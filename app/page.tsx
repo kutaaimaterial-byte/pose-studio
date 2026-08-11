@@ -102,30 +102,48 @@ const presetCameraTarget: [number, number, number] = [0, 1.55, 0];
 const presetCameraFov = 34;
 
 type JointPose = {
+  hips: [number, number, number];
   torso: [number, number, number];
+  chest: [number, number, number];
+  neck: [number, number, number];
   head: [number, number, number];
+  leftShoulder: [number, number, number];
   leftArm: [number, number, number];
   leftForearm: [number, number, number];
+  leftHand: [number, number, number];
+  rightShoulder: [number, number, number];
   rightArm: [number, number, number];
   rightForearm: [number, number, number];
+  rightHand: [number, number, number];
   leftLeg: [number, number, number];
   leftShin: [number, number, number];
+  leftFoot: [number, number, number];
   rightLeg: [number, number, number];
   rightShin: [number, number, number];
+  rightFoot: [number, number, number];
 };
 
 const zeroRotation: [number, number, number] = [0, 0, 0];
 const jointPose = (values: Partial<JointPose> = {}): JointPose => ({
+  hips: zeroRotation,
   torso: zeroRotation,
+  chest: zeroRotation,
+  neck: zeroRotation,
   head: zeroRotation,
+  leftShoulder: zeroRotation,
   leftArm: zeroRotation,
   leftForearm: zeroRotation,
+  leftHand: zeroRotation,
+  rightShoulder: zeroRotation,
   rightArm: zeroRotation,
   rightForearm: zeroRotation,
+  rightHand: zeroRotation,
   leftLeg: zeroRotation,
   leftShin: zeroRotation,
+  leftFoot: zeroRotation,
   rightLeg: zeroRotation,
   rightShin: zeroRotation,
+  rightFoot: zeroRotation,
   ...values,
 });
 
@@ -152,23 +170,26 @@ const jointPoses: JointPose[] = [
   jointPose({ torso: [24, 0, -4], head: [-16, 0, 3], leftArm: [32, 0, -48], leftForearm: [34, 0, 76], rightArm: [28, 0, 46], rightForearm: [30, 0, -72], leftLeg: [46, 0, -18], leftShin: [-72, 0, 8], rightLeg: [38, 0, 20], rightShin: [-64, 0, -8] }),
 ];
 
-type PoseTransform = {
-  rotation: [number, number, number];
-  position: [number, number, number];
-  scale: number;
-};
-
 const cloneJointPose = (source: JointPose): JointPose => ({
+  hips: [...source.hips],
   torso: [...source.torso],
+  chest: [...source.chest],
+  neck: [...source.neck],
   head: [...source.head],
+  leftShoulder: [...source.leftShoulder],
   leftArm: [...source.leftArm],
   leftForearm: [...source.leftForearm],
+  leftHand: [...source.leftHand],
+  rightShoulder: [...source.rightShoulder],
   rightArm: [...source.rightArm],
   rightForearm: [...source.rightForearm],
+  rightHand: [...source.rightHand],
   leftLeg: [...source.leftLeg],
   leftShin: [...source.leftShin],
+  leftFoot: [...source.leftFoot],
   rightLeg: [...source.rightLeg],
   rightShin: [...source.rightShin],
+  rightFoot: [...source.rightFoot],
 });
 
 // V2 authoring follows the document's basePose + key bone differences model.
@@ -181,14 +202,15 @@ const poseWithBase = (base: JointPose, values: Partial<JointPose> = {}): JointPo
 
 function createStandingJointPose(name: string): JointPose {
   const base = jointPose({
-    torso: [0, 0, -1], head: [0, 0, 1],
+    hips: [0, 0, 0], torso: [0, 0, -1], chest: [0, 0, 1], head: [0, 0, 1],
+    leftShoulder: [0, 0, -3], rightShoulder: [0, 0, 3],
     leftArm: [2, 0, -14], leftForearm: [2, 0, 18],
     rightArm: [2, 0, 14], rightForearm: [2, 0, -18],
-    leftLeg: [0, 0, -7], rightLeg: [0, 0, 7],
+    leftLeg: [0, 0, -9], rightLeg: [4, 0, 11],
   });
   switch (name) {
-    case "双脚并拢站立": return poseWithBase(base, { leftLeg: [0, 0, -3], rightLeg: [0, 0, 3] });
-    case "双脚分开站立": return poseWithBase(base, { leftLeg: [0, 0, -17], rightLeg: [0, 0, 17] });
+    case "双脚并拢站立": return poseWithBase(base, { torso: [0, 0, 0], leftLeg: [0, 0, 0], rightLeg: [0, 0, 0], leftArm: [0, 0, -10], rightArm: [0, 0, 10] });
+    case "双脚分开站立": return poseWithBase(base, { torso: [0, 0, -2], leftLeg: [0, 0, -24], rightLeg: [0, 0, 24] });
     case "单腿微屈站立": return poseWithBase(base, { torso: [0, 0, -3], leftLeg: [0, 0, -10], rightLeg: [-14, 0, 15], rightShin: [-26, 0, -4] });
     case "重心左移": return poseWithBase(base, { torso: [0, 0, -7], leftLeg: [0, 0, -12], rightLeg: [14, 0, 16], rightShin: [-24, 0, -4] });
     case "重心右移": return poseWithBase(base, { torso: [0, 0, 7], leftLeg: [14, 0, -16], leftShin: [-24, 0, 4], rightLeg: [0, 0, 12] });
@@ -206,10 +228,10 @@ function createStandingJointPose(name: string): JointPose {
     case "单手摸头": return poseWithBase(base, { torso: [1, 4, -3], head: [-5, -8, 4], leftArm: [-18, 0, -72], leftForearm: [4, 0, 126] });
     case "单手举起": return poseWithBase(base, { torso: [-2, -3, -2], head: [-8, 8, 2], rightArm: [-24, 0, 136], rightForearm: [0, 0, 20] });
     case "双臂张开": return poseWithBase(base, { torso: [-3, 0, 0], leftArm: [0, 0, -92], leftForearm: [0, 0, 16], rightArm: [0, 0, 92], rightForearm: [0, 0, -16], leftLeg: [0, 0, -12], rightLeg: [0, 0, 12] });
-    case "侧身站立": return poseWithBase(base, { torso: [0, 22, -3], head: [0, -16, 3], leftLeg: [0, 0, -10], rightLeg: [8, 0, 12] });
-    case "侧身回眸": return poseWithBase(base, { torso: [0, 26, -3], head: [-3, -64, 4], leftArm: [2, 0, -18], rightArm: [4, 0, 22], leftLeg: [0, 0, -10], rightLeg: [10, 0, 13] });
-    case "背身站立": return poseWithBase(base, { torso: [0, 0, 1], head: [0, 0, 0], leftArm: [1, 0, -16], rightArm: [1, 0, 16] });
-    case "背身回头": return poseWithBase(base, { torso: [0, -10, 0], head: [-2, 76, 4], leftArm: [2, 0, -16], rightArm: [4, 0, 20], leftLeg: [0, 0, -8], rightLeg: [6, 0, 10] });
+    case "侧身站立": return poseWithBase(base, { hips: [0, 78, 0], torso: [0, 8, -3], head: [0, -8, 3], leftLeg: [0, 0, -10], rightLeg: [8, 0, 12] });
+    case "侧身回眸": return poseWithBase(base, { hips: [0, 74, 0], torso: [0, 18, -3], chest: [0, 12, 1], neck: [0, -18, 0], head: [-3, -48, 4], leftArm: [2, 0, -18], rightArm: [4, 0, 22], leftLeg: [0, 0, -10], rightLeg: [10, 0, 13] });
+    case "背身站立": return poseWithBase(base, { hips: [0, 180, 0], torso: [0, 0, 1], head: [0, 0, 0], leftArm: [1, 0, -16], rightArm: [1, 0, 16] });
+    case "背身回头": return poseWithBase(base, { hips: [0, 180, 0], torso: [0, -18, 0], chest: [0, -16, 0], neck: [0, 28, 0], head: [-2, 54, 4], leftArm: [2, 0, -16], rightArm: [4, 0, 20], leftLeg: [0, 0, -8], rightLeg: [6, 0, 10] });
     default: return base;
   }
 }
@@ -223,7 +245,7 @@ function createWalkingJointPose(name: string): JointPose {
     rightLeg: [28, 0, 11], rightShin: [-18, 0, -3],
   });
   switch (name) {
-    case "向前迈步": return poseWithBase(base, { torso: [6, -2, -2], leftLeg: [-40, 0, -12], leftShin: [36, 0, 4], rightLeg: [34, 0, 13], rightShin: [-22, 0, -4] });
+    case "向前迈步": return poseWithBase(base, { torso: [8, -2, -2], leftArm: [34, 0, -25], rightArm: [-32, 0, 25], leftLeg: [-48, 0, -14], leftShin: [42, 0, 5], rightLeg: [42, 0, 15], rightShin: [-28, 0, -5] });
     case "大步行走": return poseWithBase(base, { torso: [8, -3, -3], leftArm: [38, 0, -28], leftForearm: [12, 0, 48], rightArm: [-36, 0, 28], rightForearm: [-12, 0, -48], leftLeg: [-52, 0, -16], leftShin: [44, 0, 5], rightLeg: [46, 0, 17], rightShin: [-28, 0, -5] });
     case "缓慢行走": return poseWithBase(base, { torso: [2, 0, 0], leftArm: [16, 0, -16], leftForearm: [6, 0, 28], rightArm: [-14, 0, 16], rightForearm: [-6, 0, -26], leftLeg: [-20, 0, -8], leftShin: [20, 0, 2], rightLeg: [18, 0, 9], rightShin: [-12, 0, -2] });
     case "轻快行走": return poseWithBase(base, { torso: [6, 2, -2], head: [-5, -2, 1], leftArm: [36, 0, -30], leftForearm: [14, 0, 52], rightArm: [-34, 0, 30], rightForearm: [-12, 0, -50], leftLeg: [-42, 0, -14], leftShin: [50, 0, 5], rightLeg: [34, 0, 15], rightShin: [-24, 0, -4] });
@@ -231,7 +253,7 @@ function createWalkingJointPose(name: string): JointPose {
     case "双手插兜行走": return poseWithBase(base, { torso: [4, 3, -4], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [12, 0, 22], rightForearm: [4, 0, -62], leftLeg: [-30, 0, -10], rightLeg: [26, 0, 11] });
     case "单手插兜行走": return poseWithBase(base, { torso: [4, 3, -3], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [-30, 0, 24], rightForearm: [-8, 0, -42] });
     case "边走边回头": return poseWithBase(base, { torso: [8, 20, -3], head: [-5, 64, 3], leftArm: [30, 0, -24], rightArm: [-28, 0, 24], leftLeg: [-36, 0, -12], rightLeg: [30, 0, 13] });
-    case "侧向行走": return poseWithBase(base, { torso: [4, 18, -2], head: [-3, -12, 1], leftArm: [24, 0, -34], leftForearm: [8, 0, 42], rightArm: [-18, 0, 34], rightForearm: [-6, 0, -40], leftLeg: [-28, 0, -18], rightLeg: [24, 0, 19] });
+    case "侧向行走": return poseWithBase(base, { hips: [0, 72, 0], torso: [4, 8, -2], head: [-3, -8, 1], leftArm: [24, 0, -34], leftForearm: [8, 0, 42], rightArm: [-18, 0, 34], rightForearm: [-6, 0, -40], leftLeg: [-28, 0, -18], rightLeg: [24, 0, 19] });
     case "低头行走": return poseWithBase(base, { torso: [8, 0, 2], head: [22, 0, 0], leftArm: [18, 0, -18], rightArm: [-16, 0, 18], leftLeg: [-26, 0, -9], rightLeg: [22, 0, 10] });
     case "挥手行走": return poseWithBase(base, { torso: [4, -4, -2], head: [-3, 10, 1], rightArm: [-12, 0, 120], rightForearm: [0, 0, 54], leftLeg: [-34, 0, -11], rightLeg: [30, 0, 12] });
     default: return base;
@@ -283,20 +305,20 @@ function createKneelingJointPose(name: string): JointPose {
 
 function createLeaningJointPose(name: string): JointPose {
   const base = jointPose({
-    torso: [-12, 0, 5], head: [6, -8, -4], leftArm: [2, 0, -20], leftForearm: [2, 0, 28], rightArm: [6, 0, 26], rightForearm: [2, 0, -42],
+    hips: [-8, 0, 0], torso: [-4, 0, 3], head: [4, -5, -3], leftArm: [2, 0, -20], leftForearm: [2, 0, 28], rightArm: [6, 0, 26], rightForearm: [2, 0, -42],
     leftLeg: [-4, 0, -12], rightLeg: [18, 0, 16], rightShin: [-28, 0, -4],
   });
   switch (name) {
-    case "单肩靠墙": return poseWithBase(base, { torso: [-10, 14, 8], head: [5, -12, -6], leftArm: [0, 0, -26], rightLeg: [20, 0, 18] });
-    case "侧身靠墙": return poseWithBase(base, { torso: [-8, 24, 6], head: [4, -18, -4], leftLeg: [-4, 0, -14], rightLeg: [16, 0, 18] });
+    case "单肩靠墙": return poseWithBase(base, { hips: [-5, 20, 6], torso: [-8, 18, 12], head: [5, -15, -8], leftShoulder: [0, 0, -14], leftArm: [0, 0, -28], rightLeg: [22, 0, 20] });
+    case "侧身靠墙": return poseWithBase(base, { hips: [-4, 68, 0], torso: [-5, 10, 5], head: [4, -10, -4], leftLeg: [-4, 0, -16], rightLeg: [18, 0, 20] });
     case "单手撑墙": return poseWithBase(base, { torso: [16, 8, -3], head: [-10, -8, 2], leftArm: [-52, 0, -44], leftForearm: [-6, 0, 26], rightArm: [4, 0, 24], rightForearm: [2, 0, -32], leftLeg: [-8, 0, -12], rightLeg: [14, 0, 14] });
     case "双手撑墙": return poseWithBase(base, { torso: [20, 0, -4], head: [-12, 0, 2], leftArm: [-52, 0, -42], leftForearm: [-6, 0, 24], rightArm: [-52, 0, 42], rightForearm: [-6, 0, -24], leftLeg: [-12, 0, -14], rightLeg: [18, 0, 16] });
     case "单手撑桌": return poseWithBase(base, { torso: [28, 8, -4], head: [-16, -8, 3], leftArm: [26, 0, -36], leftForearm: [16, 0, 48], rightArm: [4, 0, 24], rightForearm: [2, 0, -32], leftLeg: [-6, 0, -12], rightLeg: [10, 0, 13] });
     case "双手撑桌": return poseWithBase(base, { torso: [30, 0, -5], head: [-17, 0, 3], leftArm: [28, 0, -38], leftForearm: [18, 0, 50], rightArm: [28, 0, 38], rightForearm: [18, 0, -50], leftLeg: [-6, 0, -12], rightLeg: [10, 0, 13] });
-    case "身体倚桌": return poseWithBase(base, { torso: [-14, 6, 6], head: [7, -8, -4], leftArm: [4, 0, -26], leftForearm: [4, 0, 34], rightLeg: [22, 0, 18], rightShin: [-32, 0, -5] });
+    case "身体倚桌": return poseWithBase(base, { hips: [6, 0, 0], torso: [24, 6, -4], chest: [6, 0, -1], head: [-17, -8, 3], leftArm: [24, 0, -34], leftForearm: [16, 0, 46], rightArm: [20, 0, 32], rightForearm: [14, 0, -44], rightLeg: [10, 0, 15] });
     case "倚靠栏杆": return poseWithBase(base, { torso: [-8, 8, 4], head: [4, -8, -3], leftArm: [18, 0, -34], leftForearm: [8, 0, 48], rightArm: [10, 0, 26], rightForearm: [4, 0, -38], leftLeg: [-2, 0, -12], rightLeg: [16, 0, 16] });
     case "双手扶栏杆": return poseWithBase(base, { torso: [12, 0, -3], head: [-8, 0, 2], leftArm: [18, 0, -36], leftForearm: [10, 0, 52], rightArm: [18, 0, 36], rightForearm: [10, 0, -52], leftLeg: [-4, 0, -12], rightLeg: [10, 0, 13] });
-    case "臀部倚桌": return poseWithBase(base, { torso: [-16, 0, 7], head: [8, 0, -5], leftArm: [2, 0, -24], rightArm: [2, 0, 24], leftLeg: [-8, 0, -14], rightLeg: [24, 0, 18], rightShin: [-34, 0, -5] });
+    case "臀部倚桌": return poseWithBase(base, { hips: [-14, 0, 0], torso: [-8, 0, 7], head: [8, 0, -5], leftArm: [2, 0, -24], rightArm: [2, 0, 24], leftLeg: [-12, 8, -18], leftShin: [8, 0, 4], rightLeg: [28, -8, 22], rightShin: [-38, 0, -6] });
     case "坐姿侧靠": return poseWithBase(base, { torso: [-8, 18, 6], head: [5, -16, -4], leftArm: [18, -6, -30], leftForearm: [8, 0, 42], rightArm: [6, 4, 24], rightForearm: [4, 0, -34], leftLeg: [-70, 12, -16], leftShin: [78, 0, 6], rightLeg: [-66, 14, 18], rightShin: [74, 0, -6] });
     default: return base;
   }
@@ -325,13 +347,16 @@ function createSeatedJointPose(name: string): JointPose {
       pose.rightLeg = [-68, 0, 15]; pose.rightShin = [82, 0, -4];
       break;
     case "双腿并拢坐":
-      pose.leftLeg = [-74, 0, -3]; pose.rightLeg = [-74, 0, 3];
-      pose.leftShin = [78, 0, 1]; pose.rightShin = [78, 0, -1];
+      pose.torso = [0, 0, 0]; pose.head = [0, 0, 0];
+      pose.leftLeg = [-82, 0, 0]; pose.rightLeg = [-82, 0, 0];
+      pose.leftShin = [84, 0, 0]; pose.rightShin = [84, 0, 0];
       break;
     case "双腿打开坐":
     case "双腿分开坐":
-      pose.leftLeg = [-70, 0, -19]; pose.rightLeg = [-70, 0, 19];
-      pose.leftShin = [74, 0, 5]; pose.rightShin = [74, 0, -5];
+      pose.torso = [-3, 0, 1]; pose.head = [2, 0, -1];
+      pose.leftArm = [8, 0, -18]; pose.rightArm = [8, 0, 18];
+      pose.leftLeg = [-68, 0, -32]; pose.rightLeg = [-68, 0, 32];
+      pose.leftShin = [72, 0, 9]; pose.rightShin = [72, 0, -9];
       break;
     case "双腿斜放坐":
       pose.torso = [2, 7, 1]; pose.head = [-2, -7, -1];
@@ -366,8 +391,8 @@ function createSeatedJointPose(name: string): JointPose {
       break;
     case "身体前倾坐":
     case "手撑膝盖坐":
-      pose.torso = [10, 0, 0]; pose.head = [-8, 0, 0];
-      pose.leftLeg = [-70, 0, -13]; pose.rightLeg = [-70, 0, 13];
+      pose.hips = [6, 0, 0]; pose.torso = [18, 0, 0]; pose.chest = [6, 0, 0]; pose.head = [-14, 0, 0];
+      pose.leftLeg = [-66, 0, -15]; pose.rightLeg = [-66, 0, 15];
       break;
     case "身体后仰坐":
     case "身体后靠坐":
@@ -378,8 +403,10 @@ function createSeatedJointPose(name: string): JointPose {
       pose.leftLeg = [-68, 0, -13]; pose.rightLeg = [-68, 0, 15];
       break;
     case "双手放腿上":
-      pose.torso = [3, 0, 0]; pose.head = [-3, 0, 0];
-      pose.leftLeg = [-74, 0, -7]; pose.rightLeg = [-74, 0, 7];
+      pose.torso = [5, 0, 0]; pose.head = [-4, 0, 0];
+      pose.leftArm = [24, 0, -18]; pose.leftForearm = [18, 0, 54];
+      pose.rightArm = [24, 0, 18]; pose.rightForearm = [18, 0, -54];
+      pose.leftLeg = [-76, 0, -12]; pose.rightLeg = [-76, 0, 12];
       break;
     case "单手托腮坐":
       pose.torso = [7, 4, 0]; pose.head = [-5, -8, 3];
@@ -396,8 +423,8 @@ function createSeatedJointPose(name: string): JointPose {
       break;
     case "盘腿坐":
       pose.torso = [7, 0, 0]; pose.head = [-6, 0, 0];
-      pose.leftLeg = [-90, 0, -42]; pose.leftShin = [104, 0, -72];
-      pose.rightLeg = [-90, 0, 42]; pose.rightShin = [104, 0, 72];
+      pose.leftLeg = [-96, 28, -48]; pose.leftShin = [104, 0, -18];
+      pose.rightLeg = [-96, -28, 48]; pose.rightShin = [104, 0, 18];
       break;
     case "后手撑地坐":
       pose.torso = [-13, 0, 0]; pose.head = [10, 0, 0];
@@ -591,21 +618,21 @@ function createGroundJointPose(name: string): JointPose {
 
 function createRunningJointPose(name: string): JointPose {
   const jog = jointPose({
-    torso: [12, -4, -2], head: [-8, 5, 1],
+    hips: [7, 0, 0], torso: [10, -4, -2], chest: [4, 0, -1], head: [-8, 5, 1],
     leftArm: [-4, 0, -42], leftForearm: [2, 0, -92], rightArm: [16, 0, 38], rightForearm: [2, 0, -78],
     leftLeg: [-42, 0, -15], leftShin: [62, 0, 5], rightLeg: [30, 0, 16], rightShin: [10, 0, -4],
   });
   switch (name) {
-    case "正常跑步": return poseWithBase(jog, { torso: [16, -4, -3], leftLeg: [-50, 0, -17], leftShin: [72, 0, 5], rightLeg: [38, 0, 18], rightShin: [12, 0, -5] });
+    case "正常跑步": return poseWithBase(jog, { hips: [10, 0, 0], torso: [17, -4, -3], chest: [5, 0, -1], leftArm: [-12, 0, -48], leftForearm: [2, 0, -104], rightArm: [22, 0, 42], rightForearm: [2, 0, -84], leftLeg: [-56, 0, -18], leftShin: [78, 0, 6], rightLeg: [44, 0, 19], rightShin: [14, 0, -5] });
     case "快速奔跑": return poseWithBase(jog, { torso: [21, -6, -4], head: [-13, 7, 2], leftArm: [-18, 0, -52], leftForearm: [2, 0, -116], rightArm: [24, 0, 44], rightForearm: [2, 0, -86], leftLeg: [-58, 0, -18], leftShin: [82, 0, 6], rightLeg: [46, 0, 19], rightShin: [10, 0, -5] });
-    case "全力冲刺": return poseWithBase(jog, { torso: [28, -8, -5], head: [-18, 9, 3], leftArm: [-26, 0, -58], leftForearm: [2, 0, -126], rightArm: [30, 0, 48], rightForearm: [2, 0, -92], leftLeg: [-68, 0, -20], leftShin: [88, 0, 6], rightLeg: [56, 0, 20], rightShin: [8, 0, -6] });
-    case "冲刺起步": return jointPose({ torso: [52, -6, -5], head: [-34, 7, 3], leftArm: [34, 0, -32], leftForearm: [20, 0, 68], rightArm: [30, 0, 34], rightForearm: [18, 0, -64], leftLeg: [-82, 0, -21], leftShin: [110, 0, 7], rightLeg: [-34, 0, 20], rightShin: [62, 0, -6] });
-    case "起跑准备": return jointPose({ torso: [58, 0, -5], head: [-38, 0, 3], leftArm: [40, 0, -34], leftForearm: [22, 0, 70], rightArm: [40, 0, 34], rightForearm: [22, 0, -70], leftLeg: [-72, 0, -24], leftShin: [104, 0, 8], rightLeg: [-48, 0, 24], rightShin: [78, 0, -8] });
+    case "全力冲刺": return poseWithBase(jog, { hips: [14, 0, 0], torso: [20, -8, -5], chest: [7, -2, -1], head: [-18, 9, 3], leftArm: [-26, 0, -58], leftForearm: [2, 0, -126], rightArm: [30, 0, 48], rightForearm: [2, 0, -92], leftLeg: [-68, 0, -20], leftShin: [88, 0, 6], leftFoot: [-16, 0, 0], rightLeg: [56, 0, 20], rightShin: [8, 0, -6], rightFoot: [12, 0, 0] });
+    case "冲刺起步": return jointPose({ hips: [20, 0, 0], torso: [32, -6, -5], chest: [10, 0, -1], head: [-34, 7, 3], leftArm: [34, 0, -32], leftForearm: [20, 0, 68], rightArm: [30, 0, 34], rightForearm: [18, 0, -64], leftLeg: [-82, 0, -21], leftShin: [110, 0, 7], leftFoot: [-18, 0, 0], rightLeg: [-34, 0, 20], rightShin: [62, 0, -6], rightFoot: [14, 0, 0] });
+    case "起跑准备": return jointPose({ hips: [22, 0, 0], torso: [34, 0, -5], chest: [10, 0, -1], head: [-38, 0, 3], leftArm: [40, 0, -34], leftForearm: [22, 0, 70], rightArm: [40, 0, 34], rightForearm: [22, 0, -70], leftLeg: [-72, 0, -24], leftShin: [104, 0, 8], leftFoot: [-18, 0, 0], rightLeg: [-48, 0, 24], rightShin: [78, 0, -8], rightFoot: [14, 0, 0] });
     case "身体前倾奔跑": return poseWithBase(jog, { torso: [32, -2, -5], head: [-20, 3, 3], leftArm: [-18, 0, -54], leftForearm: [2, 0, -118], rightArm: [28, 0, 46], rightForearm: [2, 0, -88], leftLeg: [-56, 0, -18], leftShin: [80, 0, 6], rightLeg: [44, 0, 18] });
     case "大跨步奔跑": return poseWithBase(jog, { torso: [22, -3, -4], head: [-14, 4, 2], leftArm: [-22, 0, -56], leftForearm: [2, 0, -120], rightArm: [28, 0, 46], rightForearm: [2, 0, -90], leftLeg: [-78, 0, -19], leftShin: [38, 0, 6], rightLeg: [68, 0, 20], rightShin: [8, 0, -6] });
     case "转弯奔跑": return poseWithBase(jog, { torso: [20, 28, -8], head: [-12, -20, 5], leftArm: [-18, -8, -58], leftForearm: [2, 0, -112], rightArm: [24, 8, 52], rightForearm: [2, 0, -90], leftLeg: [-52, -10, -22], leftShin: [76, 0, 7], rightLeg: [38, 12, 24], rightShin: [18, 0, -7] });
     case "回头奔跑": return poseWithBase(jog, { torso: [17, 22, -4], head: [-9, 76, 4], leftArm: [22, 0, -44], leftForearm: [4, 0, 88], rightArm: [-18, 0, 48], rightForearm: [2, 0, 118], leftLeg: [-54, 0, -18], leftShin: [78, 0, 6], rightLeg: [38, 0, 18], rightShin: [18, 0, -5] });
-    case "侧向奔跑": return poseWithBase(jog, { torso: [17, 16, -4], head: [-10, -12, 2], leftArm: [-22, 0, -54], leftForearm: [2, 0, -118], rightArm: [24, 0, 44], rightForearm: [2, 0, -84], leftLeg: [42, 0, -26], leftShin: [12, 0, 8], rightLeg: [-58, 0, 28], rightShin: [84, 0, -9] });
+    case "侧向奔跑": return poseWithBase(jog, { hips: [8, 66, 0], torso: [12, 10, -4], head: [-10, -10, 2], leftArm: [-22, 0, -54], leftForearm: [2, 0, -118], rightArm: [24, 0, 44], rightForearm: [2, 0, -84], leftLeg: [42, 0, -26], leftShin: [12, 0, 8], rightLeg: [-58, 0, 28], rightShin: [84, 0, -9] });
     case "急停姿态": return jointPose({ torso: [34, 10, -6], head: [-21, -9, 4], leftArm: [-12, 0, -72], leftForearm: [4, 0, -130], rightArm: [-12, 0, 72], rightForearm: [4, 0, 130], leftLeg: [-74, 0, -26], leftShin: [100, 0, 8], rightLeg: [-28, 0, 26], rightShin: [56, 0, -8] });
     default: return jog;
   }
@@ -613,6 +640,7 @@ function createRunningJointPose(name: string): JointPose {
 
 function createLyingJointPose(name: string): JointPose {
   const pose = jointPose({
+    hips: [0, 0, 90],
     head: [0, 0, 0],
     leftArm: [0, 0, -24], leftForearm: [0, 0, 8],
     rightArm: [0, 0, 24], rightForearm: [0, 0, -8],
@@ -639,6 +667,7 @@ function createLyingJointPose(name: string): JointPose {
     pose.rightArm = [-52, 0, 76]; pose.rightForearm = [0, 0, -118];
   }
   if (/侧卧/.test(name)) {
+    pose.hips = [/左/.test(name) ? -78 : 78, 0, 90];
     pose.torso = [0, 0, /左/.test(name) ? -8 : 8];
     pose.head = [0, /回头/.test(name) ? 38 : -10, /左/.test(name) ? 8 : -8];
     pose.leftArm = [-50, 0, -48]; pose.leftForearm = [0, 0, 98];
@@ -658,6 +687,7 @@ function createLyingJointPose(name: string): JointPose {
 
 function createProneJointPose(name: string): JointPose {
   const pose = jointPose({
+    hips: [0, 180, 90],
     torso: [0, 0, -2], head: [-14, /回头/.test(name) ? 46 : 10, 0],
     leftArm: [-48, 0, -42], leftForearm: [0, 0, 92],
     rightArm: [-48, 0, 42], rightForearm: [0, 0, -92],
@@ -684,6 +714,7 @@ function createProneJointPose(name: string): JointPose {
 
 function createGroundActionJointPose(name: string): JointPose {
   const fourPoint = jointPose({
+    hips: [0, 0, 90],
     torso: [12, 0, -3], head: [-14, 0, 2],
     leftArm: [-28, 0, -50], leftForearm: [0, 0, 74], rightArm: [-28, 0, 50], rightForearm: [0, 0, -74],
     leftLeg: [-48, 0, -16], leftShin: [88, 0, 5], rightLeg: [-48, 0, 16], rightShin: [88, 0, -5],
@@ -691,9 +722,9 @@ function createGroundActionJointPose(name: string): JointPose {
   switch (name) {
     case "向前爬行": return poseWithBase(fourPoint, { torso: [15, -5, -4], head: [-16, 6, 3], leftArm: [-42, 0, -54], leftForearm: [0, 0, 86], rightArm: [-12, 0, 46], rightForearm: [0, 0, -58], leftLeg: [-62, 0, -18], leftShin: [98, 0, 6], rightLeg: [-26, 0, 20], rightShin: [66, 0, -6] });
     case "熊爬姿态": return poseWithBase(fourPoint, { torso: [2, 0, -4], head: [-12, 0, 3], leftArm: [-10, 0, -52], leftForearm: [0, 0, 28], rightArm: [-10, 0, 52], rightForearm: [0, 0, -28], leftLeg: [-28, 0, -22], leftShin: [52, 0, 7], rightLeg: [-28, 0, 22], rightShin: [52, 0, -7] });
-    case "平板支撑": return jointPose({ torso: [0, 0, -2], head: [-10, 0, 2], leftArm: [-8, 0, -50], leftForearm: [0, 0, 18], rightArm: [-8, 0, 50], rightForearm: [0, 0, -18], leftLeg: [3, 0, -13], leftShin: [4, 0, 3], rightLeg: [3, 0, 13], rightShin: [4, 0, -3] });
-    case "俯卧撑准备": return jointPose({ torso: [3, 0, -3], head: [-13, 0, 2], leftArm: [-12, 0, -56], leftForearm: [0, 0, 14], rightArm: [-12, 0, 56], rightForearm: [0, 0, -14], leftLeg: [4, 0, -15], leftShin: [5, 0, 3], rightLeg: [4, 0, 15], rightShin: [5, 0, -3] });
-    case "俯卧撑低位": return jointPose({ torso: [-5, 0, -3], head: [-5, 0, 2], leftArm: [-46, 0, -50], leftForearm: [0, 0, 92], rightArm: [-46, 0, 50], rightForearm: [0, 0, -92], leftLeg: [4, 0, -14], leftShin: [5, 0, 3], rightLeg: [4, 0, 14], rightShin: [5, 0, -3] });
+    case "平板支撑": return jointPose({ hips: [0, 0, 90], torso: [2, 0, -2], head: [-10, 0, 2], leftArm: [-32, 0, -38], leftForearm: [0, 0, 112], leftHand: [10, 0, 0], rightArm: [-32, 0, 38], rightForearm: [0, 0, -112], rightHand: [10, 0, 0], leftLeg: [3, 0, -13], leftShin: [4, 0, 3], leftFoot: [-10, 0, 0], rightLeg: [3, 0, 13], rightShin: [4, 0, -3], rightFoot: [-10, 0, 0] });
+    case "俯卧撑准备": return jointPose({ hips: [0, 0, 90], torso: [3, 0, -3], head: [-13, 0, 2], leftArm: [-12, 0, -56], leftForearm: [0, 0, 14], rightArm: [-12, 0, 56], rightForearm: [0, 0, -14], leftLeg: [4, 0, -15], leftShin: [5, 0, 3], leftFoot: [-12, 0, 0], rightLeg: [4, 0, 15], rightShin: [5, 0, -3], rightFoot: [-12, 0, 0] });
+    case "俯卧撑低位": return jointPose({ hips: [0, 0, 90], torso: [-5, 0, -3], head: [-5, 0, 2], leftArm: [-46, 0, -50], leftForearm: [0, 0, 92], rightArm: [-46, 0, 50], rightForearm: [0, 0, -92], leftLeg: [4, 0, -14], leftShin: [5, 0, 3], leftFoot: [-12, 0, 0], rightLeg: [4, 0, 14], rightShin: [5, 0, -3], rightFoot: [-12, 0, 0] });
     case "坐地后撑": return createGroundJointPose("后仰撑地");
     case "跌坐": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [8, -7, -3], head: [-4, 8, 2], leftLeg: [-72, 0, -22], leftShin: [100, 0, 7], rightLeg: [-44, 0, 24], rightShin: [76, 0, -7] });
     case "跌倒侧撑": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [6, 28, 7], head: [-3, -24, -5], leftArm: [48, -8, -40], leftForearm: [12, 0, 40], rightArm: [-2, 6, 32], rightForearm: [2, 0, -38], leftLeg: [-64, 16, -28], leftShin: [88, 0, 9], rightLeg: [-34, 20, 26], rightShin: [66, 0, -8] });
@@ -838,54 +869,33 @@ function createSemanticJointPose(item: PoseItem): JointPose {
 }
 const poseItemByEngineIndex = new Map(poseItems.map((item) => [item.enginePoseIndex, item]));
 
-function getSemanticTransform(item: PoseItem): PoseTransform {
-  const text = `${item.name} ${item.tags.join(" ")}`;
-  let yRotation = item.previewAngle;
-  if (item.name === "侧身站立") yRotation = 30;
-  else if (item.name === "回头奔跑") yRotation = -52;
-  else if (/回眸|回头|回望/.test(text)) yRotation = item.enginePoseIndex % 2 ? 146 : -146;
-  if (/背身|背向|背部|背面/.test(text) && !/回/.test(text)) yRotation = 176;
-  if (yRotation === 0 && item.category === "sitting") yRotation = -24;
-  if (yRotation === 0 && (item.category === "squatting" || item.category === "kneeling")) yRotation = -22;
-  if (yRotation === 0 && item.category === "running") yRotation = -28;
-
-  if (item.category === "lying") {
-    const sideAngle = /侧卧/.test(item.name) ? (item.name.startsWith("左") ? -18 : 18) : 0;
-    return { rotation: [34, sideAngle, 90], position: [0.76, 1.15, -0.51], scale: /半躺/.test(item.name) ? 102 : 110 };
-  }
-  if (item.category === "prone") {
-    return { rotation: [-34, /回头/.test(item.name) ? 146 : 180, 90], position: [-0.76, 1.15, 0.51], scale: 106 };
-  }
-  if (item.category === "ground") {
-    if (/四点支撑|爬行|熊爬|平板支撑|俯卧撑|翻滚|低姿移动/.test(item.name)) {
-      return { rotation: [34, yRotation || -20, 90], position: [0.72, 0.92, -0.5], scale: 104 };
-    }
-    return { rotation: [0, yRotation || -22, 0], position: [0, /滑跪/.test(item.name) ? -0.64 : -0.54, 0], scale: 102 };
-  }
-
-  let yPosition = 0;
-  let scale = 100;
-  if (item.category === "running") { yPosition = -0.2; scale = 116; }
-  if (/起跑准备|冲刺起步/.test(item.name)) { yPosition = -0.54; scale = 114; }
-  if (item.category === "jumping") { yPosition = /落地|缓冲/.test(item.name) ? -0.42 : 0.22; scale = 94; }
-  if (item.category === "sitting") yPosition = -0.42;
-  if (item.category === "squatting") { yPosition = -0.48; scale = 104; }
-  if (item.category === "kneeling") { yPosition = -0.62; scale = 102; }
-  if (/双臂展开|张开双臂|T型|张腿/.test(text)) scale = Math.min(scale, 92);
-  return { rotation: [0, yRotation, 0], position: [0, yPosition, 0], scale };
-}
-
-type PoseBoneName =
+type HumanoidBoneName =
+  | "Hips"
   | "Spine"
+  | "Chest"
+  | "Neck"
   | "Head"
+  | "LeftShoulder"
   | "LeftUpperArm"
   | "LeftLowerArm"
+  | "LeftHand"
+  | "RightShoulder"
   | "RightUpperArm"
   | "RightLowerArm"
+  | "RightHand"
   | "LeftUpperLeg"
   | "LeftLowerLeg"
+  | "LeftFoot"
   | "RightUpperLeg"
-  | "RightLowerLeg";
+  | "RightLowerLeg"
+  | "RightFoot";
+
+type BonePoseParameter = {
+  rotation: [number, number, number];
+  // Optional model-independent translation, expressed in shoulder-width units.
+  // Only the Hips bone uses it for airborne root motion; mesh transforms remain untouched.
+  position?: [number, number, number];
+};
 
 type PoseRuntimeParameter = {
   id: string;
@@ -897,24 +907,30 @@ type PoseRuntimeParameter = {
   intensity: PoseIntensity;
   styleTags: PoseStyle[];
   basePose: string;
-  rootPosition: [number, number, number];
-  rootRotation: [number, number, number];
-  scale: number;
-  bones: Partial<Record<PoseBoneName, [number, number, number]>>;
+  bones: Partial<Record<HumanoidBoneName, BonePoseParameter>>;
   notes: string;
 };
 
-const jointToBone: Record<keyof JointPose, PoseBoneName> = {
+const jointToBone: Record<keyof JointPose, HumanoidBoneName> = {
+  hips: "Hips",
   torso: "Spine",
+  chest: "Chest",
+  neck: "Neck",
   head: "Head",
+  leftShoulder: "LeftShoulder",
   leftArm: "LeftUpperArm",
   leftForearm: "LeftLowerArm",
+  leftHand: "LeftHand",
+  rightShoulder: "RightShoulder",
   rightArm: "RightUpperArm",
   rightForearm: "RightLowerArm",
+  rightHand: "RightHand",
   leftLeg: "LeftUpperLeg",
   leftShin: "LeftLowerLeg",
+  leftFoot: "LeftFoot",
   rightLeg: "RightUpperLeg",
   rightShin: "RightLowerLeg",
+  rightFoot: "RightFoot",
 };
 
 const basePoseNameByCategory: Record<PoseCategory, string> = {
@@ -931,12 +947,36 @@ const basePoseNameByCategory: Record<PoseCategory, string> = {
   ground: "四点支撑",
 };
 
-function getCategoryBaseJointPose(category: PoseCategory): JointPose {
-  return createSemanticJointPose({
-    ...poseItems.find((item) => item.category === category)!,
-    name: basePoseNameByCategory[category],
+const categoryBaseItems = Object.fromEntries(
+  (Object.keys(basePoseNameByCategory) as PoseCategory[]).map((category) => [
     category,
-  });
+    poseItems.find((item) => item.category === category && item.name === basePoseNameByCategory[category])!,
+  ]),
+) as Record<PoseCategory, PoseItem>;
+
+const categoryBaseParentId: Record<PoseCategory, string> = {
+  standing: "t_pose",
+  walking: categoryBaseItems.standing.id,
+  running: categoryBaseItems.walking.id,
+  jumping: categoryBaseItems.standing.id,
+  squatting: categoryBaseItems.standing.id,
+  sitting: categoryBaseItems.standing.id,
+  kneeling: categoryBaseItems.standing.id,
+  lying: categoryBaseItems.standing.id,
+  prone: categoryBaseItems.lying.id,
+  leaning: categoryBaseItems.standing.id,
+  ground: categoryBaseItems.standing.id,
+};
+
+function getBasePoseId(item: PoseItem) {
+  const categoryBase = categoryBaseItems[item.category];
+  return item.id === categoryBase.id ? categoryBaseParentId[item.category] : categoryBase.id;
+}
+
+function getAuthoredPoseById(id: string): JointPose {
+  if (id === "t_pose") return jointPose();
+  const item = poseItems.find((candidate) => candidate.id === id);
+  return item ? createSemanticJointPose(item) : jointPose();
 }
 
 function rotationsMatch(left: [number, number, number], right: [number, number, number]) {
@@ -944,15 +984,20 @@ function rotationsMatch(left: [number, number, number], right: [number, number, 
 }
 
 function buildPoseRuntimeParameter(item: PoseItem): PoseRuntimeParameter {
-  const basePose = getCategoryBaseJointPose(item.category);
+  const basePoseId = getBasePoseId(item);
+  const basePose = getAuthoredPoseById(basePoseId);
   const authoredPose = createSemanticJointPose(item);
-  const transform = getSemanticTransform(item);
   const bones: PoseRuntimeParameter["bones"] = {};
   (Object.keys(jointToBone) as Array<keyof JointPose>).forEach((joint) => {
     if (!rotationsMatch(authoredPose[joint], basePose[joint])) {
-      bones[jointToBone[joint]] = [...authoredPose[joint]];
+      bones[jointToBone[joint]] = { rotation: [...authoredPose[joint]] };
     }
   });
+  if (item.category === "jumping" && !/落地|缓冲/.test(item.name)) {
+    const hips = bones.Hips ?? { rotation: [...authoredPose.hips] };
+    hips.position = [0, /向上伸手|双腿腾空|抱膝/.test(item.name) ? 1.15 : 0.82, 0];
+    bones.Hips = hips;
+  }
   return {
     id: item.id,
     nameCn: item.name,
@@ -962,20 +1007,22 @@ function buildPoseRuntimeParameter(item: PoseItem): PoseRuntimeParameter {
     direction: item.direction,
     intensity: item.intensity,
     styleTags: [...item.style],
-    basePose: basePoseNameByCategory[item.category],
-    rootPosition: [...transform.position],
-    rootRotation: [...transform.rotation],
-    scale: transform.scale,
+    basePose: basePoseId,
     bones,
-    notes: "Euler authoring parameters; converted to Quaternion when applied to the skeleton.",
+    notes: "Skeleton-only Euler parameters; converted to Quaternion when applied. Model transform is stored independently.",
   };
 }
 
-function resolvePoseRuntimeParameter(parameter: PoseRuntimeParameter): JointPose {
-  const pose = getCategoryBaseJointPose(parameter.category);
-  (Object.entries(jointToBone) as Array<[keyof JointPose, PoseBoneName]>).forEach(([joint, bone]) => {
-    const rotation = parameter.bones[bone];
-    if (rotation) pose[joint] = [...rotation];
+const poseParametersById = new Map<string, PoseRuntimeParameter>();
+
+function resolvePoseRuntimeParameter(parameter: PoseRuntimeParameter, trail = new Set<string>()): JointPose {
+  if (trail.has(parameter.id)) return jointPose();
+  const nextTrail = new Set(trail).add(parameter.id);
+  const parent = parameter.basePose === "t_pose" ? undefined : poseParametersById.get(parameter.basePose);
+  const pose = parent ? resolvePoseRuntimeParameter(parent, nextTrail) : jointPose();
+  (Object.entries(jointToBone) as Array<[keyof JointPose, HumanoidBoneName]>).forEach(([joint, bone]) => {
+    const transform = parameter.bones[bone];
+    if (transform) pose[joint] = [...transform.rotation];
   });
   return pose;
 }
@@ -984,22 +1031,16 @@ const poseParametersByEngineIndex = new Map<number, PoseRuntimeParameter>();
 const semanticJointPoses: JointPose[] = [];
 // Bump this whenever authored pose parameters change. It forces both the live
 // artboard and the generated covers to discard poses left by Fast Refresh.
-const poseSolverRevision = "pose-library-v2-parameter-system-1";
+const poseSolverRevision = "pose-engine-v2-skeleton-only-2";
 poseItems.forEach((item) => {
   const parameter = buildPoseRuntimeParameter(item);
   poseParametersByEngineIndex.set(item.enginePoseIndex, parameter);
+  poseParametersById.set(item.id, parameter);
+});
+poseItems.forEach((item) => {
+  const parameter = poseParametersByEngineIndex.get(item.enginePoseIndex)!;
   semanticJointPoses[item.enginePoseIndex] = resolvePoseRuntimeParameter(parameter);
 });
-
-function getPoseTransform(item: PoseItem): PoseTransform {
-  const parameter = poseParametersByEngineIndex.get(item.enginePoseIndex);
-  if (!parameter) return getSemanticTransform(item);
-  return {
-    rotation: [...parameter.rootRotation],
-    position: [...parameter.rootPosition],
-    scale: parameter.scale,
-  };
-}
 
 function rotateAround(point: THREE.Vector3, pivot: THREE.Vector3, rotation: [number, number, number]) {
   const euler = new THREE.Euler(...rotation.map(THREE.MathUtils.degToRad) as [number, number, number], "XYZ");
@@ -1084,16 +1125,25 @@ function mirrorRotation(rotation: [number, number, number]): [number, number, nu
 
 function mirrorJointPose(source: JointPose): JointPose {
   return jointPose({
+    hips: mirrorRotation(source.hips),
     torso: mirrorRotation(source.torso),
+    chest: mirrorRotation(source.chest),
+    neck: mirrorRotation(source.neck),
     head: mirrorRotation(source.head),
+    leftShoulder: mirrorRotation(source.rightShoulder),
     leftArm: mirrorRotation(source.rightArm),
     leftForearm: mirrorRotation(source.rightForearm),
+    leftHand: mirrorRotation(source.rightHand),
+    rightShoulder: mirrorRotation(source.leftShoulder),
     rightArm: mirrorRotation(source.leftArm),
     rightForearm: mirrorRotation(source.leftForearm),
+    rightHand: mirrorRotation(source.leftHand),
     leftLeg: mirrorRotation(source.rightLeg),
     leftShin: mirrorRotation(source.rightShin),
+    leftFoot: mirrorRotation(source.rightFoot),
     rightLeg: mirrorRotation(source.leftLeg),
     rightShin: mirrorRotation(source.leftShin),
+    rightFoot: mirrorRotation(source.leftFoot),
   });
 }
 
@@ -1101,9 +1151,11 @@ type RigJoint = keyof JointPose;
 
 type RigBinding = {
   root: THREE.Object3D;
-  bones: Partial<Record<RigJoint, THREE.Bone>>;
+  humanoidBones: Partial<Record<HumanoidBoneName, THREE.Bone>>;
   bonesByName: Map<string, THREE.Bone>;
   restQuaternions: Map<THREE.Bone, THREE.Quaternion>;
+  restPositions: Map<THREE.Bone, THREE.Vector3>;
+  restRootPosition: THREE.Vector3;
 };
 
 type ArmBoneSide = "left" | "right";
@@ -1119,50 +1171,176 @@ type ArmIKTarget = {
   handDirection: [number, number, number];
 };
 
-const rigBoneNames: Record<RigJoint, string> = {
-  torso: "spine_01",
-  head: "Head",
-  // The original procedural mannequin named sides from the viewer's perspective.
-  // Quaternius uses anatomical left/right, so the paired limbs are intentionally swapped.
-  leftArm: "upperarm_r",
-  leftForearm: "lowerarm_r",
-  rightArm: "upperarm_l",
-  rightForearm: "lowerarm_l",
-  leftLeg: "thigh_r",
-  leftShin: "calf_r",
-  rightLeg: "thigh_l",
-  rightShin: "calf_l",
+const humanoidBoneOrder: HumanoidBoneName[] = [
+  "Hips", "Spine", "Chest", "Neck", "Head",
+  "LeftShoulder", "LeftUpperArm", "LeftLowerArm", "LeftHand",
+  "RightShoulder", "RightUpperArm", "RightLowerArm", "RightHand",
+  "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+  "RightUpperLeg", "RightLowerLeg", "RightFoot",
+];
+
+const humanoidBoneAliases: Record<HumanoidBoneName, readonly string[]> = {
+  Hips: ["pelvis", "Hips", "mixamorigHips", "mixamorig:Hips"],
+  Spine: ["spine_01", "Spine", "mixamorigSpine", "mixamorig:Spine"],
+  Chest: ["spine_03", "Chest", "UpperChest", "mixamorigSpine2", "mixamorig:Spine2"],
+  Neck: ["neck_01", "Neck", "mixamorigNeck", "mixamorig:Neck"],
+  Head: ["Head", "head", "mixamorigHead", "mixamorig:Head"],
+  LeftShoulder: ["clavicle_l", "LeftShoulder", "mixamorigLeftShoulder", "mixamorig:LeftShoulder"],
+  LeftUpperArm: ["upperarm_l", "LeftUpperArm", "LeftArm", "mixamorigLeftArm", "mixamorig:LeftArm"],
+  LeftLowerArm: ["lowerarm_l", "LeftLowerArm", "LeftForeArm", "mixamorigLeftForeArm", "mixamorig:LeftForeArm"],
+  LeftHand: ["hand_l", "LeftHand", "mixamorigLeftHand", "mixamorig:LeftHand"],
+  RightShoulder: ["clavicle_r", "RightShoulder", "mixamorigRightShoulder", "mixamorig:RightShoulder"],
+  RightUpperArm: ["upperarm_r", "RightUpperArm", "RightArm", "mixamorigRightArm", "mixamorig:RightArm"],
+  RightLowerArm: ["lowerarm_r", "RightLowerArm", "RightForeArm", "mixamorigRightForeArm", "mixamorig:RightForeArm"],
+  RightHand: ["hand_r", "RightHand", "mixamorigRightHand", "mixamorig:RightHand"],
+  LeftUpperLeg: ["thigh_l", "LeftUpperLeg", "LeftUpLeg", "mixamorigLeftUpLeg", "mixamorig:LeftUpLeg"],
+  LeftLowerLeg: ["calf_l", "LeftLowerLeg", "LeftLeg", "mixamorigLeftLeg", "mixamorig:LeftLeg"],
+  LeftFoot: ["foot_l", "LeftFoot", "mixamorigLeftFoot", "mixamorig:LeftFoot"],
+  RightUpperLeg: ["thigh_r", "RightUpperLeg", "RightUpLeg", "mixamorigRightUpLeg", "mixamorig:RightUpLeg"],
+  RightLowerLeg: ["calf_r", "RightLowerLeg", "RightLeg", "mixamorigRightLeg", "mixamorig:RightLeg"],
+  RightFoot: ["foot_r", "RightFoot", "mixamorigRightFoot", "mixamorig:RightFoot"],
 };
 
 const rigJointOrder: RigJoint[] = [
+  "hips",
   "torso",
+  "chest",
+  "neck",
   "head",
+  "leftShoulder",
   "leftArm",
   "leftForearm",
+  "leftHand",
+  "rightShoulder",
   "rightArm",
   "rightForearm",
+  "rightHand",
   "leftLeg",
   "leftShin",
+  "leftFoot",
   "rightLeg",
   "rightShin",
+  "rightFoot",
 ];
 
 const rigJointRotationLimits: Record<RigJoint, [[number, number], [number, number], [number, number]]> = {
+  hips: [[-120, 120], [-180, 180], [-120, 120]],
   torso: [[-55, 55], [-50, 50], [-35, 35]],
+  chest: [[-45, 45], [-55, 55], [-40, 40]],
+  neck: [[-35, 35], [-55, 55], [-30, 30]],
   head: [[-45, 45], [-85, 85], [-35, 35]],
+  leftShoulder: [[-35, 35], [-35, 35], [-45, 45]],
   leftArm: [[-110, 110], [-60, 60], [-140, 140]],
   leftForearm: [[-60, 60], [-45, 45], [-140, 140]],
+  leftHand: [[-45, 45], [-45, 45], [-65, 65]],
+  rightShoulder: [[-35, 35], [-35, 35], [-45, 45]],
   rightArm: [[-110, 110], [-60, 60], [-140, 140]],
   rightForearm: [[-60, 60], [-45, 45], [-140, 140]],
+  rightHand: [[-45, 45], [-45, 45], [-65, 65]],
   leftLeg: [[-115, 95], [-50, 50], [-60, 60]],
   leftShin: [[-115, 115], [-25, 25], [-25, 25]],
+  leftFoot: [[-55, 55], [-35, 35], [-35, 35]],
   rightLeg: [[-115, 95], [-50, 50], [-60, 60]],
   rightShin: [[-115, 115], [-25, 25], [-25, 25]],
+  rightFoot: [[-55, 55], [-35, 35], [-35, 35]],
 };
+
+type PoseAuditFinding = { id: string; name: string; issue: string };
+
+function buildPoseEngineAudit() {
+  const findings: PoseAuditFinding[] = [];
+  const exactFingerprints = new Map<string, PoseItem[]>();
+  const vectors = new Map<string, number[]>();
+
+  poseItems.forEach((item) => {
+    const pose = semanticJointPoses[item.enginePoseIndex];
+    const parameter = poseParametersByEngineIndex.get(item.enginePoseIndex);
+    if (!pose || !parameter) {
+      findings.push({ id: item.id, name: item.name, issue: "missing-runtime-parameter" });
+      return;
+    }
+    const vector = rigJointOrder.flatMap((joint) => pose[joint]);
+    const hipsPosition = parameter.bones.Hips?.position ?? [0, 0, 0];
+    vector.push(...hipsPosition.map((value) => value * 30));
+    const ikTargets = getArmIKTargets(item, false);
+    (["left", "right"] as ArmBoneSide[]).forEach((side) => {
+      const target = ikTargets.find((candidate) => candidate.side === side);
+      vector.push(...(target ? [...target.offset, ...target.pole, ...target.handDirection].map((value) => value * 30) : Array(9).fill(0)));
+    });
+    vectors.set(item.id, vector);
+    const fingerprint = JSON.stringify(vector);
+    exactFingerprints.set(fingerprint, [...(exactFingerprints.get(fingerprint) ?? []), item]);
+
+    rigJointOrder.forEach((joint) => {
+      pose[joint].forEach((value, axis) => {
+        const [minimum, maximum] = rigJointRotationLimits[joint][axis];
+        if (!Number.isFinite(value) || value < minimum || value > maximum) {
+          findings.push({ id: item.id, name: item.name, issue: `${joint}[${axis}]=${value} outside ${minimum}..${maximum}` });
+        }
+      });
+    });
+
+    if (item.category === "lying" && Math.abs(pose.hips[2]) < 70) findings.push({ id: item.id, name: item.name, issue: "lying-pose-not-horizontal" });
+    if (item.category === "prone" && (Math.abs(pose.hips[1]) < 150 || Math.abs(pose.hips[2]) < 70)) findings.push({ id: item.id, name: item.name, issue: "prone-pose-not-face-down" });
+    if (item.category === "running" && pose.hips[0] + pose.torso[0] < 12) findings.push({ id: item.id, name: item.name, issue: "running-pose-lacks-forward-drive" });
+    if (item.name === "单手叉腰" && getArmIKTargets(item, false).length !== 1) findings.push({ id: item.id, name: item.name, issue: "hand-on-hip-IK-missing" });
+    if (item.name === "全力冲刺" && (getArmIKTargets(item, false).length !== 2 || pose.hips[0] < 10)) findings.push({ id: item.id, name: item.name, issue: "sprint-chain-incomplete" });
+  });
+
+  const exactDuplicates = [...exactFingerprints.values()]
+    .filter((items) => items.length > 1)
+    .map((items) => items.map((item) => item.name));
+  const nearDuplicates: string[][] = [];
+  (Object.keys(basePoseNameByCategory) as PoseCategory[]).forEach((category) => {
+    const items = poseItems.filter((item) => item.category === category);
+    for (let left = 0; left < items.length; left += 1) {
+      for (let right = left + 1; right < items.length; right += 1) {
+        const a = vectors.get(items[left].id)!;
+        const b = vectors.get(items[right].id)!;
+        const deltas = a.map((value, index) => Math.abs(value - b[index]));
+        const rms = Math.sqrt(deltas.reduce((sum, value) => sum + value * value, 0) / deltas.length);
+        if (rms < 2.4 && Math.max(...deltas) < 11) nearDuplicates.push([items[left].name, items[right].name]);
+      }
+    }
+  });
+
+  return {
+    revision: poseSolverRevision,
+    checked: poseItems.length,
+    uniqueIds: new Set(poseItems.map((item) => item.id)).size,
+    exactDuplicates,
+    nearDuplicates,
+    findings,
+    criticalTests: {
+      naturalStanding: findings.every((finding) => finding.name !== "自然站立"),
+      singleHandOnHip: findings.every((finding) => finding.name !== "单手叉腰"),
+      fullSprint: findings.every((finding) => finding.name !== "全力冲刺"),
+    },
+  };
+}
+
+const poseEngineAudit = buildPoseEngineAudit();
+(globalThis as typeof globalThis & { __POSEBOARD_ENGINE_AUDIT__?: typeof poseEngineAudit }).__POSEBOARD_ENGINE_AUDIT__ = poseEngineAudit;
 
 function getSafeRigJointRotation(joint: RigJoint, source: [number, number, number], safetyFactor: number): [number, number, number] {
   const limits = rigJointRotationLimits[joint];
   return source.map((value, axis) => THREE.MathUtils.clamp(value * safetyFactor, limits[axis][0], limits[axis][1])) as [number, number, number];
+}
+
+function normalizeBoneName(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function createHumanoidBoneMapping(bonesByName: Map<string, THREE.Bone>) {
+  const normalizedBones = new Map<string, THREE.Bone>();
+  bonesByName.forEach((bone, name) => normalizedBones.set(normalizeBoneName(name), bone));
+  const humanoidBones: Partial<Record<HumanoidBoneName, THREE.Bone>> = {};
+  humanoidBoneOrder.forEach((standardName) => {
+    const aliases = humanoidBoneAliases[standardName];
+    const bone = aliases.map((alias) => bonesByName.get(alias) ?? normalizedBones.get(normalizeBoneName(alias))).find(Boolean);
+    if (bone) humanoidBones[standardName] = bone;
+  });
+  return humanoidBones;
 }
 
 function createRigBinding(root: THREE.Object3D): RigBinding | null {
@@ -1171,25 +1349,70 @@ function createRigBinding(root: THREE.Object3D): RigBinding | null {
     if (child instanceof THREE.Bone) bonesByName.set(child.name, child);
   });
 
-  const bones: Partial<Record<RigJoint, THREE.Bone>> = {};
-  rigJointOrder.forEach((joint) => {
-    const bone = bonesByName.get(rigBoneNames[joint]);
-    if (bone) bones[joint] = bone;
-  });
-  if (!bones.torso || !bones.head || !bones.leftArm || !bones.rightArm || !bones.leftLeg || !bones.rightLeg) return null;
+  const humanoidBones = createHumanoidBoneMapping(bonesByName);
+  const missingBones = humanoidBoneOrder.filter((name) => !humanoidBones[name]);
+  root.userData.poseboardBoneMapping = Object.fromEntries(
+    humanoidBoneOrder.flatMap((name) => humanoidBones[name] ? [[name, humanoidBones[name]!.name]] : []),
+  );
+  root.userData.poseboardMissingBones = missingBones;
+  if (missingBones.length > 0) return null;
 
   const restQuaternions = new Map<THREE.Bone, THREE.Quaternion>();
-  bonesByName.forEach((bone) => restQuaternions.set(bone, bone.quaternion.clone()));
-  return { root, bones, bonesByName, restQuaternions };
+  const restPositions = new Map<THREE.Bone, THREE.Vector3>();
+  bonesByName.forEach((bone) => {
+    restQuaternions.set(bone, bone.quaternion.clone());
+    restPositions.set(bone, bone.position.clone());
+  });
+  const rig = { root, humanoidBones, bonesByName, restQuaternions, restPositions, restRootPosition: root.position.clone() };
+  root.userData.poseboardIK = {
+    hand: (side: ArmBoneSide, target: [number, number, number], pole: [number, number, number]) =>
+      solveRigEffectorTarget(rig, side === "left" ? "LeftHand" : "RightHand", target, pole),
+    foot: (side: ArmBoneSide, target: [number, number, number], pole: [number, number, number]) =>
+      solveRigEffectorTarget(rig, side === "left" ? "LeftFoot" : "RightFoot", target, pole),
+    head: (target: [number, number, number]) => applyHeadIKTarget(rig, target),
+  };
+  return rig;
 }
 
 function resetRigPose(rig: RigBinding) {
   rig.restQuaternions.forEach((quaternion, bone) => bone.quaternion.copy(quaternion));
+  rig.restPositions.forEach((position, bone) => bone.position.copy(position));
+  rig.root.position.copy(rig.restRootPosition);
   rig.root.updateMatrixWorld(true);
 }
 
+function groundRigInParentSpace(rig: RigBinding) {
+  rig.root.updateMatrixWorld(true);
+  const parentInverse = rig.root.parent
+    ? rig.root.parent.matrixWorld.clone().invert()
+    : new THREE.Matrix4().identity();
+  const bounds = new THREE.Box3().makeEmpty();
+  const point = new THREE.Vector3();
+
+  rig.root.traverse((child) => {
+    if (!(child instanceof THREE.SkinnedMesh)) return;
+    child.skeleton.update();
+    child.computeBoundingBox();
+    const box = child.boundingBox;
+    if (!box) return;
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          point.set(x, y, z).applyMatrix4(child.matrixWorld).applyMatrix4(parentInverse);
+          bounds.expandByPoint(point);
+        }
+      }
+    }
+  });
+
+  if (bounds.isEmpty() || !Number.isFinite(bounds.min.y)) return;
+  rig.root.position.y -= bounds.min.y;
+  rig.root.updateMatrixWorld(true);
+  rig.root.userData.poseboardGroundCorrection = -bounds.min.y;
+}
+
 function applyRigJointRotation(rig: RigBinding, joint: RigJoint, rotation: [number, number, number]) {
-  const bone = rig.bones[joint];
+  const bone = rig.humanoidBones[jointToBone[joint]];
   const parent = bone?.parent;
   if (!bone || !parent || rotation.every((value) => Math.abs(value) < 0.001)) return;
 
@@ -1208,8 +1431,29 @@ function applyRigJointRotation(rig: RigBinding, joint: RigJoint, rotation: [numb
   bone.updateMatrixWorld(true);
 }
 
-function getRigBonePosition(rig: RigBinding, name: string) {
-  const bone = rig.bonesByName?.get(name);
+function applyRigBoneTranslation(
+  rig: RigBinding,
+  boneName: HumanoidBoneName,
+  translationInShoulderWidths: [number, number, number],
+) {
+  const bone = rig.humanoidBones[boneName];
+  const parent = bone?.parent;
+  const rest = bone ? rig.restPositions.get(bone) : undefined;
+  const leftShoulder = getRigBonePosition(rig, "LeftUpperArm");
+  const rightShoulder = getRigBonePosition(rig, "RightUpperArm");
+  if (!bone || !parent || !rest || !leftShoulder || !rightShoulder) return;
+
+  const shoulderWidth = Math.max(leftShoulder.distanceTo(rightShoulder), 0.001);
+  const deltaInRig = new THREE.Vector3(...translationInShoulderWidths).multiplyScalar(shoulderWidth);
+  const rootWorld = rig.root.getWorldQuaternion(new THREE.Quaternion());
+  const parentWorldInverse = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const deltaInParent = deltaInRig.applyQuaternion(rootWorld).applyQuaternion(parentWorldInverse);
+  bone.position.copy(rest).add(deltaInParent);
+  bone.updateMatrixWorld(true);
+}
+
+function getRigBonePosition(rig: RigBinding, source: HumanoidBoneName | THREE.Bone) {
+  const bone = typeof source === "string" ? rig.humanoidBones[source] : source;
   if (!bone) return null;
   const worldPosition = bone.getWorldPosition(new THREE.Vector3());
   return rig.root.worldToLocal(worldPosition);
@@ -1236,6 +1480,29 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
     targets = [
       { side: "left", anchor: "chest", offset: [0.48, -1.28, 0.92], pole: [0.9, -0.62, 0.72], handDirection: [0, 0, -1] },
       { side: "right", anchor: "chest", offset: [-0.48, -1.28, 1.02], pole: [-0.9, -0.62, 0.78], handDirection: [0, 0, -1] },
+    ];
+  } else if (/双手叉腰/.test(name)) {
+    targets = [
+      { side: "left", anchor: "pelvis", offset: [0.46, 0.42, 0.12], pole: [1.22, 0.58, -0.08], handDirection: [0, -1, 0.08] },
+      { side: "right", anchor: "pelvis", offset: [-0.46, 0.42, 0.12], pole: [-1.22, 0.58, -0.08], handDirection: [0, -1, 0.08] },
+    ];
+  } else if (/单手叉腰/.test(name)) {
+    targets = [
+      { side: "left", anchor: "pelvis", offset: [0.46, 0.42, 0.12], pole: [1.22, 0.58, -0.08], handDirection: [0, -1, 0.08] },
+    ];
+  } else if (/双手插兜/.test(name)) {
+    targets = [
+      { side: "left", anchor: "pelvis", offset: [0.27, 0.54, 0.24], pole: [0.96, 0.38, 0.38], handDirection: [0, -1, 0.12] },
+      { side: "right", anchor: "pelvis", offset: [-0.27, 0.54, 0.24], pole: [-0.96, 0.38, 0.38], handDirection: [0, -1, 0.12] },
+    ];
+  } else if (/单手插兜/.test(name)) {
+    targets = [
+      { side: "left", anchor: "pelvis", offset: [0.27, 0.54, 0.24], pole: [0.96, 0.38, 0.38], handDirection: [0, -1, 0.12] },
+    ];
+  } else if (/双手身前交叠/.test(name)) {
+    targets = [
+      { side: "left", anchor: "pelvis", offset: [-0.08, 0.62, 0.42], pole: [0.84, 0.18, 0.48], handDirection: [-1, 0.05, 0] },
+      { side: "right", anchor: "pelvis", offset: [0.08, 0.56, 0.5], pole: [-0.84, 0.12, 0.56], handDirection: [1, 0.05, 0] },
     ];
   } else if (item.category === "running" && /急停|侧向|回头|转弯/.test(name)) {
     // These poses intentionally use their authored asymmetric arm rotations.
@@ -1280,7 +1547,7 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.5, -0.24, -0.46], pole: [0.9, -0.2, -0.02], handDirection: [0, 0, -1] },
     ];
-  } else if (/自然正坐|双腿并拢坐|双手放腿上/.test(name)) {
+  } else if (/双手放腿上/.test(name)) {
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.3, -0.08, 0.48], pole: [0.76, -0.05, 0.45], handDirection: [0, 0, 1] },
       { side: "right", anchor: "pelvis", offset: [-0.3, -0.08, 0.48], pole: [-0.76, -0.05, 0.45], handDirection: [0, 0, 1] },
@@ -1329,7 +1596,7 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
   } else if (/手扶颈部|扶颈/.test(name)) {
     targets = [{ side: "left", anchor: "head", offset: [0.25, -0.08, 0.24], pole: [0.88, -0.3, 0.52], handDirection: [0, -1, 0.04] }];
   } else if (/手扶脸/.test(name)) {
-    targets = [{ side: "left", anchor: "head", offset: [0.32, -0.12, 0.27], pole: [0.88, -0.3, 0.5], handDirection: [0, 1, 0.04] }];
+    targets = [{ side: "left", anchor: "head", offset: [0.56, 0.18, 0.34], pole: [1.3, 0.1, 0.7], handDirection: [0, 1, 0.04] }];
   } else if (/指向镜头/.test(name)) {
     targets = [{ side: "right", anchor: "chest", offset: [-0.08, -0.04, 1.55], pole: [-0.72, -0.72, 0.68], handDirection: [0, 0, 1] }];
   } else if (/耳机|打电话/.test(name)) {
@@ -1368,22 +1635,94 @@ function aimRigBoneAt(bone: THREE.Bone, child: THREE.Bone, targetWorld: THREE.Ve
   bone.updateMatrixWorld(true);
 }
 
+type TwoBoneEffector = "LeftHand" | "RightHand" | "LeftFoot" | "RightFoot";
+
+const effectorChains: Record<TwoBoneEffector, [HumanoidBoneName, HumanoidBoneName, HumanoidBoneName]> = {
+  LeftHand: ["LeftUpperArm", "LeftLowerArm", "LeftHand"],
+  RightHand: ["RightUpperArm", "RightLowerArm", "RightHand"],
+  LeftFoot: ["LeftUpperLeg", "LeftLowerLeg", "LeftFoot"],
+  RightFoot: ["RightUpperLeg", "RightLowerLeg", "RightFoot"],
+};
+
+function solveTwoBoneRigChain(
+  rig: RigBinding,
+  chain: [HumanoidBoneName, HumanoidBoneName, HumanoidBoneName],
+  targetWorld: THREE.Vector3,
+  poleWorld: THREE.Vector3,
+) {
+  const upper = rig.humanoidBones[chain[0]];
+  const lower = rig.humanoidBones[chain[1]];
+  const end = rig.humanoidBones[chain[2]];
+  if (!upper || !lower || !end) return false;
+  const upperRest = rig.restQuaternions.get(upper);
+  const lowerRest = rig.restQuaternions.get(lower);
+  if (!upperRest || !lowerRest) return false;
+
+  rig.root.updateMatrixWorld(true);
+  const upperWorld = upper.getWorldPosition(new THREE.Vector3());
+  const lowerWorld = lower.getWorldPosition(new THREE.Vector3());
+  const endWorld = end.getWorldPosition(new THREE.Vector3());
+  const upperLength = Math.max(upperWorld.distanceTo(lowerWorld), 0.001);
+  const lowerLength = Math.max(lowerWorld.distanceTo(endWorld), 0.001);
+  const reach = targetWorld.clone().sub(upperWorld);
+  const rawDistance = Math.max(reach.length(), 0.001);
+  const minDistance = Math.abs(upperLength - lowerLength) + 0.006;
+  const maxDistance = upperLength + lowerLength - 0.006;
+  const distance = THREE.MathUtils.clamp(rawDistance, minDistance, maxDistance);
+  const direction = reach.normalize();
+  const reachableTarget = upperWorld.clone().addScaledVector(direction, distance);
+  const along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2 * distance);
+  const height = Math.sqrt(Math.max(upperLength * upperLength - along * along, 0));
+  const poleDirection = poleWorld.clone().sub(upperWorld);
+  poleDirection.addScaledVector(direction, -poleDirection.dot(direction));
+  if (poleDirection.lengthSq() < 1e-8) poleDirection.set(0, 0, 1).transformDirection(rig.root.matrixWorld);
+  poleDirection.normalize();
+  const solvedMiddle = upperWorld.clone().addScaledVector(direction, along).addScaledVector(poleDirection, height);
+
+  aimRigBoneAt(upper, lower, solvedMiddle, upperRest);
+  rig.root.updateMatrixWorld(true);
+  aimRigBoneAt(lower, end, reachableTarget, lowerRest);
+  rig.root.updateMatrixWorld(true);
+  return true;
+}
+
+function solveRigEffectorTarget(
+  rig: RigBinding,
+  effector: TwoBoneEffector,
+  targetInRig: [number, number, number],
+  poleInRig: [number, number, number],
+) {
+  const targetWorld = rig.root.localToWorld(new THREE.Vector3(...targetInRig));
+  const poleWorld = rig.root.localToWorld(new THREE.Vector3(...poleInRig));
+  return solveTwoBoneRigChain(rig, effectorChains[effector], targetWorld, poleWorld);
+}
+
+function applyHeadIKTarget(rig: RigBinding, targetInRig: [number, number, number]) {
+  const headPosition = getRigBonePosition(rig, "Head");
+  if (!headPosition) return false;
+  const direction = new THREE.Vector3(...targetInRig).sub(headPosition).normalize();
+  const yaw = THREE.MathUtils.radToDeg(Math.atan2(direction.x, Math.max(Math.abs(direction.z), 0.0001) * Math.sign(direction.z || 1)));
+  const pitch = THREE.MathUtils.radToDeg(-Math.atan2(direction.y, Math.hypot(direction.x, direction.z)));
+  applyRigJointRotation(rig, "neck", [pitch * 0.38, yaw * 0.38, 0]);
+  applyRigJointRotation(rig, "head", [pitch * 0.62, yaw * 0.62, 0]);
+  rig.root.updateMatrixWorld(true);
+  return true;
+}
+
 function applyArmIKTarget(rig: RigBinding, target: ArmIKTarget, safetyFactor: number) {
-  const upperArm = rig.bonesByName.get(`upperarm_${target.side === "left" ? "l" : "r"}`);
-  const lowerArm = rig.bonesByName.get(`lowerarm_${target.side === "left" ? "l" : "r"}`);
-  const hand = rig.bonesByName.get(`hand_${target.side === "left" ? "l" : "r"}`);
+  const upperArm = rig.humanoidBones[target.side === "left" ? "LeftUpperArm" : "RightUpperArm"];
+  const lowerArm = rig.humanoidBones[target.side === "left" ? "LeftLowerArm" : "RightLowerArm"];
+  const hand = rig.humanoidBones[target.side === "left" ? "LeftHand" : "RightHand"];
   const middleFinger = rig.bonesByName.get(`middle_01_${target.side === "left" ? "l" : "r"}`);
-  const leftShoulder = getRigBonePosition(rig, "upperarm_l");
-  const rightShoulder = getRigBonePosition(rig, "upperarm_r");
+  const leftShoulder = getRigBonePosition(rig, "LeftUpperArm");
+  const rightShoulder = getRigBonePosition(rig, "RightUpperArm");
   const head = getRigBonePosition(rig, "Head");
-  const chest = getRigBonePosition(rig, "spine_03");
-  const pelvis = getRigBonePosition(rig, "pelvis");
+  const chest = getRigBonePosition(rig, "Chest");
+  const pelvis = getRigBonePosition(rig, "Hips");
   if (!upperArm || !lowerArm || !hand || !leftShoulder || !rightShoulder || !head || !chest || !pelvis) return false;
 
-  const upperRest = rig.restQuaternions.get(upperArm);
-  const lowerRest = rig.restQuaternions.get(lowerArm);
   const handRest = rig.restQuaternions.get(hand);
-  if (!upperRest || !lowerRest || !handRest) return false;
+  if (!handRest) return false;
 
   const shoulderWidth = Math.max(leftShoulder.distanceTo(rightShoulder), 0.001);
   const sideAxis = leftShoulder.clone().sub(rightShoulder).normalize();
@@ -1398,7 +1737,7 @@ function applyArmIKTarget(rig: RigBinding, target: ArmIKTarget, safetyFactor: nu
     .addScaledVector(sideAxis, target.offset[0] * shoulderWidth)
     .addScaledVector(upAxis, target.offset[1] * shoulderWidth)
     .addScaledVector(forwardAxis, (target.offset[2] + clearance) * shoulderWidth);
-  const shoulderLocal = getRigBonePosition(rig, upperArm.name);
+  const shoulderLocal = getRigBonePosition(rig, upperArm);
   if (!shoulderLocal) return false;
   const poleLocal = shoulderLocal.clone()
     .addScaledVector(sideAxis, target.pole[0] * shoulderWidth)
@@ -1407,31 +1746,8 @@ function applyArmIKTarget(rig: RigBinding, target: ArmIKTarget, safetyFactor: nu
 
   const targetWorld = rig.root.localToWorld(targetLocal.clone());
   const poleWorld = rig.root.localToWorld(poleLocal.clone());
-  rig.root.updateMatrixWorld(true);
-  const shoulderWorld = upperArm.getWorldPosition(new THREE.Vector3());
-  const elbowWorld = lowerArm.getWorldPosition(new THREE.Vector3());
-  const handWorld = hand.getWorldPosition(new THREE.Vector3());
-  const upperLength = Math.max(shoulderWorld.distanceTo(elbowWorld), 0.001);
-  const lowerLength = Math.max(elbowWorld.distanceTo(handWorld), 0.001);
-  const reach = targetWorld.clone().sub(shoulderWorld);
-  const rawDistance = Math.max(reach.length(), 0.001);
-  const minDistance = Math.abs(upperLength - lowerLength) + 0.006;
-  const maxDistance = upperLength + lowerLength - 0.006;
-  const distance = THREE.MathUtils.clamp(rawDistance, minDistance, maxDistance);
-  const direction = reach.normalize();
-  const reachableTarget = shoulderWorld.clone().addScaledVector(direction, distance);
-  const along = (upperLength * upperLength - lowerLength * lowerLength + distance * distance) / (2 * distance);
-  const height = Math.sqrt(Math.max(upperLength * upperLength - along * along, 0));
-  const poleDirection = poleWorld.clone().sub(shoulderWorld);
-  poleDirection.addScaledVector(direction, -poleDirection.dot(direction));
-  if (poleDirection.lengthSq() < 1e-8) poleDirection.copy(forwardAxis).transformDirection(rig.root.matrixWorld);
-  poleDirection.normalize();
-  const solvedElbow = shoulderWorld.clone().addScaledVector(direction, along).addScaledVector(poleDirection, height);
-
-  aimRigBoneAt(upperArm, lowerArm, solvedElbow, upperRest);
-  rig.root.updateMatrixWorld(true);
-  aimRigBoneAt(lowerArm, hand, reachableTarget, lowerRest);
-  rig.root.updateMatrixWorld(true);
+  const effector: TwoBoneEffector = target.side === "left" ? "LeftHand" : "RightHand";
+  if (!solveTwoBoneRigChain(rig, effectorChains[effector], targetWorld, poleWorld)) return false;
   if (middleFinger) {
     const fingerDirectionLocal = sideAxis.clone().multiplyScalar(target.handDirection[0])
       .addScaledVector(upAxis, target.handDirection[1])
@@ -1479,21 +1795,21 @@ type RigCollisionProfile = {
 
 function getRigSelfCollision(rig: RigBinding, profile: RigCollisionProfile): string | null {
   rig.root.updateMatrixWorld(true);
-  const pelvis = getRigBonePosition(rig, "pelvis");
-  const chest = getRigBonePosition(rig, "spine_03");
+  const pelvis = getRigBonePosition(rig, "Hips");
+  const chest = getRigBonePosition(rig, "Chest");
   const head = getRigBonePosition(rig, "Head");
-  const leftShoulder = getRigBonePosition(rig, "upperarm_l");
-  const leftElbow = getRigBonePosition(rig, "lowerarm_l");
-  const leftHand = getRigBonePosition(rig, "hand_l");
-  const rightShoulder = getRigBonePosition(rig, "upperarm_r");
-  const rightElbow = getRigBonePosition(rig, "lowerarm_r");
-  const rightHand = getRigBonePosition(rig, "hand_r");
-  const leftHip = getRigBonePosition(rig, "thigh_l");
-  const leftKnee = getRigBonePosition(rig, "calf_l");
-  const leftFoot = getRigBonePosition(rig, "foot_l");
-  const rightHip = getRigBonePosition(rig, "thigh_r");
-  const rightKnee = getRigBonePosition(rig, "calf_r");
-  const rightFoot = getRigBonePosition(rig, "foot_r");
+  const leftShoulder = getRigBonePosition(rig, "LeftUpperArm");
+  const leftElbow = getRigBonePosition(rig, "LeftLowerArm");
+  const leftHand = getRigBonePosition(rig, "LeftHand");
+  const rightShoulder = getRigBonePosition(rig, "RightUpperArm");
+  const rightElbow = getRigBonePosition(rig, "RightLowerArm");
+  const rightHand = getRigBonePosition(rig, "RightHand");
+  const leftHip = getRigBonePosition(rig, "LeftUpperLeg");
+  const leftKnee = getRigBonePosition(rig, "LeftLowerLeg");
+  const leftFoot = getRigBonePosition(rig, "LeftFoot");
+  const rightHip = getRigBonePosition(rig, "RightUpperLeg");
+  const rightKnee = getRigBonePosition(rig, "RightLowerLeg");
+  const rightFoot = getRigBonePosition(rig, "RightFoot");
   if (!pelvis || !chest || !head || !leftShoulder || !leftElbow || !leftHand || !rightShoulder || !rightElbow || !rightHand || !leftHip || !leftKnee || !leftFoot || !rightHip || !rightKnee || !rightFoot) return null;
 
   const torsoCenter = pelvis.clone().lerp(chest, 0.52);
@@ -1514,8 +1830,17 @@ function getRigSelfCollision(rig: RigBinding, profile: RigCollisionProfile): str
   if (!profile.allowHeadContact && (leftHand.distanceTo(head) < headClearance || rightHand.distanceTo(head) < headClearance)) return "hand-head";
   if (!profile.allowArmPairContact && leftHand.distanceTo(rightHand) < 0.09) return "hand-hand";
   if (!profile.allowArmPairContact && sampledSegmentDistance(leftElbow, leftHand, rightElbow, rightHand) < 0.085) return "forearm-forearm";
-  if (!profile.allowLegPairContact && sampledSegmentDistance(leftHip, leftKnee, rightHip, rightKnee) < 0.13) return "thigh-thigh";
-  if (!profile.allowLegPairContact && sampledSegmentDistance(leftKnee, leftFoot, rightKnee, rightFoot) < 0.11) return "shin-shin";
+  // Paired legs share nearby anatomical origins. A raw capsule distance marks
+  // even the model's bind stance as colliding, so V2 checks anatomical side
+  // ordering at the distal limb instead. An unexpected Left/Right inversion is
+  // a reliable signal of a crossed-through limb; close parallel legs are valid.
+  const sideAxis = leftHip.clone().sub(rightHip).normalize();
+  const leftThighDistal = leftHip.clone().lerp(leftKnee, 0.72);
+  const rightThighDistal = rightHip.clone().lerp(rightKnee, 0.72);
+  const leftShinDistal = leftKnee.clone().lerp(leftFoot, 0.72);
+  const rightShinDistal = rightKnee.clone().lerp(rightFoot, 0.72);
+  if (!profile.allowLegPairContact && leftThighDistal.clone().sub(rightThighDistal).dot(sideAxis) < -0.01) return "thigh-thigh";
+  if (!profile.allowLegPairContact && leftShinDistal.clone().sub(rightShinDistal).dot(sideAxis) < -0.01) return "shin-shin";
   return null;
 }
 
@@ -1527,37 +1852,67 @@ function applyRigPose(rig: RigBinding, poseIndex: number, mirrored = false) {
   const armIKTargets = getArmIKTargets(poseItem, mirrored);
   const ikSides = new Set(armIKTargets.map(({ side }) => side));
   const collisionProfile: RigCollisionProfile = {
-    allowArmPairContact: /抱胸|交叉|鼓掌|捧脸|捂脸|捂嘴|整理头发|持物|托举|看书|看手机|拿相机|蹲|趴卧/.test(safetyText),
+    allowArmPairContact: /抱胸|交叉|交叠|鼓掌|捧脸|捂脸|捂嘴|整理头发|持物|托举|看书|看手机|拿相机|蹲|趴卧/.test(safetyText),
     allowHeadContact: /托腮|扶下巴|扶脸|扶头|撑头|摸发|整理头发|扶颈|捧脸|捂脸|捂嘴|遮脸|耳机|打电话|侧躺|趴卧/.test(safetyText),
-    allowLegPairContact: /交叉|二郎|并拢|盘腿|抱膝|侧躺|趴卧/.test(safetyText),
+    allowLegPairContact: /交叉|二郎|翘腿|并拢|盘腿|抱膝|侧躺|趴卧/.test(safetyText) || poseItem?.direction === "back",
     // Targeted hand contacts must still remain outside the torso volume.
-    allowTorsoContact: armIKTargets.length === 0 && /抱胸|交叉|持物|托举|看手机|看书|相机|手表|胸前|蹲|撑地|后仰|半躺/.test(safetyText),
+    allowTorsoContact: armIKTargets.length === 0 && (/抱胸|交叉|持物|托举|看手机|看书|相机|手表|胸前|蹲|撑地|后仰|半躺/.test(safetyText) || poseItem?.category === "prone"),
   };
-  const safetyFactors = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0];
+  // Safety correction is deliberately shallow. The old engine repeatedly scaled
+  // every joint down to zero, which avoided some contacts by destroying the named
+  // action. V2 preserves the authored pose and only allows a small clearance pass.
+  const safetyFactors = [1, 0.94, 0.88];
   let fallbackReason: string | null = null;
   for (const safetyFactor of safetyFactors) {
     resetRigPose(rig);
     rigJointOrder.forEach((joint) => {
-      const anatomicalSide = joint === "leftArm" || joint === "leftForearm" ? "right" : joint === "rightArm" || joint === "rightForearm" ? "left" : null;
+      const anatomicalSide = joint === "leftShoulder" || joint === "leftArm" || joint === "leftForearm" || joint === "leftHand"
+        ? "left"
+        : joint === "rightShoulder" || joint === "rightArm" || joint === "rightForearm" || joint === "rightHand"
+          ? "right"
+          : null;
       if (anatomicalSide && ikSides.has(anatomicalSide)) return;
-      const rotation = getSafeRigJointRotation(joint, pose[joint], safetyFactor);
+      // The V1 authoring table was produced while raw .l/.r bones were swapped.
+      // Convert those limb-local rotations into the standard anatomical frame
+      // after mapping, rather than swapping the actual skeleton again.
+      const authoredRotation = anatomicalSide || joint === "leftLeg" || joint === "leftShin" || joint === "leftFoot" || joint === "rightLeg" || joint === "rightShin" || joint === "rightFoot"
+        ? mirrorRotation(pose[joint])
+        : pose[joint];
+      const rotation = getSafeRigJointRotation(joint, authoredRotation, safetyFactor);
       // The supplied character is authored in a T-pose, while PoseBoard presets use
       // relaxed arms as their zero position. Fold that bind-pose offset into shoulders.
-      if (joint === "leftArm") rotation[2] += 90;
-      if (joint === "rightArm") rotation[2] -= 90;
+      if (joint === "leftArm") rotation[2] -= 90;
+      if (joint === "rightArm") rotation[2] += 90;
       applyRigJointRotation(rig, joint, rotation);
     });
     armIKTargets.forEach((target) => applyArmIKTarget(rig, target, safetyFactor));
     rig.root.updateMatrixWorld(true);
     const collision = getRigSelfCollision(rig, collisionProfile);
-    if (!collision || safetyFactor === 0) {
+    if (!collision || safetyFactor === safetyFactors[safetyFactors.length - 1]) {
       rig.root.userData.poseboardSafetyFactor = safetyFactor;
-      rig.root.userData.poseboardCollisionFallbackReason = fallbackReason;
+      rig.root.userData.poseboardCollisionFallbackReason = collision ?? fallbackReason;
       break;
     }
     fallbackReason = collision;
   }
+  groundRigInParentSpace(rig);
+  const hipsPosition = poseParametersByEngineIndex.get(poseIndex)?.bones.Hips?.position;
+  if (hipsPosition) {
+    const mirroredPosition: [number, number, number] = mirrored
+      ? [-hipsPosition[0], hipsPosition[1], hipsPosition[2]]
+      : hipsPosition;
+    applyRigBoneTranslation(rig, "Hips", mirroredPosition);
+    rig.root.updateMatrixWorld(true);
+  }
 }
+
+(globalThis as typeof globalThis & {
+  __POSEBOARD_ENGINE_DEBUG__?: {
+    createRigBinding: typeof createRigBinding;
+    applyRigPose: typeof applyRigPose;
+    poses: typeof poseItems;
+  };
+}).__POSEBOARD_ENGINE_DEBUG__ = { createRigBinding, applyRigPose, poses: poseItems };
 
 function createMannequinMaterial() {
   return new THREE.MeshStandardMaterial({ color: 0xf5f5f3, roughness: 0.76, metalness: 0.03 });
@@ -1659,7 +2014,6 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
   poseIndices.forEach((poseIndex) => {
     const item = poseItemByEngineIndex.get(poseIndex);
     if (!item) return;
-    const transform = getPoseTransform(item);
     const root = new THREE.Group();
     const clone = cloneSkeleton(model);
     const rig = createRigBinding(clone);
@@ -1675,9 +2029,6 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
     });
     if (rig) applyRigPose(rig, poseIndex);
     root.add(clone);
-    root.position.set(...transform.position);
-    root.rotation.set(...transform.rotation.map(THREE.MathUtils.degToRad) as [number, number, number]);
-    root.scale.setScalar(transform.scale / 100);
     scene.add(root);
     renderer.render(scene, camera);
     thumbnails[poseIndex] = canvas.toDataURL("image/jpeg", 0.88);
@@ -1864,14 +2215,10 @@ export default function Home() {
       if (Array.isArray(recent)) setRecentIds(recent.filter((id): id is string => typeof id === "string").slice(0, 20));
       const restoredPose = poseItems.find((pose) => pose.id === lastSelected && pose.status === "ready");
       if (restoredPose) {
-        const preset = getPoseTransform(restoredPose);
         setSelectedPoseId(restoredPose.id);
         setEditor((current) => ({
           ...current,
           pose: restoredPose.enginePoseIndex,
-          position: [...preset.position] as [number, number, number],
-          rotation: [...preset.rotation] as [number, number, number],
-          scale: preset.scale,
         }));
       }
     } finally {
@@ -2000,14 +2347,10 @@ export default function Home() {
       flash("Pose 资源缺失，请稍后重试");
       return;
     }
-    const preset = getPoseTransform(pose);
     commit((current) => ({
       ...current,
       pose: pose.enginePoseIndex,
       mirrored: false,
-      position: [...preset.position] as [number, number, number],
-      rotation: [...preset.rotation] as [number, number, number],
-      scale: preset.scale,
     }));
     setSelectedPoseId(pose.id);
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
@@ -2272,10 +2615,6 @@ export default function Home() {
           }
         });
 
-        const rig = createRigBinding(model);
-        const hasSkeleton = Boolean(rig);
-        if (!rig) originalMeshes.forEach((mesh) => prepareRigidPoseGeometry(mesh.geometry));
-
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
@@ -2283,6 +2622,12 @@ export default function Home() {
         model.scale.setScalar(fit);
         model.position.set(-center.x * fit, -box.min.y * fit, -center.z * fit);
         root.add(model);
+
+        // Bind after normalization so reset/grounding always returns to the
+        // model's normalized internal placement, independently of editor transform.
+        const rig = createRigBinding(model);
+        const hasSkeleton = Boolean(rig);
+        if (!rig) originalMeshes.forEach((mesh) => prepareRigidPoseGeometry(mesh.geometry));
 
         const template = cloneSkeleton(model);
         template.traverse((child) => {
