@@ -42,11 +42,18 @@ import {
   defaultPose,
   directionOptions,
   getPoseCategoryLabel,
+  getPoseCategoryLabelEn,
   getPoseTabLabel,
   handOptions,
+  handLabelsEn,
   intensityOptions,
+  intensityLabelsEn as poseIntensityLabelsEn,
   poseCategoryTabs,
   poseItems,
+  poseCategoryLabelsEn,
+  directionLabelsEn as poseDirectionLabelsEn,
+  bodyLabelsEn,
+  styleLabelsEn,
   styleOptions,
   type PoseBody,
   type PoseCategory,
@@ -66,9 +73,10 @@ import {
 } from "./prompt-to-pose";
 
 type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
+type Language = "en" | "zh";
 type ToolMode = "translate" | "rotate" | "pose";
 type InspectorTab = "model" | "camera" | "scene";
-type QuickView = "常用" | "最近" | null;
+type QuickView = "featured" | "recent" | null;
 type CameraPresetId = "commercial" | "cinematic" | "ecommerce" | "custom";
 type ShotSize = "close" | "medium" | "full" | "long";
 type LightingPresetId = "studio" | "cinematic" | "night" | "soft" | "custom";
@@ -95,27 +103,64 @@ type IKControlId =
   | "rightFootDirection";
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 
-const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; kind: "core" | "joint" | "effector" | "direction" }> = [
-  { id: "head", label: "头部朝向", kind: "effector" },
-  { id: "chest", label: "胸腔", kind: "core" },
-  { id: "hips", label: "骨盆", kind: "core" },
-  { id: "leftShoulder", label: "左肩", kind: "joint" },
-  { id: "rightShoulder", label: "右肩", kind: "joint" },
-  { id: "leftElbow", label: "左肘", kind: "joint" },
-  { id: "rightElbow", label: "右肘", kind: "joint" },
-  { id: "leftHand", label: "左手", kind: "effector" },
-  { id: "rightHand", label: "右手", kind: "effector" },
-  { id: "leftHandDirection", label: "左手方向", kind: "direction" },
-  { id: "rightHandDirection", label: "右手方向", kind: "direction" },
-  { id: "leftHip", label: "左髋", kind: "joint" },
-  { id: "rightHip", label: "右髋", kind: "joint" },
-  { id: "leftKnee", label: "左膝", kind: "joint" },
-  { id: "rightKnee", label: "右膝", kind: "joint" },
-  { id: "leftFoot", label: "左脚", kind: "effector" },
-  { id: "rightFoot", label: "右脚", kind: "effector" },
-  { id: "leftFootDirection", label: "左脚方向", kind: "direction" },
-  { id: "rightFootDirection", label: "右脚方向", kind: "direction" },
+const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction" }> = [
+  { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector" },
+  { id: "chest", label: "胸腔", labelEn: "Chest", kind: "core" },
+  { id: "hips", label: "骨盆", labelEn: "Pelvis", kind: "core" },
+  { id: "leftShoulder", label: "左肩", labelEn: "Left Shoulder", kind: "joint" },
+  { id: "rightShoulder", label: "右肩", labelEn: "Right Shoulder", kind: "joint" },
+  { id: "leftElbow", label: "左肘", labelEn: "Left Elbow", kind: "joint" },
+  { id: "rightElbow", label: "右肘", labelEn: "Right Elbow", kind: "joint" },
+  { id: "leftHand", label: "左手", labelEn: "Left Hand", kind: "effector" },
+  { id: "rightHand", label: "右手", labelEn: "Right Hand", kind: "effector" },
+  { id: "leftHandDirection", label: "左手方向", labelEn: "Left Hand Direction", kind: "direction" },
+  { id: "rightHandDirection", label: "右手方向", labelEn: "Right Hand Direction", kind: "direction" },
+  { id: "leftHip", label: "左髋", labelEn: "Left Hip", kind: "joint" },
+  { id: "rightHip", label: "右髋", labelEn: "Right Hip", kind: "joint" },
+  { id: "leftKnee", label: "左膝", labelEn: "Left Knee", kind: "joint" },
+  { id: "rightKnee", label: "右膝", labelEn: "Right Knee", kind: "joint" },
+  { id: "leftFoot", label: "左脚", labelEn: "Left Foot", kind: "effector" },
+  { id: "rightFoot", label: "右脚", labelEn: "Right Foot", kind: "effector" },
+  { id: "leftFootDirection", label: "左脚方向", labelEn: "Left Foot Direction", kind: "direction" },
+  { id: "rightFootDirection", label: "右脚方向", labelEn: "Right Foot Direction", kind: "direction" },
 ];
+
+const directionOptionsEn = [
+  ["Any", "any"], ["Front", "front"], ["Front Left 45°", "front-left"], ["Front Right 45°", "front-right"],
+  ["Side", "side"], ["Back", "back"], ["Look Back", "look-back"],
+] as const;
+
+const intensityOptionsEn = [
+  ["Any", "any"], ["Static", "static"], ["Light", "light"], ["Medium", "medium"], ["Strong", "strong"],
+] as const;
+
+const handOptionsEn = [
+  ["Any", "any"], ["Natural", "natural"], ["Hip", "hip"], ["Pocket", "pocket"], ["Crossed", "crossed"],
+  ["Behind", "behind"], ["Support", "support"], ["Face", "face"], ["Chin", "chin"], ["Raise", "raise"],
+  ["Open", "open"], ["Fist", "fist"], ["Holding", "holding"],
+] as const;
+
+const bodyOptionsEn = [
+  ["Any", "any"], ["Upright", "upright"], ["Forward", "forward"], ["Backward", "backward"],
+  ["Side Lean", "side-lean"], ["Twist", "twist"], ["Turn", "turn"],
+] as const;
+
+const styleOptionsEn = [
+  ["Any", "any"], ["Natural", "natural"], ["Fashion", "fashion"], ["Photo", "photo"], ["Sport", "sport"],
+  ["Combat", "combat"], ["Hero", "hero"], ["Emotion", "emotion"], ["Dance", "dance"], ["Daily", "daily"], ["Commercial", "commercial"],
+] as const;
+
+const compactPoseTabLabelsEn: Record<PoseCategoryTab, string> = {
+  all: "All", favorites: "Favorites", standing: "Stand", walking: "Walk", running: "Run", jumping: "Jump",
+  squatting: "Squat", sitting: "Sit", kneeling: "Kneel", lying: "Lie", prone: "Prone", leaning: "Lean", ground: "Ground",
+};
+
+const promptToPoseExamplesEn = [
+  "A warrior kneeling on one knee, holding a sword in the right hand, leaning forward and ready to fight",
+  "A fashion model standing on the street with both hands in pockets, turning sideways and looking back",
+  "An athlete sprinting forward at full speed, body leaning forward with strong motion",
+  "A person sitting on a chair, resting one hand on the chin and looking to the side",
+] as const;
 
 type EditorState = {
   pose: number;
@@ -189,14 +234,15 @@ const presetCameraFov = 34;
 
 const cameraPresets: Record<Exclude<CameraPresetId, "custom">, {
   label: string;
+  labelEn: string;
   focalLength: number;
   position: [number, number, number];
   target: [number, number, number];
   shotSize: ShotSize;
 }> = {
-  commercial: { label: "商业摄影", focalLength: 85, position: [4.7, 2.8, 8.4], target: [0, 1.55, 0], shotSize: "full" },
-  cinematic: { label: "电影英雄", focalLength: 24, position: [5.4, 1.1, 7.4], target: [0, 1.9, 0], shotSize: "full" },
-  ecommerce: { label: "电商模特", focalLength: 50, position: [0, 2.25, 8.7], target: [0, 1.65, 0], shotSize: "full" },
+  commercial: { label: "商业摄影", labelEn: "Commercial", focalLength: 85, position: [4.7, 2.8, 8.4], target: [0, 1.55, 0], shotSize: "full" },
+  cinematic: { label: "电影英雄", labelEn: "Cinematic Hero", focalLength: 24, position: [5.4, 1.1, 7.4], target: [0, 1.9, 0], shotSize: "full" },
+  ecommerce: { label: "电商模特", labelEn: "E-commerce", focalLength: 50, position: [0, 2.25, 8.7], target: [0, 1.65, 0], shotSize: "full" },
 };
 
 const shotDistance: Record<ShotSize, number> = { close: 3.8, medium: 5.1, full: 8.5, long: 11.5 };
@@ -227,6 +273,7 @@ const lightingPresetLabelsEn: Record<LightingPresetId, string> = {
 
 const lightingPresets: Record<Exclude<LightingPresetId, "custom">, {
   label: string;
+  labelEn: string;
   key: number;
   fill: number;
   rim: number;
@@ -236,10 +283,10 @@ const lightingPresets: Record<Exclude<LightingPresetId, "custom">, {
   fillColor: number;
   rimColor: number;
 }> = {
-  studio: { label: "商业棚拍", key: 4.6, fill: 1.35, rim: 2.1, exposure: 1.05, background: "#eef0f4", keyColor: 0xffffff, fillColor: 0xe8f1ff, rimColor: 0xcbd5ff },
-  cinematic: { label: "电影侧逆光", key: 3.8, fill: 0.55, rim: 4.2, exposure: 0.95, background: "#dfe4ec", keyColor: 0xffd8b5, fillColor: 0x92a9ce, rimColor: 0x9ab7ff },
-  night: { label: "蓝橙夜景", key: 3.4, fill: 0.7, rim: 4.8, exposure: 0.9, background: "#cbd4df", keyColor: 0xffb06b, fillColor: 0x6f91d6, rimColor: 0x7aa7ff },
-  soft: { label: "柔光人像", key: 3.1, fill: 2.2, rim: 1.1, exposure: 1.08, background: "#f1f2f4", keyColor: 0xfff5e9, fillColor: 0xf0f5ff, rimColor: 0xe3e7ff },
+  studio: { label: "商业棚拍", labelEn: "Studio", key: 4.6, fill: 1.35, rim: 2.1, exposure: 1.05, background: "#eef0f4", keyColor: 0xffffff, fillColor: 0xe8f1ff, rimColor: 0xcbd5ff },
+  cinematic: { label: "电影侧逆光", labelEn: "Cinematic Rim", key: 3.8, fill: 0.55, rim: 4.2, exposure: 0.95, background: "#dfe4ec", keyColor: 0xffd8b5, fillColor: 0x92a9ce, rimColor: 0x9ab7ff },
+  night: { label: "蓝橙夜景", labelEn: "Blue & Orange", key: 3.4, fill: 0.7, rim: 4.8, exposure: 0.9, background: "#cbd4df", keyColor: 0xffb06b, fillColor: 0x6f91d6, rimColor: 0x7aa7ff },
+  soft: { label: "柔光人像", labelEn: "Soft Portrait", key: 3.1, fill: 2.2, rim: 1.1, exposure: 1.08, background: "#f1f2f4", keyColor: 0xfff5e9, fillColor: 0xf0f5ff, rimColor: 0xe3e7ff },
 };
 
 type JointPose = {
@@ -2425,7 +2472,9 @@ export default function Home() {
   const saveTimerRef = useRef<number | null>(null);
   const randomCursorRef = useRef(73);
   const poseThumbnailsRef = useRef<Record<number, string>>({});
+  const languageRef = useRef<Language>("en");
 
+  const [language, setLanguage] = useState<Language>("en");
   const [editor, setEditor] = useState<EditorState>(cloneState(initialState));
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -2446,7 +2495,7 @@ export default function Home() {
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"library" | "inspector" | null>(null);
   const [toast, setToast] = useState("");
-  const [saveState, setSaveState] = useState("已保存 · 刚刚");
+  const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
   const [exporting, setExporting] = useState(false);
   const [modelList, setModelList] = useState<ModelListItem[]>([{ id: "model-1", name: "机器人 01" }]);
   const [selectedModelId, setSelectedModelId] = useState("model-1");
@@ -2454,7 +2503,7 @@ export default function Home() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
   const [activeIKControl, setActiveIKControl] = useState<IKControlId | null>(null);
   const [promptToPoseOpen, setPromptToPoseOpen] = useState(false);
-  const [poseText, setPoseText] = useState<string>(promptToPoseExamples[0]);
+  const [poseText, setPoseText] = useState<string>(promptToPoseExamplesEn[0]);
   const [promptToPoseResult, setPromptToPoseResult] = useState<PromptToPoseResult | null>(null);
   const [sourcePosePrompt, setSourcePosePrompt] = useState("");
   const [promptOpen, setPromptOpen] = useState(false);
@@ -2462,11 +2511,51 @@ export default function Home() {
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
   const [modelInfo, setModelInfo] = useState({ loaded: false, hasSkeleton: false, label: "正在加载 GLB…" });
 
+  const isZh = language === "zh";
+  const text = (english: string, chinese: string) => isZh ? chinese : english;
+  const poseDisplayName = (pose: PoseItem) => isZh ? pose.name : pose.nameEn;
+  const categoryDisplayName = (value: PoseCategory) => isZh ? getPoseCategoryLabel(value) : getPoseCategoryLabelEn(value);
+  const tabDisplayName = (value: PoseCategoryTab) => isZh ? getPoseTabLabel(value) : compactPoseTabLabelsEn[value];
+  const quickViewDisplayName = (value: Exclude<QuickView, null>) => value === "featured" ? text("Featured", "常用") : text("Recent", "最近");
+  const modelDisplayName = (model?: ModelListItem) => {
+    const sequence = model?.name.match(/\d+/)?.[0] ?? "01";
+    return text(`Character ${sequence}`, `角色 ${sequence}`);
+  };
+  const modelStatusLabel = modelInfo.loaded
+    ? modelInfo.hasSkeleton
+      ? text("Quaternius Humanoid · 65 bones · 19 mapped", "Quaternius Humanoid · 65 骨骼 · 19 核心映射")
+      : text("Pose Preview · Prototype mapping", "姿态预览 · 原型映射")
+    : modelInfo.label.includes("失败")
+      ? text("GLB failed to load", "GLB 加载失败")
+      : text("Loading GLB…", "正在加载 GLB…");
+  const poseMeta = (pose: PoseItem) => {
+    if (isZh) return [getPoseCategoryLabel(pose.category), ...pose.tags].slice(0, 3).join(" · ");
+    const detail = pose.hand.find((value) => value !== "natural");
+    const bodyDetail = pose.body.find((value) => value !== "upright");
+    const styleDetail = pose.style.find((value) => value !== "natural" && value !== "daily") ?? pose.style[0];
+    return [...new Set([
+      poseCategoryLabelsEn[pose.category],
+      detail ? handLabelsEn[detail] : bodyDetail ? bodyLabelsEn[bodyDetail] : poseIntensityLabelsEn[pose.intensity],
+      styleDetail ? styleLabelsEn[styleDetail] : poseDirectionLabelsEn[pose.direction],
+    ])].join(" · ");
+  };
+  const changeLanguage = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    setPoseText((current) => {
+      const chineseIndex = promptToPoseExamples.indexOf(current as (typeof promptToPoseExamples)[number]);
+      const englishIndex = promptToPoseExamplesEn.indexOf(current as (typeof promptToPoseExamplesEn)[number]);
+      if (nextLanguage === "en" && chineseIndex >= 0) return promptToPoseExamplesEn[chineseIndex];
+      if (nextLanguage === "zh" && englishIndex >= 0) return promptToPoseExamples[englishIndex];
+      return current;
+    });
+    setPromptToPoseResult(null);
+  };
+
   const filteredPoses = useMemo(() => {
     const keyword = debouncedQuery.trim().toLowerCase();
     let candidates = poseItems;
-    if (quickView === "常用") candidates = candidates.filter((pose) => pose.featured);
-    if (quickView === "最近") {
+    if (quickView === "featured") candidates = candidates.filter((pose) => pose.featured);
+    if (quickView === "recent") {
       candidates = recentIds.map((id) => poseItems.find((pose) => pose.id === id)).filter((pose): pose is PoseItem => Boolean(pose));
     }
     if (category === "favorites") candidates = candidates.filter((pose) => favoriteIds.includes(pose.id));
@@ -2481,6 +2570,14 @@ export default function Home() {
         && (!keyword || searchable.includes(keyword));
     });
   }, [body, category, debouncedQuery, direction, favoriteIds, hand, intensity, quickView, recentIds, style]);
+
+  useEffect(() => {
+    document.documentElement.lang = isZh ? "zh-CN" : "en";
+  }, [isZh]);
+
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   const selectedPose = useMemo(() => poseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [selectedPoseId]);
   const generatedPrompt = useMemo(() => {
@@ -2617,8 +2714,8 @@ export default function Home() {
 
   const markSaving = () => {
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    setSaveState("正在保存…");
-    saveTimerRef.current = window.setTimeout(() => setSaveState("已保存 · 刚刚"), 420);
+    setSaveState("saving");
+    saveTimerRef.current = window.setTimeout(() => setSaveState("saved"), 420);
   };
 
   const syncHistoryAvailability = () => {
@@ -2673,7 +2770,7 @@ export default function Home() {
     });
     syncHistoryAvailability();
     markSaving();
-    flash("已撤销上一步");
+    flash(text("Undo complete", "已撤销上一步"));
   };
 
   const redo = () => {
@@ -2685,7 +2782,7 @@ export default function Home() {
     });
     syncHistoryAvailability();
     markSaving();
-    flash("已重做");
+    flash(text("Redo complete", "已重做"));
   };
 
   useEffect(() => {
@@ -2709,11 +2806,11 @@ export default function Home() {
 
   const selectPose = (pose: PoseItem) => {
     if (pose.status === "incompatible") {
-      flash("当前模型不兼容此 Pose");
+      flash(text("This pose is not compatible with the current model", "当前模型不兼容此 Pose"));
       return;
     }
     if (pose.status === "missing") {
-      flash("Pose 资源缺失，请稍后重试");
+      flash(text("Pose asset is missing. Please try again later", "Pose 资源缺失，请稍后重试"));
       return;
     }
     commit((current) => ({
@@ -2727,7 +2824,7 @@ export default function Home() {
     setSourcePosePrompt("");
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
     setMobilePanel(null);
-    flash(`已应用「${pose.name}」`);
+    flash(text(`Applied “${pose.nameEn}”`, `已应用「${pose.name}」`));
   };
 
   const clearPoseFilters = () => {
@@ -2743,7 +2840,9 @@ export default function Home() {
 
   const toggleFavorite = (pose: PoseItem) => {
     setFavoriteIds((ids) => ids.includes(pose.id) ? ids.filter((id) => id !== pose.id) : [...ids, pose.id]);
-    flash(favoriteIds.includes(pose.id) ? `已取消收藏「${pose.name}」` : `已收藏「${pose.name}」`);
+    flash(favoriteIds.includes(pose.id)
+      ? text(`Removed “${pose.nameEn}” from favorites`, `已取消收藏「${pose.name}」`)
+      : text(`Saved “${pose.nameEn}” to favorites`, `已收藏「${pose.name}」`));
   };
 
   const selectAdjacentPose = (offset: number) => {
@@ -2763,7 +2862,7 @@ export default function Home() {
   const showSimilarPoses = () => {
     setQuickView(null);
     setCategory(selectedPose.category);
-    setQuery(selectedPose.tags[0] ?? selectedPose.category);
+    setQuery(isZh ? selectedPose.tags[0] ?? "" : "");
     setDirection("any");
     setIntensity("any");
     setHand("any");
@@ -2819,7 +2918,8 @@ export default function Home() {
       if (controlsRef.current) controlsRef.current.enabled = true;
       setActiveIKControl(null);
       endContinuousEdit();
-      flash(`${ikControlDefinitions.find(({ id }) => id === control)?.label ?? "关节"}已更新`);
+      const definition = ikControlDefinitions.find(({ id }) => id === control);
+      flash(text(`${definition?.labelEn ?? "Joint"} updated`, `${definition?.label ?? "关节"}已更新`));
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
@@ -2829,7 +2929,7 @@ export default function Home() {
   const resetIKEdits = () => {
     commit((current) => ({ ...current, ikTargets: {} }));
     setActiveIKControl(null);
-    flash("已恢复预设骨骼姿态");
+    flash(text("Preset skeleton pose restored", "已恢复预设骨骼姿态"));
   };
 
   const applyCameraPreset = (presetId: Exclude<CameraPresetId, "custom">) => {
@@ -2849,7 +2949,7 @@ export default function Home() {
       cameraHeight: preset.target[1],
       shotSize: preset.shotSize,
     }));
-    flash(`已应用${preset.label}镜头`);
+    flash(text(`${preset.labelEn} camera applied`, `已应用${preset.label}镜头`));
   };
 
   const updateCameraComposition = (patch: Partial<Pick<EditorState, "focalLength" | "cameraHeight" | "shotSize">>, continuous = false) => {
@@ -2885,18 +2985,18 @@ export default function Home() {
       rimColor: toHex(preset.rimColor),
       background: preset.background,
     }));
-    flash(`已应用${preset.label}`);
+    flash(text(`${preset.labelEn} lighting applied`, `已应用${preset.label}`));
   };
 
   const analyzePoseText = () => {
     const input = poseText.trim();
     if (!input) {
-      flash("请先输入人物动作描述");
+      flash(text("Describe the character pose first", "请先输入人物动作描述"));
       return;
     }
     const result = analyzePromptToPose(input);
     setPromptToPoseResult(result);
-    flash(`已匹配「${result.pose.name}」`);
+    flash(text(`Matched “${result.pose.nameEn}”`, `已匹配「${result.pose.name}」`));
   };
 
   const applyPromptToPose = () => {
@@ -2945,7 +3045,7 @@ export default function Home() {
     setInspectorTab("model");
     setMobilePanel(null);
     setPromptToPoseOpen(false);
-    flash(`文字姿态已应用：${result.pose.name}`);
+    flash(text(`Text pose applied: ${result.pose.nameEn}`, `文字姿态已应用：${result.pose.name}`));
   };
 
   const updateLightingValue = (key: "keyLight" | "fillLight" | "rimLight" | "exposure", value: number) => {
@@ -2955,9 +3055,9 @@ export default function Home() {
   const copyPrompt = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
-      flash("Prompt 已复制");
+      flash(text("Prompt copied", "Prompt 已复制"));
     } catch {
-      flash("复制失败，请手动选择文本");
+      flash(text("Copy failed. Select the text manually", "复制失败，请手动选择文本"));
     }
   };
 
@@ -2992,7 +3092,7 @@ export default function Home() {
       prompt: { platform: promptPlatform, ...generatedPrompt },
     };
     downloadTextFile(`poseboard-${selectedPose.id}.json`, JSON.stringify(project, null, 2), "application/json");
-    flash("项目 JSON 已导出");
+    flash(text("Project JSON exported", "项目 JSON 已导出"));
   };
 
   const updateVector = (kind: "position" | "rotation", axis: number, value: number) => {
@@ -3005,7 +3105,7 @@ export default function Home() {
 
   const setLandscapeRatio = (base: "16:9" | "3:2" | "4:3" | "1:1") => {
     commit((current) => ({ ...current, ratio: base }));
-    flash(`画幅已切换为 ${base}`);
+    flash(text(`Canvas ratio changed to ${base}`, `画幅已切换为 ${base}`));
   };
 
   const toggleOrientation = () => {
@@ -3013,7 +3113,7 @@ export default function Home() {
       const ratio: Ratio = current.ratio === "16:9" ? "9:16" : current.ratio === "9:16" ? "16:9" : current.ratio === "3:2" ? "2:3" : current.ratio === "2:3" ? "3:2" : current.ratio === "4:3" ? "3:4" : current.ratio === "3:4" ? "4:3" : "1:1";
       return { ...current, ratio };
     });
-    flash("画幅方向已切换");
+    flash(text("Canvas orientation switched", "画幅方向已切换"));
   };
 
   const selectModel = (id: string) => {
@@ -3033,7 +3133,7 @@ export default function Home() {
     const template = templateModelRef.current;
     if (!scene || !template || !modelInfo.loaded) return;
     if (modelList.length >= 8) {
-      flash("当前画板最多添加 8 个模型");
+      flash(text("You can add up to 8 characters", "当前画板最多添加 8 个模型"));
       return;
     }
 
@@ -3080,7 +3180,7 @@ export default function Home() {
     setModelList((items) => [...items, { id, name: `机器人 ${String(sequence).padStart(2, "0")}` }]);
     setSelectedModelId(id);
     setEditor((current) => ({ ...current, ...cloneModelEditState(state) }));
-    flash(`机器人 ${String(sequence).padStart(2, "0")} 已添加`);
+    flash(text(`Character ${String(sequence).padStart(2, "0")} added`, `角色 ${String(sequence).padStart(2, "0")} 已添加`));
   };
 
   useEffect(() => {
@@ -3149,7 +3249,9 @@ export default function Home() {
     const handleTransformDragging = (event: { value: unknown }) => {
       controls.enabled = !event.value;
     };
-    const handleTransformMouseUp = () => flash(transformControls.getMode() === "rotate" ? "模型旋转已更新" : "模型位置已更新");
+    const handleTransformMouseUp = () => flash(transformControls.getMode() === "rotate"
+      ? languageRef.current === "zh" ? "模型旋转已更新" : "Model rotation updated"
+      : languageRef.current === "zh" ? "模型位置已更新" : "Model position updated");
     transformControls.addEventListener("mouseDown", handleTransformMouseDown);
     transformControls.addEventListener("objectChange", handleTransformChange);
     transformControls.addEventListener("dragging-changed", handleTransformDragging);
@@ -3376,7 +3478,7 @@ export default function Home() {
     const camera = cameraRef.current;
     const host = viewportRef.current;
     if (!renderer || !scene || !camera || !host || !modelInfo.loaded || exporting) {
-      flash(modelInfo.loaded ? "导出暂不可用" : "3D 场景仍在加载");
+      flash(modelInfo.loaded ? text("Export is temporarily unavailable", "导出暂不可用") : text("The 3D scene is still loading", "3D 场景仍在加载"));
       return;
     }
 
@@ -3402,9 +3504,9 @@ export default function Home() {
       link.href = renderer.domElement.toDataURL("image/png");
       link.download = `poseboard-${selectedPose.name}-${targetWidth}x${targetHeight}.png`;
       link.click();
-      flash(`PNG 已按 ${editor.ratio} 画幅导出`);
+      flash(text(`PNG exported at ${editor.ratio}`, `PNG 已按 ${editor.ratio} 画幅导出`));
     } catch {
-      flash("PNG 导出失败，请重试");
+      flash(text("PNG export failed. Please try again", "PNG 导出失败，请重试"));
     } finally {
       renderer.setPixelRatio(oldPixelRatio);
       renderer.setSize(oldSize.x, oldSize.y, false);
@@ -3431,7 +3533,7 @@ export default function Home() {
       controlsRef.current.update();
       controlsRef.current.saveState();
     }
-    flash("场景已重置");
+    flash(text("Scene reset", "场景已重置"));
   };
 
   const currentSize = ratioSize[editor.ratio];
@@ -3446,31 +3548,35 @@ export default function Home() {
           <span className="brand-mark">P</span>
           <span className="brand-name">PoseBoard</span>
           <span className="brand-edition">3D STUDIO</span>
-          <span className="file-state" aria-live="polite">{saveState}</span>
+          <div className="language-switch" role="group" aria-label={text("Language", "语言")}>
+            <button className={language === "en" ? "active" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
+            <button className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} onClick={() => changeLanguage("zh")}>中文</button>
+          </div>
+          <span className="file-state" aria-live="polite">{saveState === "saving" ? text("Saving…", "正在保存…") : text("Saved · just now", "已保存 · 刚刚")}</span>
         </div>
 
-        <div className="toolbar-center" aria-label="画板工具">
-          <div className="segmented" aria-label="画板比例">
+        <div className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
+          <div className="segmented" aria-label={text("Canvas ratio", "画板比例")}>
             {(["16:9", "3:2", "4:3", "1:1"] as const).map((ratio) => (
               <button key={ratio} className={landscapeRatio === ratio ? "active" : ""} aria-pressed={landscapeRatio === ratio} onClick={() => setLandscapeRatio(ratio)}>{ratio}</button>
             ))}
           </div>
-          <button className="icon-button swap-button" onClick={toggleOrientation} title="切换横竖屏" aria-label="切换横竖屏"><ArrowsLeftRight size={18} /></button>
+          <button className="icon-button swap-button" onClick={toggleOrientation} title={text("Switch orientation", "切换横竖屏")} aria-label={text("Switch orientation", "切换横竖屏")}><ArrowsLeftRight size={18} /></button>
           <span className="toolbar-separator" />
-          <button className="reset-scene-button" onClick={resetAll} title="重置整个场景"><ArrowCounterClockwise size={17} /><span>重置场景</span></button>
-          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "library"} onClick={() => setMobilePanel(mobilePanel === "library" ? null : "library")} title="姿势库" aria-label="打开姿势库"><SidebarSimple size={19} /></button>
-          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "inspector"} onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} title="检查器" aria-label="打开检查器"><SlidersHorizontal size={19} /></button>
-          <button className="icon-button mobile-only" onClick={() => setPromptToPoseOpen(true)} title="文字生成姿态" aria-label="文字生成姿态"><Sparkle size={19} weight="fill" /></button>
-          <button className="icon-button mobile-only" onClick={() => setPromptOpen(true)} title="生成绘图 Prompt" aria-label="生成绘图 Prompt"><Copy size={18} /></button>
+          <button className="reset-scene-button" onClick={resetAll} title={text("Reset entire scene", "重置整个场景")}><ArrowCounterClockwise size={17} /><span>{text("Reset Scene", "重置场景")}</span></button>
+          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "library"} onClick={() => setMobilePanel(mobilePanel === "library" ? null : "library")} title={text("Pose Library", "姿势库")} aria-label={text("Open Pose Library", "打开姿势库")}><SidebarSimple size={19} /></button>
+          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "inspector"} onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} title={text("Inspector", "检查器")} aria-label={text("Open Inspector", "打开检查器")}><SlidersHorizontal size={19} /></button>
+          <button className="icon-button mobile-only" onClick={() => setPromptToPoseOpen(true)} title={text("Text to Pose", "文字生成姿态")} aria-label={text("Text to Pose", "文字生成姿态")}><Sparkle size={19} weight="fill" /></button>
+          <button className="icon-button mobile-only" onClick={() => setPromptOpen(true)} title={text("Generate image prompt", "生成绘图 Prompt")} aria-label={text("Generate image prompt", "生成绘图 Prompt")}><Copy size={18} /></button>
         </div>
 
         <div className="toolbar-right">
-          <button className="icon-button" onClick={undo} disabled={!canUndo} title="撤销 ⌘/Ctrl Z" aria-label="撤销"><ArrowCounterClockwise size={18} /></button>
-          <button className="icon-button" onClick={redo} disabled={!canRedo} title="重做 ⌘/Ctrl Shift Z" aria-label="重做"><ArrowClockwise size={18} /></button>
+          <button className="icon-button" onClick={undo} disabled={!canUndo} title={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} aria-label={text("Undo", "撤销")}><ArrowCounterClockwise size={18} /></button>
+          <button className="icon-button" onClick={redo} disabled={!canRedo} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} aria-label={text("Redo", "重做")}><ArrowClockwise size={18} /></button>
           <span className="toolbar-separator" />
-          <button className="pose-ai-button" onClick={() => setPromptToPoseOpen(true)} disabled={!modelInfo.loaded} title="用文字生成 3D 姿态"><Sparkle size={17} weight="fill" /> 文字姿态</button>
-          <button className="icon-button prompt-output-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded} title="生成绘图 Prompt" aria-label="生成绘图 Prompt"><Copy size={17} /></button>
-          <button className={`export-button ${exporting ? "loading" : ""}`} onClick={exportPng} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? "导出中…" : "导出 PNG"}</button>
+          <button className="pose-ai-button" onClick={() => setPromptToPoseOpen(true)} disabled={!modelInfo.loaded} title={text("Generate a 3D pose from text", "用文字生成 3D 姿态")}><Sparkle size={17} weight="fill" /> {text("Text to Pose", "文字姿态")}</button>
+          <button className="icon-button prompt-output-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded} title={text("Generate image prompt", "生成绘图 Prompt")} aria-label={text("Generate image prompt", "生成绘图 Prompt")}><Copy size={17} /></button>
+          <button className={`export-button ${exporting ? "loading" : ""}`} onClick={exportPng} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? text("Exporting…", "导出中…") : text("Export PNG", "导出 PNG")}</button>
         </div>
       </header>
 
@@ -3478,106 +3584,106 @@ export default function Home() {
         <aside className="panel library-panel" aria-label="Pose Library">
           <div className="library-scroll-header">
             <div className="panel-title-row">
-              <div><h2>姿势预设库</h2></div>
+              <div><h2>{text("Pose Library", "姿势预设库")}</h2></div>
               <span className="count">{poseItems.length} poses</span>
             </div>
 
             <div className="search-field" role="search">
               <span><MagnifyingGlass size={18} /></span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姿势，例如：回头 / 冲刺 / 叉腰" aria-label="搜索姿势" />
-              {query && <button className="clear-search" onClick={() => setQuery("")} aria-label="清除搜索" title="清除搜索"><X size={15} /></button>}
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text("Search poses: look back / sprint / hand on hip", "搜索姿势，例如：回头 / 冲刺 / 叉腰")} aria-label={text("Search poses", "搜索姿势")} />
+              {query && <button className="clear-search" onClick={() => setQuery("")} aria-label={text("Clear search", "清除搜索")} title={text("Clear search", "清除搜索")}><X size={15} /></button>}
             </div>
 
-            <div className="quick-entry" aria-label="快捷入口">
-              {(["常用", "最近"] as const).map((item) => (
+            <div className="quick-entry" aria-label={text("Quick views", "快捷入口")}>
+              {(["featured", "recent"] as const).map((item) => (
                 <button key={item} className={quickView === item ? "active" : ""} aria-pressed={quickView === item} onClick={() => setQuickView(quickView === item ? null : item)}>
-                  {item}{item === "最近" ? ` ${recentIds.length}` : ""}
+                  {quickViewDisplayName(item)}{item === "recent" ? ` ${recentIds.length}` : ""}
                 </button>
               ))}
-              <button className={`filter-toggle ${filtersExpanded ? "active" : ""}`} aria-expanded={filtersExpanded} onClick={() => setFiltersExpanded((value) => !value)} title="展开或收起筛选">
-                <FunnelSimple size={15} weight={hasActiveFilters ? "fill" : "regular"} /> 筛选
+              <button className={`filter-toggle ${filtersExpanded ? "active" : ""}`} aria-expanded={filtersExpanded} onClick={() => setFiltersExpanded((value) => !value)} title={text("Expand or collapse filters", "展开或收起筛选")}>
+                <FunnelSimple size={15} weight={hasActiveFilters ? "fill" : "regular"} /> {text("Filter", "筛选")}
               </button>
             </div>
 
-            <div className="category-list" role="listbox" aria-label="姿势一级分类">
-              {poseCategoryTabs.map((item) => <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={item.english} onClick={() => { setCategory(item.value); setQuickView(null); }}>
-                {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}{item.label}{item.value === "favorites" ? ` ${favoriteIds.length}` : ""}
+            <div className="category-list" role="listbox" aria-label={text("Primary pose categories", "姿势一级分类")}>
+              {poseCategoryTabs.map((item) => <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={tabDisplayName(item.value)} onClick={() => { setCategory(item.value); setQuickView(null); }}>
+                {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}{tabDisplayName(item.value)}{item.value === "favorites" ? ` ${favoriteIds.length}` : ""}
               </button>)}
             </div>
 
             {filtersExpanded && <div className="pose-filters">
-              <FilterChips label="朝向" options={directionOptions} value={direction} onChange={(value) => setDirection(value as PoseDirection | "any")} />
-              <FilterChips label="动态程度" options={intensityOptions} value={intensity} onChange={(value) => setIntensity(value as PoseIntensity | "any")} />
-              <FilterChips label="手部" options={handOptions} value={hand} onChange={(value) => setHand(value as PoseHand | "any")} />
-              <FilterChips label="身体" options={bodyOptions} value={body} onChange={(value) => setBody(value as PoseBody | "any")} />
-              <FilterChips label="风格" options={styleOptions} value={style} onChange={(value) => setStyle(value as PoseStyle | "any")} />
+              <FilterChips label={text("Direction", "朝向")} options={isZh ? directionOptions : directionOptionsEn} value={direction} onChange={(value) => setDirection(value as PoseDirection | "any")} />
+              <FilterChips label={text("Motion", "动态程度")} options={isZh ? intensityOptions : intensityOptionsEn} value={intensity} onChange={(value) => setIntensity(value as PoseIntensity | "any")} />
+              <FilterChips label={text("Hands", "手部")} options={isZh ? handOptions : handOptionsEn} value={hand} onChange={(value) => setHand(value as PoseHand | "any")} />
+              <FilterChips label={text("Body", "身体")} options={isZh ? bodyOptions : bodyOptionsEn} value={body} onChange={(value) => setBody(value as PoseBody | "any")} />
+              <FilterChips label={text("Style", "风格")} options={isZh ? styleOptions : styleOptionsEn} value={style} onChange={(value) => setStyle(value as PoseStyle | "any")} />
             </div>}
 
             <div className="result-line">
-              <strong>{quickView ?? getPoseTabLabel(category)}</strong><span>· {filteredPoses.length}</span>
-              {hasActiveFilters && <button onClick={clearPoseFilters}>清空筛选</button>}
+              <strong>{quickView ? quickViewDisplayName(quickView) : tabDisplayName(category)}</strong><span>· {filteredPoses.length}</span>
+              {hasActiveFilters && <button onClick={clearPoseFilters}>{text("Clear filters", "清空筛选")}</button>}
             </div>
           </div>
 
-          <div ref={poseGridRef} className="pose-grid" aria-label="姿势结果">
+          <div ref={poseGridRef} className="pose-grid" aria-label={text("Pose results", "姿势结果")}>
             {filteredPoses.map((pose) => {
               const selected = selectedPose.id === pose.id;
               const favorited = favoriteIds.includes(pose.id);
               const unavailable = pose.status !== "ready";
               return <article key={pose.id} data-pose-index={pose.enginePoseIndex} className={`pose-card ${selected ? "active" : ""} ${unavailable ? "disabled" : ""}`}>
-                <button className="pose-card-main" aria-pressed={selected} onClick={() => selectPose(pose)} disabled={unavailable} title={pose.status === "incompatible" ? "当前模型不兼容此 Pose" : pose.status === "missing" ? "Pose 资源缺失" : `应用 ${pose.name}`}>
+                <button className="pose-card-main" aria-pressed={selected} onClick={() => selectPose(pose)} disabled={unavailable} title={pose.status === "incompatible" ? text("Not compatible with this model", "当前模型不兼容此 Pose") : pose.status === "missing" ? text("Pose asset missing", "Pose 资源缺失") : text(`Apply ${pose.nameEn}`, `应用 ${pose.name}`)}>
                   <span className="pose-thumb">
                     {poseThumbnails[pose.enginePoseIndex]
-                      ? <img src={poseThumbnails[pose.enginePoseIndex]} alt={`${pose.name} 白膜姿态预览`} loading="lazy" />
+                      ? <img src={poseThumbnails[pose.enginePoseIndex]} alt={text(`${pose.nameEn} mannequin preview`, `${pose.name} 白膜姿态预览`)} loading="lazy" />
                       : <i className="pose-thumb-loading" />}
-                    {unavailable && <em>{pose.status === "missing" ? "资源缺失" : "骨骼不兼容"}</em>}
+                    {unavailable && <em>{pose.status === "missing" ? text("Asset missing", "资源缺失") : text("Rig incompatible", "骨骼不兼容")}</em>}
                   </span>
-                  <span className="pose-card-body"><strong>{pose.name}</strong><small>{[getPoseCategoryLabel(pose.category), ...pose.tags].slice(0, 3).join(" · ")}</small></span>
+                  <span className="pose-card-body"><strong>{poseDisplayName(pose)}</strong><small>{poseMeta(pose)}</small></span>
                   {selected && <span className="selected-dot"><Check size={14} weight="bold" /></span>}
                 </button>
                 <div className="pose-card-actions">
-                  <button className={favorited ? "favorite active" : "favorite"} onClick={() => toggleFavorite(pose)} aria-label={favorited ? `取消收藏 ${pose.name}` : `收藏 ${pose.name}`} title={favorited ? "取消收藏" : "收藏"}><Star size={15} weight={favorited ? "fill" : "regular"} /></button>
-                  <button onClick={() => flash(`Pose ID · ${pose.id}`)} aria-label={`更多 ${pose.name}`} title={`Pose ID · ${pose.id}`}><DotsThree size={17} weight="bold" /></button>
+                  <button className={favorited ? "favorite active" : "favorite"} onClick={() => toggleFavorite(pose)} aria-label={favorited ? text(`Remove ${pose.nameEn} from favorites`, `取消收藏 ${pose.name}`) : text(`Add ${pose.nameEn} to favorites`, `收藏 ${pose.name}`)} title={favorited ? text("Remove favorite", "取消收藏") : text("Favorite", "收藏")}><Star size={15} weight={favorited ? "fill" : "regular"} /></button>
+                  <button onClick={() => flash(`Pose ID · ${pose.id}`)} aria-label={text(`More options for ${pose.nameEn}`, `更多 ${pose.name}`)} title={`Pose ID · ${pose.id}`}><DotsThree size={17} weight="bold" /></button>
                 </div>
               </article>;
             })}
 
             {!filteredPoses.length && <div className="pose-empty-state">
               <span>{category === "favorites" ? <Star size={20} /> : <MagnifyingGlass size={20} />}</span>
-              <strong>{category === "favorites" ? "还没有收藏姿势" : quickView === "最近" ? "还没有最近使用" : "没有匹配的姿势"}</strong>
-              <p>{category === "favorites" ? "点击卡片上的星标加入收藏。" : "清空筛选，或从下面的常用 Pose 开始。"}</p>
-              <button onClick={clearPoseFilters}>清空筛选</button>
+              <strong>{category === "favorites" ? text("No favorite poses yet", "还没有收藏姿势") : quickView === "recent" ? text("No recently used poses", "还没有最近使用") : text("No matching poses", "没有匹配的姿势")}</strong>
+              <p>{category === "favorites" ? text("Use the star on any card to save it here.", "点击卡片上的星标加入收藏。") : text("Clear filters or start with a featured pose below.", "清空筛选，或从下面的常用 Pose 开始。")}</p>
+              <button onClick={clearPoseFilters}>{text("Clear filters", "清空筛选")}</button>
               <div className="empty-recommendations">
-                {poseItems.filter((pose) => pose.featured).slice(0, 3).map((pose) => <button key={pose.id} onClick={() => selectPose(pose)}>{pose.name}</button>)}
+                {poseItems.filter((pose) => pose.featured).slice(0, 3).map((pose) => <button key={pose.id} onClick={() => selectPose(pose)}>{poseDisplayName(pose)}</button>)}
               </div>
             </div>}
           </div>
 
-          <div className="current-pose-toolbar" aria-label="当前姿势快捷控制">
-            <div className="current-pose-meta"><span>当前姿势</span><strong>{selectedPose.name}</strong><small>{getPoseCategoryLabel(selectedPose.category)} · {selectedPose.id}</small></div>
+          <div className="current-pose-toolbar" aria-label={text("Current pose controls", "当前姿势快捷控制")}>
+            <div className="current-pose-meta"><span>{text("Current Pose", "当前姿势")}</span><strong>{poseDisplayName(selectedPose)}</strong><small>{categoryDisplayName(selectedPose.category)} · {selectedPose.id}</small></div>
             <div className="current-pose-actions">
-              <button className={editor.mirrored ? "active" : ""} onClick={() => { commit((current) => ({ ...current, mirrored: !current.mirrored })); flash(editor.mirrored ? "已恢复原始姿态" : "已镜像骨骼姿态"); }} aria-pressed={editor.mirrored} title="镜像骨骼姿态"><ArrowsLeftRight size={16} /></button>
-              <button onClick={() => selectAdjacentPose(-1)} title="上一个"><ArrowLeft size={16} /></button>
-              <button onClick={() => selectAdjacentPose(1)} title="下一个"><ArrowRight size={16} /></button>
-              <button onClick={selectRandomPose} title="在当前筛选中随机"><Shuffle size={16} /></button>
-              <button className={favoriteIds.includes(selectedPose.id) ? "active favorite" : "favorite"} onClick={() => toggleFavorite(selectedPose)} title="收藏当前姿势"><Star size={16} weight={favoriteIds.includes(selectedPose.id) ? "fill" : "regular"} /></button>
-              <button onClick={showSimilarPoses} title="查看相似动作"><Sparkle size={16} /></button>
-              <button onClick={() => selectPose(defaultPose)} title="恢复自然站立"><ArrowCounterClockwise size={16} /></button>
+              <button className={editor.mirrored ? "active" : ""} onClick={() => { commit((current) => ({ ...current, mirrored: !current.mirrored })); flash(editor.mirrored ? text("Original pose restored", "已恢复原始姿态") : text("Skeleton pose mirrored", "已镜像骨骼姿态")); }} aria-pressed={editor.mirrored} title={text("Mirror skeleton pose", "镜像骨骼姿态")}><ArrowsLeftRight size={16} /></button>
+              <button onClick={() => selectAdjacentPose(-1)} title={text("Previous", "上一个")}><ArrowLeft size={16} /></button>
+              <button onClick={() => selectAdjacentPose(1)} title={text("Next", "下一个")}><ArrowRight size={16} /></button>
+              <button onClick={selectRandomPose} title={text("Random from current results", "在当前筛选中随机")}><Shuffle size={16} /></button>
+              <button className={favoriteIds.includes(selectedPose.id) ? "active favorite" : "favorite"} onClick={() => toggleFavorite(selectedPose)} title={text("Favorite current pose", "收藏当前姿势")}><Star size={16} weight={favoriteIds.includes(selectedPose.id) ? "fill" : "regular"} /></button>
+              <button onClick={showSimilarPoses} title={text("Show similar poses", "查看相似动作")}><Sparkle size={16} /></button>
+              <button onClick={() => selectPose(defaultPose)} title={text("Restore natural standing", "恢复自然站立")}><ArrowCounterClockwise size={16} /></button>
             </div>
           </div>
         </aside>
 
         <section className="canvas-area">
           <div className="canvas-header">
-            <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{modelInfo.label}</span></div>
-            <div className="tool-dock" role="toolbar" aria-label="模型编辑模式">
-              <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title="点击模型后移动"><ArrowsOutCardinal size={16} /> 选择并移动</button>
-              <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title="旋转模型"><ArrowClockwise size={16} /> 旋转</button>
-              <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title="拖动关节与方向控制柄调整骨骼"><Sparkle size={16} /> 姿态编辑</button>
+            <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{modelStatusLabel}</span></div>
+            <div className="tool-dock" role="toolbar" aria-label={text("Model editing mode", "模型编辑模式")}>
+              <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title={text("Select a model to move it", "点击模型后移动")}><ArrowsOutCardinal size={16} /> {text("Move", "选择并移动")}</button>
+              <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title={text("Rotate model", "旋转模型")}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button>
+              <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title={text("Drag joint and direction handles to edit the skeleton", "拖动关节与方向控制柄调整骨骼")}><Sparkle size={16} /> {text("Edit Pose", "姿态编辑")}</button>
             </div>
             <div className="canvas-actions">
-              <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? "构图线已关闭" : "构图线已开启"); }} title="构图线" aria-label="切换构图线"><GridFour size={17} /></button>
-              <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash("镜头已归位"); }} title="归位镜头" aria-label="归位镜头"><HouseLine size={17} /></button>
+              <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
+              <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
             </div>
           </div>
 
@@ -3587,60 +3693,60 @@ export default function Home() {
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
                 <div className={`control-point-layer ${toolMode === "pose" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={toolMode !== "pose"}>
-                  {ikControlDefinitions.map(({ id: control, label, kind }) => (
+                  {ikControlDefinitions.map(({ id: control, label, labelEn, kind }) => (
                     <button
                       key={control}
                       ref={(element) => { if (element) controlPointRefs.current[control] = element; else delete controlPointRefs.current[control]; }}
                       className={`control-point ${kind} ${activeIKControl === control ? "selected" : ""}`}
                       onPointerDown={(event) => beginIKDrag(control, event)}
-                      aria-label={`拖动${label}控制点`}
+                      aria-label={text(`Drag ${labelEn} control point`, `拖动${label}控制点`)}
                       tabIndex={toolMode === "pose" ? 0 : -1}
-                    ><span /><small>{label}</small></button>
+                    ><span /><small>{isZh ? label : labelEn}</small></button>
                   ))}
                 </div>
-                {!modelInfo.loaded && <div className="model-loader"><span /><p>{modelInfo.label}</p></div>}
+                {!modelInfo.loaded && <div className="model-loader"><span /><p>{modelStatusLabel}</p></div>}
                 {editor.grid && <div className="composition-grid"><i /><i /><b /><b /></div>}
                 <div className="viewport-hint">
-                  {toolMode === "translate" && "选择并移动 · 点击机器人选中，拖动彩色箭头移动"}
-                  {toolMode === "rotate" && "旋转模式 · 拖动彩色圆环旋转当前模型"}
-                  {toolMode === "pose" && "姿态编辑 · 圆点调整关节位置，橙色菱形控制手掌与脚尖方向"}
+                  {toolMode === "translate" && text("Move · select a character, then drag the colored arrows", "选择并移动 · 点击机器人选中，拖动彩色箭头移动")}
+                  {toolMode === "rotate" && text("Rotate · drag the colored rings around the current model", "旋转模式 · 拖动彩色圆环旋转当前模型")}
+                  {toolMode === "pose" && text("Pose · circles adjust joints; orange diamonds control hands and feet", "姿态编辑 · 圆点调整关节位置，橙色菱形控制手掌与脚尖方向")}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="zoom-control">
-            <button onClick={() => setZoom((value) => clamp(value - 8, 34, 100))} aria-label="缩小"><Minus size={16} /></button>
-            <button className="zoom-value" onClick={() => setZoom(76)} aria-label={`当前缩放 ${zoom}%，点击恢复默认`}>{zoom}%</button>
-            <button onClick={() => setZoom((value) => clamp(value + 8, 34, 100))} aria-label="放大"><Plus size={16} /></button>
+            <button onClick={() => setZoom((value) => clamp(value - 8, 34, 100))} aria-label={text("Zoom out", "缩小")}><Minus size={16} /></button>
+            <button className="zoom-value" onClick={() => setZoom(76)} aria-label={text(`Zoom ${zoom}%. Click to reset`, `当前缩放 ${zoom}%，点击恢复默认`)}>{zoom}%</button>
+            <button onClick={() => setZoom((value) => clamp(value + 8, 34, 100))} aria-label={text("Zoom in", "放大")}><Plus size={16} /></button>
             <span />
-            <button onClick={() => setZoom(76)}>适应</button>
+            <button onClick={() => setZoom(76)}>{text("Fit", "适应")}</button>
           </div>
         </section>
 
         <aside className="panel inspector-panel" aria-label="Inspector">
           <div className="selection-header">
             <span className="cube-icon"><Cube size={19} weight="duotone" /></span>
-            <div><strong>{selectedModel?.name ?? "机器人模型"}</strong><small>{modelInfo.hasSkeleton ? "Rigged Humanoid" : "Pose Preview · Prototype"}</small></div>
-            <button className={editor.visible ? "visible" : ""} onClick={() => { commit((current) => ({ ...current, visible: !current.visible })); flash(editor.visible ? "模型已隐藏" : "模型已显示"); }} aria-label={editor.visible ? "隐藏模型" : "显示模型"}>{editor.visible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>
-            <button className="add-model-button" onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8} aria-label="添加机器人模型" title="添加机器人模型"><Plus size={18} weight="bold" /></button>
+            <div><strong>{modelDisplayName(selectedModel)}</strong><small>{modelInfo.hasSkeleton ? "Rigged Humanoid" : "Pose Preview · Prototype"}</small></div>
+            <button className={editor.visible ? "visible" : ""} onClick={() => { commit((current) => ({ ...current, visible: !current.visible })); flash(editor.visible ? text("Model hidden", "模型已隐藏") : text("Model shown", "模型已显示")); }} aria-label={editor.visible ? text("Hide model", "隐藏模型") : text("Show model", "显示模型")}>{editor.visible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>
+            <button className="add-model-button" onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8} aria-label={text("Add character model", "添加机器人模型")} title={text("Add character model", "添加机器人模型")}><Plus size={18} weight="bold" /></button>
           </div>
 
-          <div className="inspector-tabs" role="tablist" aria-label="属性类型">
-            <button className={inspectorTab === "model" ? "active" : ""} role="tab" aria-selected={inspectorTab === "model"} onClick={() => setInspectorTab("model")}>模型</button>
-            <button className={inspectorTab === "camera" ? "active" : ""} role="tab" aria-selected={inspectorTab === "camera"} onClick={() => setInspectorTab("camera")}>镜头</button>
-            <button className={inspectorTab === "scene" ? "active" : ""} role="tab" aria-selected={inspectorTab === "scene"} onClick={() => setInspectorTab("scene")}>场景</button>
+          <div className="inspector-tabs" role="tablist" aria-label={text("Inspector sections", "属性类型")}>
+            <button className={inspectorTab === "model" ? "active" : ""} role="tab" aria-selected={inspectorTab === "model"} onClick={() => setInspectorTab("model")}>{text("Model", "模型")}</button>
+            <button className={inspectorTab === "camera" ? "active" : ""} role="tab" aria-selected={inspectorTab === "camera"} onClick={() => setInspectorTab("camera")}>{text("Camera", "镜头")}</button>
+            <button className={inspectorTab === "scene" ? "active" : ""} role="tab" aria-selected={inspectorTab === "scene"} onClick={() => setInspectorTab("scene")}>{text("Scene", "场景")}</button>
           </div>
 
           <div className="inspector-content">
             {inspectorTab === "model" && <>
-              <div className="model-stack" aria-label="画板模型列表">
-                <div className="model-stack-title"><span>画板模型</span><small>{modelList.length} / 8</small></div>
+              <div className="model-stack" aria-label={text("Canvas models", "画板模型列表")}>
+                <div className="model-stack-title"><span>{text("Canvas Models", "画板模型")}</span><small>{modelList.length} / 8</small></div>
                 <div className="model-stack-list">
                   {modelList.map((model) => (
                     <button key={model.id} className={selectedModelId === model.id ? "active" : ""} onClick={() => selectModel(model.id)}>
                       <Cube size={16} weight={selectedModelId === model.id ? "fill" : "regular"} />
-                      <span>{model.name}</span>
+                      <span>{modelDisplayName(model)}</span>
                       {selectedModelId === model.id && <Check size={14} weight="bold" />}
                     </button>
                   ))}
@@ -3649,59 +3755,61 @@ export default function Home() {
 
               <div className="active-tool-card">
                 <span>{toolMode === "translate" ? <ArrowsOutCardinal size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <Sparkle size={18} />}</span>
-                <div><small>当前模式</small><strong>{toolMode === "translate" ? "选择并移动" : toolMode === "rotate" ? "旋转模型" : "IK 姿态编辑"}</strong></div>
+                <div><small>{text("Current Mode", "当前模式")}</small><strong>{toolMode === "translate" ? text("Move Model", "选择并移动") : toolMode === "rotate" ? text("Rotate Model", "旋转模型") : text("IK Pose Editing", "IK 姿态编辑")}</strong></div>
               </div>
 
-              {toolMode === "pose" && <InspectorSection title="IK 姿态编辑" onReset={resetIKEdits}>
+              {toolMode === "pose" && <InspectorSection title={text("IK Pose Editing", "IK 姿态编辑")} resetLabel={text("Reset", "重置")} onReset={resetIKEdits}>
                 <div className={`control-point-info ${activeIKControl ? "selected" : ""}`}>
                   <span><Sparkle size={17} weight="fill" /></span>
-                  <div><strong>{activeIKControl ? "正在调整骨骼" : "19 个人体骨骼控制点"}</strong><small>蓝色圆点控制位置；橙色菱形控制手掌与脚尖方向；紫色控制胸腔和骨盆；小型圆点控制肩、肘、髋与膝。</small></div>
+                  <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Blue points control position; orange diamonds control hand and foot direction; core points adjust the chest and pelvis; smaller points control shoulders, elbows, hips, and knees.", "蓝色圆点控制位置；橙色菱形控制手掌与脚尖方向；核心控制点调整胸腔和骨盆；小型圆点控制肩、肘、髋与膝。")}</small></div>
                 </div>
               </InspectorSection>}
 
-              <InspectorSection title="模型变换" onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
-                <VectorField label="位置" values={editor.position} step={0.05} onChange={(axis, value) => updateVector("position", axis, value)} />
-                <VectorField label="旋转" values={editor.rotation} step={1} onChange={(axis, value) => updateVector("rotation", axis, value)} />
-                <ControlRow label="缩放"><div className="range-with-value"><input type="range" min="50" max="300" value={editor.scale} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, scale: Number(event.target.value) }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label="模型缩放" /><output>{editor.scale}%</output></div></ControlRow>
+              <InspectorSection title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
+                <VectorField label={text("Position", "位置")} values={editor.position} step={0.05} onChange={(axis, value) => updateVector("position", axis, value)} />
+                <VectorField label={text("Rotation", "旋转")} values={editor.rotation} step={1} onChange={(axis, value) => updateVector("rotation", axis, value)} />
+                <ControlRow label={text("Scale", "缩放")}><div className="range-with-value"><input type="range" min="50" max="300" value={editor.scale} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, scale: Number(event.target.value) }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Model scale", "模型缩放")} /><output>{editor.scale}%</output></div></ControlRow>
               </InspectorSection>
             </>}
 
-            {inspectorTab === "camera" && <InspectorSection title="镜头系统" onReset={() => applyCameraPreset("commercial")}>
+            {inspectorTab === "camera" && <InspectorSection title={text("Camera System", "镜头系统")} resetLabel={text("Reset", "重置")} onReset={() => applyCameraPreset("commercial")}>
               <div className="preset-grid camera-presets">
                 {(Object.entries(cameraPresets) as Array<[Exclude<CameraPresetId, "custom">, (typeof cameraPresets)[Exclude<CameraPresetId, "custom">]]>).map(([id, preset]) => (
-                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}><Camera size={16} /><span>{preset.label}</span><small>{preset.focalLength}mm</small></button>
+                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}><Camera size={16} /><span>{isZh ? preset.label : preset.labelEn}</span><small>{preset.focalLength}mm</small></button>
                 ))}
               </div>
-              <ControlRow label="焦距"><div className="range-with-value"><input type="range" min="18" max="120" value={editor.focalLength} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ focalLength: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label="相机焦距" /><output>{editor.focalLength}mm</output></div></ControlRow>
-              <ControlRow label="高度"><div className="range-with-value"><input type="range" min="0.4" max="3.2" step="0.05" value={editor.cameraHeight} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ cameraHeight: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label="相机高度" /><output>{editor.cameraHeight.toFixed(2)}</output></div></ControlRow>
-              <ControlRow label="景别"><select value={editor.shotSize} onChange={(event) => updateCameraComposition({ shotSize: event.target.value as ShotSize })} aria-label="相机景别">{(Object.entries(shotLabels) as Array<[ShotSize, string]>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></ControlRow>
-              <ControlRow label="投影"><select defaultValue="perspective" aria-label="相机投影"><option value="perspective">透视</option></select></ControlRow>
-              <div className="camera-tip"><span><Info size={17} /></span><p>预设会同时调整焦距、机位和景别；画板空白处仍可自由旋转镜头。</p></div>
+              <ControlRow label={text("Focal", "焦距")}><div className="range-with-value"><input type="range" min="18" max="120" value={editor.focalLength} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ focalLength: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Camera focal length", "相机焦距")} /><output>{editor.focalLength}mm</output></div></ControlRow>
+              <ControlRow label={text("Height", "高度")}><div className="range-with-value"><input type="range" min="0.4" max="3.2" step="0.05" value={editor.cameraHeight} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ cameraHeight: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Camera height", "相机高度")} /><output>{editor.cameraHeight.toFixed(2)}</output></div></ControlRow>
+              <ControlRow label={text("Shot", "景别")}><select value={editor.shotSize} onChange={(event) => updateCameraComposition({ shotSize: event.target.value as ShotSize })} aria-label={text("Camera shot size", "相机景别")}>{(Object.entries(isZh ? shotLabels : shotLabelsEn) as Array<[ShotSize, string]>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></ControlRow>
+              <ControlRow label={text("Projection", "投影")}><select defaultValue="perspective" aria-label={text("Camera projection", "相机投影")}><option value="perspective">{text("Perspective", "透视")}</option></select></ControlRow>
+              <div className="camera-tip"><span><Info size={17} /></span><p>{text("Presets adjust focal length, camera position, and shot size together. Drag the empty artboard to orbit freely.", "预设会同时调整焦距、机位和景别；画板空白处仍可自由旋转镜头。")}</p></div>
             </InspectorSection>}
 
             {inspectorTab === "scene" && <>
-              <InspectorSection title="灯光系统" onReset={() => applyLightingPreset("studio")}>
+              <InspectorSection title={text("Lighting System", "灯光系统")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
                 <div className="preset-grid lighting-presets">
                   {(Object.entries(lightingPresets) as Array<[Exclude<LightingPresetId, "custom">, (typeof lightingPresets)[Exclude<LightingPresetId, "custom">]]>).map(([id, preset]) => (
-                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}><Lightbulb size={16} /><span>{preset.label}</span></button>
+                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}><Lightbulb size={16} /><span>{isZh ? preset.label : preset.labelEn}</span></button>
                   ))}
                 </div>
                 {([
-                  ["主光", "keyLight", editor.keyLight],
-                  ["补光", "fillLight", editor.fillLight],
-                  ["轮廓光", "rimLight", editor.rimLight],
-                  ["曝光", "exposure", editor.exposure],
+                  [text("Key", "主光"), "keyLight", editor.keyLight],
+                  [text("Fill", "补光"), "fillLight", editor.fillLight],
+                  [text("Rim", "轮廓光"), "rimLight", editor.rimLight],
+                  [text("Exposure", "曝光"), "exposure", editor.exposure],
                 ] as Array<[string, "keyLight" | "fillLight" | "rimLight" | "exposure", number]>).map(([label, key, value]) => (
                   <ControlRow key={key} label={label}><div className="range-with-value"><input type="range" min={key === "exposure" ? "0.6" : "0"} max={key === "exposure" ? "1.5" : "6"} step="0.05" value={value} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateLightingValue(key, Number(event.target.value))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={label} /><output>{value.toFixed(2)}</output></div></ControlRow>
                 ))}
               </InspectorSection>
-              <InspectorSection title="场景外观" onReset={() => commit((current) => ({ ...current, background: "#eef0f4", shadow: true }))}>
-                <ControlRow label="背景"><label className="color-control"><span>{editor.background.toUpperCase()}</span><input type="color" value={editor.background} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, background: event.target.value }))} onBlur={endContinuousEdit} aria-label="场景背景颜色" /></label></ControlRow>
-                <ToggleRow label="模型阴影" active={editor.shadow} onClick={() => commit((current) => ({ ...current, shadow: !current.shadow }))} />
+              <InspectorSection title={text("Scene Appearance", "场景外观")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, background: "#eef0f4", shadow: true }))}>
+                <ControlRow label={text("Background", "背景")}><label className="color-control"><span>{editor.background.toUpperCase()}</span><input type="color" value={editor.background} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, background: event.target.value }))} onBlur={endContinuousEdit} aria-label={text("Scene background color", "场景背景颜色")} /></label></ControlRow>
+                <ToggleRow label={text("Model Shadow", "模型阴影")} toggleLabel={text("Toggle model shadow", "切换模型阴影")} active={editor.shadow} onClick={() => commit((current) => ({ ...current, shadow: !current.shadow }))} />
               </InspectorSection>
               <div className="model-diagnostics">
                 <span className={modelInfo.hasSkeleton ? "ok" : "warn"}>{modelInfo.hasSkeleton ? "HUMANOID V1" : "PROTOTYPE"}</span>
-                <p>{modelInfo.hasSkeleton ? "已检测到兼容骨骼，Pose 切换不会重新加载模型。" : "当前白模没有 Skeleton；原型使用 PoseItem 到程序化预览的映射。生产环境需替换为已 Rig 的 humanoid_v1 白模。"}</p>
+                <p>{modelInfo.hasSkeleton
+                  ? text("A compatible skeleton was detected. Switching poses does not reload the model.", "已检测到兼容骨骼，Pose 切换不会重新加载模型。")
+                  : text("The current mannequin has no Skeleton. This prototype maps PoseItem data to a procedural preview; production requires a rigged humanoid_v1 model.", "当前白模没有 Skeleton；原型使用 PoseItem 到程序化预览的映射。生产环境需替换为已 Rig 的 humanoid_v1 白模。")}</p>
               </div>
             </>}
           </div>
@@ -3711,46 +3819,51 @@ export default function Home() {
       {promptToPoseOpen && <div className="prompt-backdrop">
         <section className="prompt-dialog pose-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="pose-prompt-title">
           <div className="prompt-heading">
-            <div><span><Sparkle size={16} weight="fill" /> Prompt To Pose</span><h2 id="pose-prompt-title">用自然语言生成 3D 人体姿态</h2></div>
-            <button onClick={() => setPromptToPoseOpen(false)} aria-label="关闭文字生成姿态面板"><X size={18} /></button>
+            <div><span><Sparkle size={16} weight="fill" /> Prompt To Pose</span><h2 id="pose-prompt-title">{text("Create a 3D pose with natural language", "用自然语言生成 3D 人体姿态")}</h2></div>
+            <button onClick={() => setPromptToPoseOpen(false)} aria-label={text("Close Text to Pose", "关闭文字生成姿态面板")}><X size={18} /></button>
           </div>
           <div className="pose-prompt-input">
-            <label htmlFor="pose-prompt-text">描述人物正在做什么</label>
+            <label htmlFor="pose-prompt-text">{text("Describe what the character is doing", "描述人物正在做什么")}</label>
             <textarea
               id="pose-prompt-text"
               value={poseText}
               onChange={(event) => { setPoseText(event.target.value); setPromptToPoseResult(null); }}
-              placeholder="例如：一个武士单膝跪地，右手握刀，身体前倾，准备战斗"
+              placeholder={text("Example: a warrior kneeling on one knee, holding a sword and leaning forward", "例如：一个武士单膝跪地，右手握刀，身体前倾，准备战斗")}
             />
-            <div className="pose-prompt-examples" aria-label="动作描述示例">
-              {promptToPoseExamples.map((example, index) => <button key={example} onClick={() => { setPoseText(example); setPromptToPoseResult(null); }}>示例 {index + 1}</button>)}
+            <div className="pose-prompt-examples" aria-label={text("Pose prompt examples", "动作描述示例")}>
+              {(isZh ? promptToPoseExamples : promptToPoseExamplesEn).map((example, index) => <button key={example} onClick={() => { setPoseText(example); setPromptToPoseResult(null); }}>{text("Example", "示例")} {index + 1}</button>)}
             </div>
-            <button className="pose-analyze-button" onClick={analyzePoseText}><Sparkle size={16} weight="fill" /> 解析并匹配姿态</button>
+            <button className="pose-analyze-button" onClick={analyzePoseText}><Sparkle size={16} weight="fill" /> {text("Analyze & Match Pose", "解析并匹配姿态")}</button>
           </div>
 
           {promptToPoseResult ? <>
             <div className="pose-match-card">
               <span className="pose-match-icon"><Check size={18} weight="bold" /></span>
-              <div><small>Skeleton Pose 匹配</small><h3>{promptToPoseResult.pose.name}</h3><p>{promptToPoseResult.categoryLabel} · {promptToPoseResult.tags.join(" · ")}</p></div>
+              <div><small>{text("Skeleton Pose Match", "Skeleton Pose 匹配")}</small><h3>{poseDisplayName(promptToPoseResult.pose)}</h3><p>{poseMeta(promptToPoseResult.pose)}</p></div>
               <strong>{Math.round(promptToPoseResult.confidence * 100)}%</strong>
             </div>
             <div className="pose-semantic-grid">
-              <section><span>结构化动作参数</span><pre>{JSON.stringify(promptToPoseJson(promptToPoseResult), null, 2)}</pre></section>
-              <section><span>解析与推荐</span><ul>{promptToPoseResult.explanation.map((item) => <li key={item}>{item}</li>)}</ul></section>
+              <section><span>{text("Structured Pose Data", "结构化动作参数")}</span><pre>{JSON.stringify(promptToPoseJson(promptToPoseResult), null, 2)}</pre></section>
+              <section><span>{text("Analysis & Recommendation", "解析与推荐")}</span><ul>{(isZh ? promptToPoseResult.explanation : [
+                `Primary category: ${getPoseCategoryLabelEn(promptToPoseResult.category)}`,
+                `Best database match: ${promptToPoseResult.pose.nameEn}`,
+                `${Object.keys(promptToPoseResult.modifiers).length} semantic pose modifiers detected`,
+                `Recommended ${cameraPresets[promptToPoseResult.cameraPreset].labelEn} camera with ${lightingPresets[promptToPoseResult.lightingPreset].labelEn} lighting`,
+              ]).map((item) => <li key={item}>{item}</li>)}</ul></section>
             </div>
             <div className="prompt-summary pose-result-summary">
               <span>Category <b>{promptToPoseResult.category}</b></span>
               <span>Base Pose <b>{promptToPoseResult.basePose}</b></span>
-              <span>Camera <b>{cameraPresets[promptToPoseResult.cameraPreset].label}</b></span>
-              <span>Light <b>{lightingPresets[promptToPoseResult.lightingPreset].label}</b></span>
+              <span>Camera <b>{isZh ? cameraPresets[promptToPoseResult.cameraPreset].label : cameraPresets[promptToPoseResult.cameraPreset].labelEn}</b></span>
+              <span>Light <b>{isZh ? lightingPresets[promptToPoseResult.lightingPreset].label : lightingPresets[promptToPoseResult.lightingPreset].labelEn}</b></span>
             </div>
             <div className="prompt-footer">
-              <button onClick={() => copyPrompt(JSON.stringify(promptToPoseJson(promptToPoseResult), null, 2))}><Copy size={15} />复制 JSON</button>
-              <button className="primary" onClick={applyPromptToPose}><Sparkle size={16} weight="fill" />应用到 3D 骨骼</button>
+              <button onClick={() => copyPrompt(JSON.stringify(promptToPoseJson(promptToPoseResult), null, 2))}><Copy size={15} />{text("Copy JSON", "复制 JSON")}</button>
+              <button className="primary" onClick={applyPromptToPose}><Sparkle size={16} weight="fill" />{text("Apply to 3D Skeleton", "应用到 3D 骨骼")}</button>
             </div>
           </> : <div className="pose-prompt-empty">
             <Sparkle size={22} />
-            <div><strong>语义 → Pose 数据库 → Skeleton</strong><p>系统会识别主姿态、身体方向、手腿动作、情绪与风格，再选择最接近的骨骼预设并推荐镜头和灯光。</p></div>
+            <div><strong>{text("Language → Pose Library → Skeleton", "语义 → Pose 数据库 → Skeleton")}</strong><p>{text("The system identifies the primary posture, body direction, limb action, expression, and style, then matches the closest skeleton preset and recommends camera and lighting.", "系统会识别主姿态、身体方向、手腿动作、情绪与风格，再选择最接近的骨骼预设并推荐镜头和灯光。")}</p></div>
           </div>}
         </section>
       </div>}
@@ -3758,37 +3871,37 @@ export default function Home() {
       {promptOpen && <div className="prompt-backdrop">
         <section className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
           <div className="prompt-heading">
-            <div><span><Sparkle size={16} weight="fill" /> AI Prompt Generator</span><h2 id="prompt-title">从姿势、镜头与灯光生成提示词</h2></div>
-            <button onClick={() => setPromptOpen(false)} aria-label="关闭 Prompt 面板"><X size={18} /></button>
+            <div><span><Sparkle size={16} weight="fill" /> AI Prompt Generator</span><h2 id="prompt-title">{text("Generate a prompt from pose, camera, and lighting", "从姿势、镜头与灯光生成提示词")}</h2></div>
+            <button onClick={() => setPromptOpen(false)} aria-label={text("Close Prompt panel", "关闭 Prompt 面板")}><X size={18} /></button>
           </div>
-          <div className="platform-tabs" role="tablist" aria-label="AI 平台">
+          <div className="platform-tabs" role="tablist" aria-label={text("AI platform", "AI 平台")}>
             {([
               ["midjourney", "Midjourney"],
               ["flux", "Flux"],
               ["gpt-image", "GPT Image"],
               ["seedance", "Seedance"],
-              ["jimeng", "即梦"],
+              ["jimeng", text("Jimeng", "即梦")],
             ] as Array<[PromptPlatform, string]>).map(([value, label]) => <button key={value} className={promptPlatform === value ? "active" : ""} onClick={() => setPromptPlatform(value)} role="tab" aria-selected={promptPlatform === value}>{label}</button>)}
           </div>
           <div className="prompt-fields">
-            <label><span>中文 Prompt</span><textarea readOnly value={generatedPrompt.chinese} /><button onClick={() => copyPrompt(generatedPrompt.chinese)}><Copy size={15} />复制中文</button></label>
+            <label><span>{text("Chinese Prompt", "中文 Prompt")}</span><textarea readOnly value={generatedPrompt.chinese} /><button onClick={() => copyPrompt(generatedPrompt.chinese)}><Copy size={15} />{text("Copy Chinese", "复制中文")}</button></label>
             <label><span>English Prompt</span><textarea readOnly value={generatedPrompt.english} /><button onClick={() => copyPrompt(generatedPrompt.english)}><Copy size={15} />Copy English</button></label>
           </div>
           <div className="prompt-summary">
-            <span>Pose <b>{selectedPose.name}</b></span>
-            <span>Camera <b>{editor.focalLength}mm · {shotLabels[editor.shotSize]}</b></span>
-            <span>Light <b>{editor.lightingPreset === "custom" ? "自定义" : lightingPresets[editor.lightingPreset].label}</b></span>
+            <span>Pose <b>{poseDisplayName(selectedPose)}</b></span>
+            <span>Camera <b>{editor.focalLength}mm · {(isZh ? shotLabels : shotLabelsEn)[editor.shotSize]}</b></span>
+            <span>Light <b>{editor.lightingPreset === "custom" ? text("Custom", "自定义") : isZh ? lightingPresets[editor.lightingPreset].label : lightingPresets[editor.lightingPreset].labelEn}</b></span>
           </div>
           <div className="prompt-footer">
-            <button onClick={exportProjectJson}>导出项目 JSON</button>
-            <button onClick={() => { downloadTextFile(`poseboard-${selectedPose.id}-prompt.md`, `# ${selectedPose.name}\n\n## 中文 Prompt\n\n${generatedPrompt.chinese}\n\n## English Prompt\n\n${generatedPrompt.english}\n`, "text/markdown"); flash("Prompt Markdown 已导出"); }}>导出 Markdown</button>
-            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} />复制全部</button>
+            <button onClick={exportProjectJson}>{text("Export Project JSON", "导出项目 JSON")}</button>
+            <button onClick={() => { downloadTextFile(`poseboard-${selectedPose.id}-prompt.md`, `# ${selectedPose.nameEn}\n\n## Chinese Prompt\n\n${generatedPrompt.chinese}\n\n## English Prompt\n\n${generatedPrompt.english}\n`, "text/markdown"); flash(text("Prompt Markdown exported", "Prompt Markdown 已导出")); }}>{text("Export Markdown", "导出 Markdown")}</button>
+            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} />{text("Copy All", "复制全部")}</button>
           </div>
         </section>
       </div>}
 
       <div className={`toast ${toast ? "show" : ""}`} role="status" aria-live="polite">{toast}</div>
-      {mobilePanel && <button className="mobile-scrim" onClick={() => setMobilePanel(null)} aria-label="关闭面板" />}
+      {mobilePanel && <button className="mobile-scrim" onClick={() => setMobilePanel(null)} aria-label={text("Close panel", "关闭面板")} />}
     </main>
   );
 }
@@ -3797,8 +3910,8 @@ function FilterChips({ label, options, value, onChange }: { label: string; optio
   return <div className="filter-row"><span>{label}</span><div>{options.map(([optionLabel, optionValue]) => <button key={optionValue} className={value === optionValue ? "active" : ""} aria-pressed={value === optionValue} onClick={() => onChange(optionValue)}>{optionLabel}</button>)}</div></div>;
 }
 
-function InspectorSection({ title, children, onReset }: { title: string; children: React.ReactNode; onReset: () => void }) {
-  return <section className="inspector-section"><div className="section-heading"><h3>{title}</h3><button onClick={onReset} title={`重置 ${title}`} aria-label={`重置 ${title}`}><ArrowCounterClockwise size={17} /></button></div>{children}</section>;
+function InspectorSection({ title, resetLabel, children, onReset }: { title: string; resetLabel: string; children: React.ReactNode; onReset: () => void }) {
+  return <section className="inspector-section"><div className="section-heading"><h3>{title}</h3><button onClick={onReset} title={`${resetLabel} ${title}`} aria-label={`${resetLabel} ${title}`}><ArrowCounterClockwise size={17} /></button></div>{children}</section>;
 }
 
 function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -3809,6 +3922,6 @@ function VectorField({ label, values, step, onChange }: { label: string; values:
   return <ControlRow label={label}><div className="vector-field">{["X", "Y", "Z"].map((axis, index) => <label key={axis}><span>{axis}</span><input type="number" step={step} value={Number(values[index].toFixed(2))} aria-label={`${label} ${axis}`} onChange={(event) => onChange(index, Number(event.target.value))} /></label>)}</div></ControlRow>;
 }
 
-function ToggleRow({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return <div className="toggle-row"><span>{label}</span><button className={`toggle ${active ? "active" : ""}`} onClick={onClick} role="switch" aria-label={`切换${label}`} aria-checked={active}><i /></button></div>;
+function ToggleRow({ label, toggleLabel, active, onClick }: { label: string; toggleLabel: string; active: boolean; onClick: () => void }) {
+  return <div className="toggle-row"><span>{label}</span><button className={`toggle ${active ? "active" : ""}`} onClick={onClick} role="switch" aria-label={toggleLabel} aria-checked={active}><i /></button></div>;
 }

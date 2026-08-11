@@ -120,6 +120,49 @@ function normalize(value: string) {
   return value.trim().toLowerCase().replace(/[，。！？、；：,.!?;:\s]+/g, "");
 }
 
+const englishSemanticAliases: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\b(one[- ]?knee|half kneel|kneeling|kneel)\b/i, "单膝 跪姿"],
+  [/\b(squat|squatting|crouch)\b/i, "蹲姿"],
+  [/\b(jump|jumping|leap|airborne|vault|landing)\b/i, "跳跃 腾空"],
+  [/\b(sprint(?:ing)?|running|run|jog(?:ging)?)\b/i, "奔跑 冲刺"],
+  [/\b(walking|walk|step|catwalk)\b/i, "行走 迈步"],
+  [/\b(sitting|seated|sit|chair)\b/i, "坐姿 椅子"],
+  [/\b(supine|lying|lie down|side lying)\b/i, "仰躺 侧卧"],
+  [/\b(prone|face down)\b/i, "俯卧 趴姿"],
+  [/\b(leaning against|lean against|against (?:a |the )?wall|railing)\b/i, "倚靠 靠墙"],
+  [/\b(crawl|plank|push[- ]?up|ground roll|all fours)\b/i, "地面 四点支撑"],
+  [/\b(standing|stand|upright)\b/i, "站姿 直立"],
+  [/\b(hand|hands) on (the )?hip(s)?\b/i, "叉腰"],
+  [/\b(hand|hands) in (the )?pocket(s)?\b/i, "插兜"],
+  [/\barms crossed\b/i, "抱臂"],
+  [/\bhands behind (the )?back\b/i, "双手背后"],
+  [/\b(hand on chin|touching chin)\b/i, "托腮"],
+  [/\b(touching face|hand on face)\b/i, "扶脸"],
+  [/\b(arm raised|hand raised|reaching up)\b/i, "举手"],
+  [/\b(open arms|arms open)\b/i, "双臂张开"],
+  [/\b(fist|clenched fist)\b/i, "握拳"],
+  [/\b(holding|gripping|sword|weapon)\b/i, "持物 握刀 战斗"],
+  [/\b(leaning forward|forward lean)\b/i, "身体前倾"],
+  [/\b(leaning back|backward lean|reclined)\b/i, "身体后仰"],
+  [/\b(twist|twisting)\b/i, "扭转"],
+  [/\b(looking back|look back|over (the )?shoulder)\b/i, "回头 回眸"],
+  [/\b(side view|sideways|to the side)\b/i, "侧身 侧面"],
+  [/\b(fashion|model|catwalk)\b/i, "时尚 模特"],
+  [/\b(athlete|athletic|sport)\b/i, "运动 运动员"],
+  [/\b(combat|fight|warrior|defensive|attack)\b/i, "战斗 武士"],
+  [/\b(hero|heroic|epic)\b/i, "英雄 史诗"],
+  [/\b(dance|dancer)\b/i, "舞蹈"],
+  [/\b(commercial|advertising|e[- ]?commerce)\b/i, "商业 电商"],
+  [/\b(relaxed|natural|casual)\b/i, "放松 自然"],
+  [/\b(full speed|powerful|explosive|strong motion)\b/i, "全力 强烈"],
+  [/\b(slow|subtle|light motion)\b/i, "缓慢 轻微"],
+];
+
+function enrichEnglishPrompt(value: string) {
+  const aliases = englishSemanticAliases.filter(([pattern]) => pattern.test(value)).map(([, alias]) => alias);
+  return aliases.length ? `${value} ${aliases.join(" ")}` : value;
+}
+
 function detectMany<T extends string>(input: string, rules: Array<[T, RegExp]>): T[] {
   return rules.filter(([, pattern]) => pattern.test(input)).map(([value]) => value);
 }
@@ -228,7 +271,8 @@ function recommendLighting(input: string, styles: PoseStyle[]): PromptLightingPr
 }
 
 export function analyzePromptToPose(rawInput: string): PromptToPoseResult {
-  const input = rawInput.trim();
+  const sourceInput = rawInput.trim();
+  const input = enrichEnglishPrompt(sourceInput);
   const normalizedInput = normalize(input);
   const categoryMatch = detectCategory(input);
   const direction = detectOne(input, directionRules);
@@ -259,7 +303,7 @@ export function analyzePromptToPose(rawInput: string): PromptToPoseResult {
   ];
 
   return {
-    input,
+    input: sourceInput,
     category: categoryMatch.category,
     categoryLabel: getPoseCategoryLabel(categoryMatch.category),
     basePose: winner.pose.id,

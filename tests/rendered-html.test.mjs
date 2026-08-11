@@ -33,11 +33,14 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /class="editor-app/);
   assert.match(html, />PoseBoard<\/span>/);
   assert.match(html, />3D STUDIO<\/span>/);
-  assert.match(html, /姿势预设库/);
+  assert.match(html, />Pose Library<\/h2>/);
   assert.match(html, /152<!-- --> poses/);
   assert.match(html, /aria-label="Pose Library"/);
   assert.match(html, /aria-label="Inspector"/);
-  assert.match(html, /aria-label="模型编辑模式"/);
+  assert.match(html, /aria-label="Model editing mode"/);
+  assert.match(html, /class="language-switch" role="group" aria-label="Language"/);
+  assert.match(html, /aria-pressed="true">EN<\/button>/);
+  assert.match(html, /aria-pressed="false">中文<\/button>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -58,5 +61,6 @@ test("keeps the premium white-first design system responsive and restrained", as
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
   assert.match(page, /className="brand-edition">3D STUDIO/);
+  assert.match(page, /useState<Language>\("en"\)/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
 });

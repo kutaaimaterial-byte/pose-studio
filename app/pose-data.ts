@@ -145,9 +145,85 @@ const poseNamesByCategory: Record<PoseCategory, string[]> = {
   ],
 };
 
+const poseNamesEnByCategory: Record<PoseCategory, string[]> = {
+  standing: [
+    "Natural Standing", "Feet Together", "Wide Stance", "Single Knee Relaxed", "Weight Shift Left", "Weight Shift Right", "Staggered Stance", "Crossed-Leg Standing",
+    "One Hand on Hip", "Hands on Hips", "Both Hands in Pockets", "One Hand in Pocket", "Arms Crossed", "Hands Behind Back", "Hands Folded in Front", "Hand on Chin",
+    "Hand on Face", "Hand on Head", "One Arm Raised", "Arms Open", "Side Standing", "Side Pose Looking Back", "Back-Facing Standing", "Back Pose Looking Over Shoulder",
+  ],
+  walking: [
+    "Natural Walk", "Step Forward", "Long Stride Walk", "Slow Walk", "Light Walk", "Model Catwalk", "Walking with Hands in Pockets", "Walking with One Hand in Pocket",
+    "Walking and Looking Back", "Side Walk", "Walking with Head Down", "Walking and Waving",
+  ],
+  running: [
+    "Natural Jog", "Running", "Fast Run", "Full Sprint", "Sprint Start", "Starting Position", "Forward-Leaning Run", "Long-Stride Run",
+    "Turning Run", "Running and Looking Back", "Side Run", "Sudden Stop",
+  ],
+  jumping: [
+    "Vertical Jump", "Forward Jump", "Long-Leap Jump", "Single-Leg Takeoff", "Both Legs Airborne", "Tuck Jump", "Straddle Jump", "Airborne Turn",
+    "Jump with Arms Reaching Up", "Obstacle Vault", "Jump Landing", "Landing Recovery",
+  ],
+  squatting: [
+    "Natural Squat", "Half Squat", "Deep Squat", "Wide-Leg Squat", "Feet-Together Squat", "Side-Lunge Low Squat", "Squat with Hands on Knees", "Squat with One Hand on Knee",
+    "Crouch with One Hand on Ground", "Knee-Hug Squat", "Athletic Ready Squat", "Defensive Low Crouch",
+  ],
+  sitting: [
+    "Natural Seated Pose", "Sitting with Legs Together", "Sitting with Legs Apart", "Cross-Legged Chair Pose", "Sitting with Legs Crossed", "Sitting with Legs Angled", "Forward-Leaning Sit", "Reclined Sitting",
+    "Hands Resting on Legs", "Seated with Hand on Chin", "Seated with Arms Crossed", "One Hand Supporting on Chair", "Lotus Sitting", "Sitting with Legs Extended", "Sitting with One Knee Bent", "Sitting with Both Knees Bent",
+    "Side Sitting", "Ground Sit with Hands Behind",
+  ],
+  kneeling: [
+    "Kneeling on Both Knees", "Kneeling Sit", "One-Knee Kneel", "Half Kneel", "Proposal Kneel", "Forward-Leaning Kneel", "Backward-Leaning Kneel", "Kneeling and Looking Back",
+    "Kneeling with Both Hands Down", "Kneeling with One Hand Down", "Combat Half Kneel", "Hero Landing",
+  ],
+  lying: [
+    "Natural Supine Pose", "Lying Supine with Legs Straight", "Supine with One Knee Bent", "Supine with Both Knees Bent", "Supine with Arms Open", "Lying with Hands Behind Head",
+    "Left Side Lying", "Right Side Lying", "Curled Side Lying", "Side Lying and Looking Back", "Supported Recline", "Side Lying on One Elbow",
+  ],
+  prone: [
+    "Natural Prone Pose", "Prone with Head Raised", "Prone on Both Elbows", "Prone on One Elbow", "Upper Body Push-Up", "Prone with One Leg Bent", "Prone with Both Legs Bent",
+    "Prone Reaching Forward", "Prone Looking Back", "Low Observation Pose",
+  ],
+  leaning: [
+    "Standing with Back Against Wall", "One Shoulder Against Wall", "Side Lean Against Wall", "One Hand on Wall", "Both Hands on Wall", "One Hand on Table", "Both Hands on Table", "Body Leaning on Table",
+    "Leaning on Railing", "Both Hands on Railing", "Hips Against Table", "Seated Side Lean",
+  ],
+  ground: [
+    "All-Fours Support", "Forward Crawl", "Bear Crawl", "Plank", "Push-Up Ready", "Low Push-Up", "Ground Sit with Rear Support", "Fallen Sitting",
+    "Side-Supported Fall", "Ground Recovery Support", "Roll Preparation", "Ground Roll", "Knee Slide", "Low Movement", "Rising from the Ground", "One-Hand Ground Recovery",
+  ],
+};
+
 const categoryEnglish: Record<PoseCategory, string> = {
   standing: "standing", walking: "walking", running: "running", jumping: "jumping", squatting: "squatting",
   sitting: "sitting", kneeling: "kneeling", lying: "lying", prone: "prone", leaning: "leaning", ground: "ground",
+};
+
+export const poseCategoryLabelsEn: Record<PoseCategory, string> = {
+  standing: "Standing", walking: "Walking", running: "Running", jumping: "Jumping", squatting: "Squatting",
+  sitting: "Sitting", kneeling: "Kneeling", lying: "Lying", prone: "Prone", leaning: "Leaning", ground: "Ground",
+};
+
+export const directionLabelsEn: Record<PoseDirection, string> = {
+  front: "Front", "front-left": "Front Left 45°", "front-right": "Front Right 45°", side: "Side", back: "Back", "look-back": "Look Back",
+};
+
+export const intensityLabelsEn: Record<PoseIntensity, string> = {
+  static: "Static", light: "Light Motion", medium: "Medium Motion", strong: "Strong Motion",
+};
+
+export const handLabelsEn: Record<PoseHand, string> = {
+  natural: "Natural", hip: "On Hip", pocket: "In Pocket", crossed: "Arms Crossed", behind: "Behind Back", support: "Support",
+  face: "Touch Face", chin: "On Chin", raise: "Raised", open: "Open", fist: "Fist", holding: "Holding",
+};
+
+export const bodyLabelsEn: Record<PoseBody, string> = {
+  upright: "Upright", forward: "Forward Lean", backward: "Backward Lean", "side-lean": "Side Lean", twist: "Twist", turn: "Turn",
+};
+
+export const styleLabelsEn: Record<PoseStyle, string> = {
+  natural: "Natural", fashion: "Fashion", photo: "Photo", sport: "Sport", combat: "Combat", hero: "Hero",
+  emotion: "Emotion", dance: "Dance", daily: "Daily", commercial: "Commercial",
 };
 
 const directionLabels: Record<PoseDirection, string> = {
@@ -320,7 +396,7 @@ export const poseItems: PoseItem[] = (Object.entries(poseNamesByCategory) as Arr
       body,
       style,
       aliases: [...new Set(aliases)],
-      nameEn: `${categoryEnglish[category]} pose ${categoryIndex + 1}`,
+      nameEn: poseNamesEnByCategory[category][categoryIndex] ?? `${categoryEnglish[category]} pose ${categoryIndex + 1}`,
       poseAsset: `procedural://humanoid_v2/${String(index).padStart(3, "0")}`,
       skeletonProfile: "humanoid_v1" as const,
       featured: featuredNames.has(name),
@@ -341,4 +417,14 @@ export function getPoseTabLabel(tab: PoseCategoryTab): string {
   if (tab === "all") return "全部";
   if (tab === "favorites") return "收藏";
   return poseCategoryLabels[tab];
+}
+
+export function getPoseCategoryLabelEn(category: PoseCategory): string {
+  return poseCategoryLabelsEn[category];
+}
+
+export function getPoseTabLabelEn(tab: PoseCategoryTab): string {
+  if (tab === "all") return "All";
+  if (tab === "favorites") return "Favorites";
+  return poseCategoryLabelsEn[tab];
 }

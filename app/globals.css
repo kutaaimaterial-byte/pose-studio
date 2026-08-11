@@ -57,6 +57,10 @@ button:disabled:active { transform: none; }
 .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; flex: none; border-radius: 10px; background: var(--text); color: white; font-weight: 850; font-size: 15px; letter-spacing: -.05em; box-shadow: 0 5px 14px rgba(20,22,18,.14); }
 .brand-name { font-family: "Avenir Next", "PingFang SC", sans-serif; font-size: 15px; font-weight: 760; letter-spacing: -.025em; white-space: nowrap; }
 .brand-edition { height: 20px; display: inline-flex; align-items: center; padding: 0 7px; border: 1px solid var(--border); border-radius: 6px; color: var(--faint); font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; }
+.language-switch { height: 28px; display: grid; grid-template-columns: 34px 38px; flex: none; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: #f3f3f0; }
+.language-switch button { min-width: 0; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; font-family: var(--mono); font-size: 10px; font-weight: 760; line-height: 1; transition: color .16s, background .16s, box-shadow .16s; }
+.language-switch button:hover { color: var(--text); }
+.language-switch button.active { background: white; color: var(--accent); box-shadow: 0 1px 5px rgba(31,34,29,.1); }
 .file-state { min-width: 0; color: var(--faint); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toolbar-center, .toolbar-right { display: flex; align-items: center; min-width: 0; }
 .toolbar-center { justify-content: center; gap: 4px; }
@@ -434,6 +438,7 @@ input[type="range"]::-webkit-slider-thumb { width: 15px; height: 15px; appearanc
   .brand-block { gap: 8px; }
   .brand-mark { width: 28px; height: 28px; }
   .brand-name { display: none; }
+  .language-switch { grid-template-columns: 32px 36px; }
   .toolbar-center { position: absolute; left: 50%; justify-content: center; transform: translateX(-50%); }
   .segmented, .swap-button, .toolbar-center .toolbar-separator { display: none; }
   .toolbar-right { border-left: 0; }
