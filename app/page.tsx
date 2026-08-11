@@ -45,6 +45,7 @@ import {
   poseItems,
   styleOptions,
   type PoseBody,
+  type PoseCategory,
   type PoseCategoryTab,
   type PoseDirection,
   type PoseHand,
@@ -170,6 +171,137 @@ const cloneJointPose = (source: JointPose): JointPose => ({
   rightShin: [...source.rightShin],
 });
 
+// V2 authoring follows the document's basePose + key bone differences model.
+// Each category function starts from one readable base and only overrides the
+// joints that give the named action its meaning.
+const poseWithBase = (base: JointPose, values: Partial<JointPose> = {}): JointPose => ({
+  ...cloneJointPose(base),
+  ...values,
+});
+
+function createStandingJointPose(name: string): JointPose {
+  const base = jointPose({
+    torso: [0, 0, -1], head: [0, 0, 1],
+    leftArm: [2, 0, -14], leftForearm: [2, 0, 18],
+    rightArm: [2, 0, 14], rightForearm: [2, 0, -18],
+    leftLeg: [0, 0, -7], rightLeg: [0, 0, 7],
+  });
+  switch (name) {
+    case "双脚并拢站立": return poseWithBase(base, { leftLeg: [0, 0, -3], rightLeg: [0, 0, 3] });
+    case "双脚分开站立": return poseWithBase(base, { leftLeg: [0, 0, -17], rightLeg: [0, 0, 17] });
+    case "单腿微屈站立": return poseWithBase(base, { torso: [0, 0, -3], leftLeg: [0, 0, -10], rightLeg: [-14, 0, 15], rightShin: [-26, 0, -4] });
+    case "重心左移": return poseWithBase(base, { torso: [0, 0, -7], leftLeg: [0, 0, -12], rightLeg: [14, 0, 16], rightShin: [-24, 0, -4] });
+    case "重心右移": return poseWithBase(base, { torso: [0, 0, 7], leftLeg: [14, 0, -16], leftShin: [-24, 0, 4], rightLeg: [0, 0, 12] });
+    case "前后脚站立": return poseWithBase(base, { torso: [0, -4, -2], leftLeg: [-14, 0, -11], leftShin: [8, 0, 3], rightLeg: [16, 0, 12], rightShin: [-10, 0, -3] });
+    case "交叉腿站立": return poseWithBase(base, { torso: [0, 5, -4], leftLeg: [0, 10, -11], rightLeg: [-10, -12, 11], rightShin: [-18, 0, -3] });
+    case "单手叉腰": return poseWithBase(base, { torso: [0, 5, -5], head: [0, -7, 4], leftArm: [8, -8, -42], leftForearm: [2, 0, 82], rightLeg: [8, 0, 12] });
+    case "双手叉腰": return poseWithBase(base, { torso: [0, 0, -4], leftArm: [8, -8, -42], leftForearm: [2, 0, 82], rightArm: [8, 8, 42], rightForearm: [2, 0, -82], leftLeg: [0, 0, -9], rightLeg: [0, 0, 9] });
+    case "双手插兜": return poseWithBase(base, { torso: [0, 3, -4], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [12, 0, 22], rightForearm: [4, 0, -62], leftLeg: [0, 0, -9], rightLeg: [0, 0, 10] });
+    case "单手插兜": return poseWithBase(base, { torso: [0, 4, -4], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [0, 0, 18], rightForearm: [2, 0, -20], leftLeg: [0, 0, -9], rightLeg: [7, 0, 12] });
+    case "双臂抱胸": return poseWithBase(base, { torso: [0, 4, -2], leftArm: [-42, 8, 37], leftForearm: [-18, 0, 55], rightArm: [-18, -8, -37], rightForearm: [8, 0, -55] });
+    case "双手背后": return poseWithBase(base, { torso: [-2, 0, 2], leftArm: [18, 10, -28], leftForearm: [0, 0, 74], rightArm: [18, -10, 28], rightForearm: [0, 0, -74] });
+    case "双手身前交叠": return poseWithBase(base, { torso: [1, 0, -2], leftArm: [12, 0, -20], leftForearm: [2, 0, 58], rightArm: [12, 0, 20], rightForearm: [2, 0, -58] });
+    case "单手扶下巴": return poseWithBase(base, { torso: [3, 7, -4], head: [-8, -12, 6], leftArm: [30, 0, -35], leftForearm: [8, 0, 112] });
+    case "单手扶脸": return poseWithBase(base, { torso: [2, 5, -3], head: [-7, -10, 5], leftArm: [26, 0, -42], leftForearm: [6, 0, 122] });
+    case "单手摸头": return poseWithBase(base, { torso: [1, 4, -3], head: [-5, -8, 4], leftArm: [-18, 0, -72], leftForearm: [4, 0, 126] });
+    case "单手举起": return poseWithBase(base, { torso: [-2, -3, -2], head: [-8, 8, 2], rightArm: [-24, 0, 136], rightForearm: [0, 0, 20] });
+    case "双臂张开": return poseWithBase(base, { torso: [-3, 0, 0], leftArm: [0, 0, -92], leftForearm: [0, 0, 16], rightArm: [0, 0, 92], rightForearm: [0, 0, -16], leftLeg: [0, 0, -12], rightLeg: [0, 0, 12] });
+    case "侧身站立": return poseWithBase(base, { torso: [0, 22, -3], head: [0, -16, 3], leftLeg: [0, 0, -10], rightLeg: [8, 0, 12] });
+    case "侧身回眸": return poseWithBase(base, { torso: [0, 26, -3], head: [-3, -64, 4], leftArm: [2, 0, -18], rightArm: [4, 0, 22], leftLeg: [0, 0, -10], rightLeg: [10, 0, 13] });
+    case "背身站立": return poseWithBase(base, { torso: [0, 0, 1], head: [0, 0, 0], leftArm: [1, 0, -16], rightArm: [1, 0, 16] });
+    case "背身回头": return poseWithBase(base, { torso: [0, -10, 0], head: [-2, 76, 4], leftArm: [2, 0, -16], rightArm: [4, 0, 20], leftLeg: [0, 0, -8], rightLeg: [6, 0, 10] });
+    default: return base;
+  }
+}
+
+function createWalkingJointPose(name: string): JointPose {
+  const base = jointPose({
+    torso: [4, 0, -1], head: [-3, 0, 1],
+    leftArm: [28, 0, -22], leftForearm: [10, 0, 38],
+    rightArm: [-26, 0, 22], rightForearm: [-8, 0, -36],
+    leftLeg: [-30, 0, -10], leftShin: [30, 0, 3],
+    rightLeg: [28, 0, 11], rightShin: [-18, 0, -3],
+  });
+  switch (name) {
+    case "向前迈步": return poseWithBase(base, { torso: [6, -2, -2], leftLeg: [-40, 0, -12], leftShin: [36, 0, 4], rightLeg: [34, 0, 13], rightShin: [-22, 0, -4] });
+    case "大步行走": return poseWithBase(base, { torso: [8, -3, -3], leftArm: [38, 0, -28], leftForearm: [12, 0, 48], rightArm: [-36, 0, 28], rightForearm: [-12, 0, -48], leftLeg: [-52, 0, -16], leftShin: [44, 0, 5], rightLeg: [46, 0, 17], rightShin: [-28, 0, -5] });
+    case "缓慢行走": return poseWithBase(base, { torso: [2, 0, 0], leftArm: [16, 0, -16], leftForearm: [6, 0, 28], rightArm: [-14, 0, 16], rightForearm: [-6, 0, -26], leftLeg: [-20, 0, -8], leftShin: [20, 0, 2], rightLeg: [18, 0, 9], rightShin: [-12, 0, -2] });
+    case "轻快行走": return poseWithBase(base, { torso: [6, 2, -2], head: [-5, -2, 1], leftArm: [36, 0, -30], leftForearm: [14, 0, 52], rightArm: [-34, 0, 30], rightForearm: [-12, 0, -50], leftLeg: [-42, 0, -14], leftShin: [50, 0, 5], rightLeg: [34, 0, 15], rightShin: [-24, 0, -4] });
+    case "模特猫步": return poseWithBase(base, { torso: [2, 7, -5], head: [-2, -8, 4], leftArm: [18, 0, -18], leftForearm: [6, 0, 30], rightArm: [-16, 0, 18], rightForearm: [-6, 0, -30], leftLeg: [-42, 8, -7], leftShin: [34, 0, 3], rightLeg: [38, -8, 8], rightShin: [-20, 0, -3] });
+    case "双手插兜行走": return poseWithBase(base, { torso: [4, 3, -4], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [12, 0, 22], rightForearm: [4, 0, -62], leftLeg: [-30, 0, -10], rightLeg: [26, 0, 11] });
+    case "单手插兜行走": return poseWithBase(base, { torso: [4, 3, -3], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [-30, 0, 24], rightForearm: [-8, 0, -42] });
+    case "边走边回头": return poseWithBase(base, { torso: [8, 20, -3], head: [-5, 64, 3], leftArm: [30, 0, -24], rightArm: [-28, 0, 24], leftLeg: [-36, 0, -12], rightLeg: [30, 0, 13] });
+    case "侧向行走": return poseWithBase(base, { torso: [4, 18, -2], head: [-3, -12, 1], leftArm: [24, 0, -34], leftForearm: [8, 0, 42], rightArm: [-18, 0, 34], rightForearm: [-6, 0, -40], leftLeg: [-28, 0, -18], rightLeg: [24, 0, 19] });
+    case "低头行走": return poseWithBase(base, { torso: [8, 0, 2], head: [22, 0, 0], leftArm: [18, 0, -18], rightArm: [-16, 0, 18], leftLeg: [-26, 0, -9], rightLeg: [22, 0, 10] });
+    case "挥手行走": return poseWithBase(base, { torso: [4, -4, -2], head: [-3, 10, 1], rightArm: [-12, 0, 120], rightForearm: [0, 0, 54], leftLeg: [-34, 0, -11], rightLeg: [30, 0, 12] });
+    default: return base;
+  }
+}
+
+function createSquattingJointPose(name: string): JointPose {
+  const base = jointPose({
+    torso: [20, 0, -2], head: [-12, 0, 2],
+    leftArm: [18, 0, -28], leftForearm: [8, 0, 54], rightArm: [18, 0, 28], rightForearm: [8, 0, -54],
+    leftLeg: [-62, 0, -19], leftShin: [92, 0, 6], rightLeg: [-62, 0, 19], rightShin: [92, 0, -6],
+  });
+  switch (name) {
+    case "半蹲": return poseWithBase(base, { torso: [12, 0, -1], leftLeg: [-42, 0, -16], leftShin: [66, 0, 5], rightLeg: [-42, 0, 16], rightShin: [66, 0, -5] });
+    case "深蹲": return poseWithBase(base, { torso: [28, 0, -3], head: [-15, 0, 3], leftLeg: [-82, 0, -23], leftShin: [108, 0, 7], rightLeg: [-82, 0, 23], rightShin: [108, 0, -7] });
+    case "双腿分开蹲": return poseWithBase(base, { leftLeg: [-68, 0, -30], leftShin: [96, 0, 9], rightLeg: [-68, 0, 30], rightShin: [96, 0, -9] });
+    case "双腿并拢蹲": return poseWithBase(base, { torso: [24, 0, -2], leftLeg: [-70, 0, -8], leftShin: [98, 0, 3], rightLeg: [-70, 0, 8], rightShin: [98, 0, -3] });
+    case "单腿侧伸低蹲": return poseWithBase(base, { torso: [28, 8, -4], head: [-16, -8, 3], leftLeg: [-82, 0, -16], leftShin: [108, 0, 6], rightLeg: [-16, 0, 48], rightShin: [6, 0, -14] });
+    case "双手撑膝蹲": return poseWithBase(base, { torso: [32, 0, -4], leftArm: [38, 0, -30], leftForearm: [24, 0, 48], rightArm: [38, 0, 30], rightForearm: [24, 0, -48] });
+    case "单手撑膝蹲": return poseWithBase(base, { torso: [28, 5, -4], leftArm: [38, 0, -30], leftForearm: [24, 0, 48], rightArm: [8, 0, 24], rightForearm: [4, 0, -30] });
+    case "单手触地蹲": return poseWithBase(base, { torso: [38, 8, -5], head: [-18, -8, 3], leftArm: [54, 0, -34], leftForearm: [18, 0, 42], rightArm: [-8, 0, 50], rightForearm: [2, 0, -52], leftLeg: [-76, 0, -20], rightLeg: [-58, 0, 24] });
+    case "抱膝蹲": return poseWithBase(base, { torso: [34, 0, -3], head: [-16, 0, 2], leftArm: [32, 0, -34], leftForearm: [12, 0, 74], rightArm: [32, 0, 34], rightForearm: [12, 0, -74], leftLeg: [-78, 0, -18], leftShin: [104, 0, 6], rightLeg: [-78, 0, 18], rightShin: [104, 0, -6] });
+    case "运动准备半蹲": return poseWithBase(base, { torso: [24, -4, -4], head: [-15, 5, 3], leftArm: [24, 0, -38], leftForearm: [8, 0, 74], rightArm: [24, 0, 38], rightForearm: [8, 0, -74], leftLeg: [-50, 0, -22], leftShin: [76, 0, 7], rightLeg: [-50, 0, 22], rightShin: [76, 0, -7] });
+    case "防御低蹲": return poseWithBase(base, { torso: [30, -8, -5], head: [-17, 10, 3], leftArm: [-12, 0, -66], leftForearm: [0, 0, -118], rightArm: [-12, 0, 66], rightForearm: [0, 0, 118], leftLeg: [-74, 0, -24], leftShin: [100, 0, 8], rightLeg: [-68, 0, 26], rightShin: [96, 0, -8] });
+    default: return base;
+  }
+}
+
+function createKneelingJointPose(name: string): JointPose {
+  const base = jointPose({
+    torso: [8, 0, -2], head: [-5, 0, 2], leftArm: [8, 0, -12], leftForearm: [0, 0, 20], rightArm: [8, 0, 12], rightForearm: [0, 0, -20],
+    leftLeg: [8, 0, -13], leftShin: [96, 0, 4], rightLeg: [8, 0, 13], rightShin: [96, 0, -4],
+  });
+  switch (name) {
+    case "跪坐": return poseWithBase(base, { torso: [2, 0, -1], leftLeg: [18, 0, -12], leftShin: [108, 0, 4], rightLeg: [18, 0, 12], rightShin: [108, 0, -4] });
+    case "单膝跪地": return poseWithBase(base, { torso: [10, -3, -2], leftLeg: [8, 0, -14], leftShin: [102, 0, 5], rightLeg: [-76, 0, 18], rightShin: [94, 0, -6] });
+    case "单膝半跪": return poseWithBase(base, { torso: [14, 2, -3], leftLeg: [4, 0, -15], leftShin: [98, 0, 5], rightLeg: [-64, 0, 20], rightShin: [82, 0, -6] });
+    case "求婚式单膝跪": return poseWithBase(base, { torso: [-1, 3, -1], head: [-4, -5, 2], leftArm: [-10, 0, -30], leftForearm: [0, 0, 88], rightArm: [-10, 0, 30], rightForearm: [0, 0, -88], leftLeg: [6, 0, -14], leftShin: [102, 0, 5], rightLeg: [-78, 0, 18], rightShin: [96, 0, -6] });
+    case "跪姿身体前倾": return poseWithBase(base, { torso: [30, 0, -4], head: [-18, 0, 3], leftArm: [18, 0, -24], leftForearm: [6, 0, 48], rightArm: [18, 0, 24], rightForearm: [6, 0, -48] });
+    case "跪姿身体后仰": return poseWithBase(base, { torso: [-22, 0, 4], head: [14, 0, -3], leftArm: [-6, 0, -34], leftForearm: [0, 0, 34], rightArm: [-6, 0, 34], rightForearm: [0, 0, -34] });
+    case "跪姿回头": return poseWithBase(base, { torso: [8, 20, -2], head: [-5, 70, 3], leftArm: [8, 0, -16], rightArm: [8, 0, 20] });
+    case "双手撑地跪姿": return poseWithBase(base, { torso: [42, 0, -5], head: [-22, 0, 3], leftArm: [48, 0, -38], leftForearm: [8, 0, 34], rightArm: [48, 0, 38], rightForearm: [8, 0, -34], leftLeg: [4, 0, -16], rightLeg: [4, 0, 16] });
+    case "单手撑地跪姿": return poseWithBase(base, { torso: [38, 10, -5], head: [-20, -10, 3], leftArm: [52, 0, -40], leftForearm: [10, 0, 38], rightArm: [-8, 0, 48], rightForearm: [0, 0, -70], leftLeg: [6, 0, -16], rightLeg: [-54, 0, 22], rightShin: [82, 0, -6] });
+    case "战斗半跪": return poseWithBase(base, { torso: [18, -8, -4], head: [-12, 10, 3], leftArm: [-16, 0, -62], leftForearm: [0, 0, -116], rightArm: [-8, 0, 64], rightForearm: [0, 0, 110], leftLeg: [4, 0, -16], leftShin: [100, 0, 5], rightLeg: [-66, 0, 22], rightShin: [84, 0, -7] });
+    case "英雄落地": return poseWithBase(base, { torso: [34, -8, -6], head: [-20, 10, 4], leftArm: [44, 0, -44], leftForearm: [12, 0, 54], rightArm: [-12, 0, 70], rightForearm: [0, 0, 106], leftLeg: [4, 0, -18], leftShin: [104, 0, 6], rightLeg: [-74, 0, 24], rightShin: [92, 0, -8] });
+    default: return base;
+  }
+}
+
+function createLeaningJointPose(name: string): JointPose {
+  const base = jointPose({
+    torso: [-12, 0, 5], head: [6, -8, -4], leftArm: [2, 0, -20], leftForearm: [2, 0, 28], rightArm: [6, 0, 26], rightForearm: [2, 0, -42],
+    leftLeg: [-4, 0, -12], rightLeg: [18, 0, 16], rightShin: [-28, 0, -4],
+  });
+  switch (name) {
+    case "单肩靠墙": return poseWithBase(base, { torso: [-10, 14, 8], head: [5, -12, -6], leftArm: [0, 0, -26], rightLeg: [20, 0, 18] });
+    case "侧身靠墙": return poseWithBase(base, { torso: [-8, 24, 6], head: [4, -18, -4], leftLeg: [-4, 0, -14], rightLeg: [16, 0, 18] });
+    case "单手撑墙": return poseWithBase(base, { torso: [16, 8, -3], head: [-10, -8, 2], leftArm: [-52, 0, -44], leftForearm: [-6, 0, 26], rightArm: [4, 0, 24], rightForearm: [2, 0, -32], leftLeg: [-8, 0, -12], rightLeg: [14, 0, 14] });
+    case "双手撑墙": return poseWithBase(base, { torso: [20, 0, -4], head: [-12, 0, 2], leftArm: [-52, 0, -42], leftForearm: [-6, 0, 24], rightArm: [-52, 0, 42], rightForearm: [-6, 0, -24], leftLeg: [-12, 0, -14], rightLeg: [18, 0, 16] });
+    case "单手撑桌": return poseWithBase(base, { torso: [28, 8, -4], head: [-16, -8, 3], leftArm: [26, 0, -36], leftForearm: [16, 0, 48], rightArm: [4, 0, 24], rightForearm: [2, 0, -32], leftLeg: [-6, 0, -12], rightLeg: [10, 0, 13] });
+    case "双手撑桌": return poseWithBase(base, { torso: [30, 0, -5], head: [-17, 0, 3], leftArm: [28, 0, -38], leftForearm: [18, 0, 50], rightArm: [28, 0, 38], rightForearm: [18, 0, -50], leftLeg: [-6, 0, -12], rightLeg: [10, 0, 13] });
+    case "身体倚桌": return poseWithBase(base, { torso: [-14, 6, 6], head: [7, -8, -4], leftArm: [4, 0, -26], leftForearm: [4, 0, 34], rightLeg: [22, 0, 18], rightShin: [-32, 0, -5] });
+    case "倚靠栏杆": return poseWithBase(base, { torso: [-8, 8, 4], head: [4, -8, -3], leftArm: [18, 0, -34], leftForearm: [8, 0, 48], rightArm: [10, 0, 26], rightForearm: [4, 0, -38], leftLeg: [-2, 0, -12], rightLeg: [16, 0, 16] });
+    case "双手扶栏杆": return poseWithBase(base, { torso: [12, 0, -3], head: [-8, 0, 2], leftArm: [18, 0, -36], leftForearm: [10, 0, 52], rightArm: [18, 0, 36], rightForearm: [10, 0, -52], leftLeg: [-4, 0, -12], rightLeg: [10, 0, 13] });
+    case "臀部倚桌": return poseWithBase(base, { torso: [-16, 0, 7], head: [8, 0, -5], leftArm: [2, 0, -24], rightArm: [2, 0, 24], leftLeg: [-8, 0, -14], rightLeg: [24, 0, 18], rightShin: [-34, 0, -5] });
+    case "坐姿侧靠": return poseWithBase(base, { torso: [-8, 18, 6], head: [5, -16, -4], leftArm: [18, -6, -30], leftForearm: [8, 0, 42], rightArm: [6, 4, 24], rightForearm: [4, 0, -34], leftLeg: [-70, 12, -16], leftShin: [78, 0, 6], rightLeg: [-66, 14, 18], rightShin: [74, 0, -6] });
+    default: return base;
+  }
+}
+
 function createSeatedJointPose(name: string): JointPose {
   const pose = jointPose({
     torso: [2, 0, 0],
@@ -200,6 +332,11 @@ function createSeatedJointPose(name: string): JointPose {
     case "双腿分开坐":
       pose.leftLeg = [-70, 0, -19]; pose.rightLeg = [-70, 0, 19];
       pose.leftShin = [74, 0, 5]; pose.rightShin = [74, 0, -5];
+      break;
+    case "双腿斜放坐":
+      pose.torso = [2, 7, 1]; pose.head = [-2, -7, -1];
+      pose.leftLeg = [-72, 16, -14]; pose.leftShin = [78, 0, 6];
+      pose.rightLeg = [-68, 18, 8]; pose.rightShin = [74, 0, 4];
       break;
     case "双腿前伸坐":
       pose.leftLeg = [-44, 0, -9]; pose.leftShin = [10, 0, 2];
@@ -453,61 +590,24 @@ function createGroundJointPose(name: string): JointPose {
 }
 
 function createRunningJointPose(name: string): JointPose {
-  // Each running title needs a different gait phase. Reusing the same pose and
-  // only rotating the model made "start", "side run", and "look back" read as
-  // the same airborne leap.
+  const jog = jointPose({
+    torso: [12, -4, -2], head: [-8, 5, 1],
+    leftArm: [-4, 0, -42], leftForearm: [2, 0, -92], rightArm: [16, 0, 38], rightForearm: [2, 0, -78],
+    leftLeg: [-42, 0, -15], leftShin: [62, 0, 5], rightLeg: [30, 0, 16], rightShin: [10, 0, -4],
+  });
   switch (name) {
-    case "冲刺起步":
-    case "起跑准备":
-      return jointPose({
-        torso: [55, -5, -3], head: [-38, 6, 2],
-        leftArm: [28, 0, -30], leftForearm: [18, 0, 64],
-        rightArm: [28, 0, 30], rightForearm: [18, 0, -64],
-        leftLeg: [-78, 0, -19], leftShin: [108, 0, 7],
-        rightLeg: [-38, 0, 18], rightShin: [68, 0, -5],
-      });
-    case "侧向奔跑":
-      return jointPose({
-        torso: [16, 5, -3], head: [-10, -5, 2],
-        leftArm: [-22, 0, -52], leftForearm: [2, 0, -118],
-        rightArm: [24, 0, 42], rightForearm: [2, 0, -82],
-        leftLeg: [42, 0, -17], leftShin: [12, 0, 5],
-        rightLeg: [-58, 0, 18], rightShin: [84, 0, -6],
-      });
-    case "回头奔跑":
-      return jointPose({
-        torso: [16, 20, -3], head: [-8, 76, 3],
-        leftArm: [22, 0, -42], leftForearm: [4, 0, 88],
-        rightArm: [-18, 0, 48], rightForearm: [2, 0, 118],
-        leftLeg: [-54, 0, -18], leftShin: [78, 0, 6],
-        rightLeg: [38, 0, 18], rightShin: [18, 0, -5],
-      });
-    case "急停姿态":
-      return jointPose({
-        torso: [32, 10, -5], head: [-20, -8, 3],
-        leftArm: [-12, 0, -70], leftForearm: [4, 0, -128],
-        rightArm: [-12, 0, 70], rightForearm: [4, 0, 128],
-        leftLeg: [-72, 0, -24], leftShin: [98, 0, 7],
-        rightLeg: [-26, 0, 24], rightShin: [54, 0, -7],
-      });
-    case "自然慢跑":
-    case "正常跑步":
-      return jointPose({
-        torso: [12, -4, -2], head: [-8, 5, 1],
-        leftArm: [-4, 0, -42], leftForearm: [2, 0, -92],
-        rightArm: [16, 0, 38], rightForearm: [2, 0, -78],
-        leftLeg: [-42, 0, -15], leftShin: [62, 0, 5],
-        rightLeg: [30, 0, 16], rightShin: [10, 0, -4],
-      });
-    case "全力冲刺":
-    default:
-      return jointPose({
-        torso: [24, -8, -4], head: [-16, 8, 2],
-        leftArm: [-24, 0, -54], leftForearm: [2, 0, -122],
-        rightArm: [28, 0, 44], rightForearm: [2, 0, -86],
-        leftLeg: [-62, 0, -18], leftShin: [84, 0, 6],
-        rightLeg: [48, 0, 18], rightShin: [12, 0, -5],
-      });
+    case "正常跑步": return poseWithBase(jog, { torso: [16, -4, -3], leftLeg: [-50, 0, -17], leftShin: [72, 0, 5], rightLeg: [38, 0, 18], rightShin: [12, 0, -5] });
+    case "快速奔跑": return poseWithBase(jog, { torso: [21, -6, -4], head: [-13, 7, 2], leftArm: [-18, 0, -52], leftForearm: [2, 0, -116], rightArm: [24, 0, 44], rightForearm: [2, 0, -86], leftLeg: [-58, 0, -18], leftShin: [82, 0, 6], rightLeg: [46, 0, 19], rightShin: [10, 0, -5] });
+    case "全力冲刺": return poseWithBase(jog, { torso: [28, -8, -5], head: [-18, 9, 3], leftArm: [-26, 0, -58], leftForearm: [2, 0, -126], rightArm: [30, 0, 48], rightForearm: [2, 0, -92], leftLeg: [-68, 0, -20], leftShin: [88, 0, 6], rightLeg: [56, 0, 20], rightShin: [8, 0, -6] });
+    case "冲刺起步": return jointPose({ torso: [52, -6, -5], head: [-34, 7, 3], leftArm: [34, 0, -32], leftForearm: [20, 0, 68], rightArm: [30, 0, 34], rightForearm: [18, 0, -64], leftLeg: [-82, 0, -21], leftShin: [110, 0, 7], rightLeg: [-34, 0, 20], rightShin: [62, 0, -6] });
+    case "起跑准备": return jointPose({ torso: [58, 0, -5], head: [-38, 0, 3], leftArm: [40, 0, -34], leftForearm: [22, 0, 70], rightArm: [40, 0, 34], rightForearm: [22, 0, -70], leftLeg: [-72, 0, -24], leftShin: [104, 0, 8], rightLeg: [-48, 0, 24], rightShin: [78, 0, -8] });
+    case "身体前倾奔跑": return poseWithBase(jog, { torso: [32, -2, -5], head: [-20, 3, 3], leftArm: [-18, 0, -54], leftForearm: [2, 0, -118], rightArm: [28, 0, 46], rightForearm: [2, 0, -88], leftLeg: [-56, 0, -18], leftShin: [80, 0, 6], rightLeg: [44, 0, 18] });
+    case "大跨步奔跑": return poseWithBase(jog, { torso: [22, -3, -4], head: [-14, 4, 2], leftArm: [-22, 0, -56], leftForearm: [2, 0, -120], rightArm: [28, 0, 46], rightForearm: [2, 0, -90], leftLeg: [-78, 0, -19], leftShin: [38, 0, 6], rightLeg: [68, 0, 20], rightShin: [8, 0, -6] });
+    case "转弯奔跑": return poseWithBase(jog, { torso: [20, 28, -8], head: [-12, -20, 5], leftArm: [-18, -8, -58], leftForearm: [2, 0, -112], rightArm: [24, 8, 52], rightForearm: [2, 0, -90], leftLeg: [-52, -10, -22], leftShin: [76, 0, 7], rightLeg: [38, 12, 24], rightShin: [18, 0, -7] });
+    case "回头奔跑": return poseWithBase(jog, { torso: [17, 22, -4], head: [-9, 76, 4], leftArm: [22, 0, -44], leftForearm: [4, 0, 88], rightArm: [-18, 0, 48], rightForearm: [2, 0, 118], leftLeg: [-54, 0, -18], leftShin: [78, 0, 6], rightLeg: [38, 0, 18], rightShin: [18, 0, -5] });
+    case "侧向奔跑": return poseWithBase(jog, { torso: [17, 16, -4], head: [-10, -12, 2], leftArm: [-22, 0, -54], leftForearm: [2, 0, -118], rightArm: [24, 0, 44], rightForearm: [2, 0, -84], leftLeg: [42, 0, -26], leftShin: [12, 0, 8], rightLeg: [-58, 0, 28], rightShin: [84, 0, -9] });
+    case "急停姿态": return jointPose({ torso: [34, 10, -6], head: [-21, -9, 4], leftArm: [-12, 0, -72], leftForearm: [4, 0, -130], rightArm: [-12, 0, 72], rightForearm: [4, 0, 130], leftLeg: [-74, 0, -26], leftShin: [100, 0, 8], rightLeg: [-28, 0, 26], rightShin: [56, 0, -8] });
+    default: return jog;
   }
 }
 
@@ -519,6 +619,11 @@ function createLyingJointPose(name: string): JointPose {
     leftLeg: [-4, 0, -7], leftShin: [3, 0, 1],
     rightLeg: [-4, 0, 7], rightShin: [3, 0, -1],
   });
+  if (name === "自然仰躺") {
+    pose.torso = [0, 3, 0]; pose.head = [2, -4, 0];
+    pose.leftArm = [2, 0, -30]; pose.leftForearm = [2, 0, 16];
+    pose.rightLeg = [-12, -4, 12]; pose.rightShin = [18, 0, -3];
+  }
   if (/单腿屈膝/.test(name)) {
     pose.rightLeg = [-54, -8, 20]; pose.rightShin = [88, 0, -6];
   }
@@ -559,6 +664,8 @@ function createProneJointPose(name: string): JointPose {
     leftLeg: [3, 0, -7], leftShin: [6, 0, 1],
     rightLeg: [3, 0, 8], rightShin: [6, 0, -1],
   });
+  if (name === "自然俯卧") pose.head = [-6, 5, 0];
+  if (name === "趴地抬头") { pose.torso = [-6, 0, -2]; pose.head = [-28, 6, 1]; }
   if (/双肘撑起/.test(name)) pose.torso = [-14, 0, -3];
   if (/单肘撑起/.test(name)) {
     pose.torso = [-12, 8, -3]; pose.leftArm = [-48, 0, -42]; pose.rightArm = [4, 0, 26]; pose.rightForearm = [0, 0, -40];
@@ -576,23 +683,29 @@ function createProneJointPose(name: string): JointPose {
 }
 
 function createGroundActionJointPose(name: string): JointPose {
-  if (/坐地后撑|跌坐|跌倒侧撑|倒地支撑|倒地起身|单手撑地起身/.test(name)) {
-    const pose = createGroundJointPose(/坐地后撑/.test(name) ? "后仰撑地" : "手撑地面坐");
-    if (/侧撑/.test(name)) { pose.torso = [2, 18, 4]; pose.head = [-2, -18, -3]; }
-    if (/起身/.test(name)) { pose.torso = [30, 8, -4]; pose.leftLeg = [-70, 0, -18]; pose.rightLeg = [-20, 0, 20]; }
-    return pose;
-  }
-  if (/滑跪/.test(name)) return jointPose({ torso: [18, 0, -4], head: [-10, 0, 2], leftArm: [-18, 0, -58], rightArm: [-18, 0, 58], leftLeg: [-8, 0, -12], leftShin: [98, 0, 5], rightLeg: [10, 0, 12], rightShin: [98, 0, -5] });
-  if (/翻滚/.test(name)) return jointPose({ torso: [28, 12, -8], head: [22, -18, 5], leftArm: [-28, 0, -46], leftForearm: [0, 0, 86], rightArm: [-18, 0, 44], rightForearm: [0, 0, -82], leftLeg: [-62, 0, -24], leftShin: [96, 0, 8], rightLeg: [-52, 0, 26], rightShin: [90, 0, -8] });
-  const low = /俯卧撑低位|低姿移动/.test(name);
-  const crawl = /四点支撑|爬行|熊爬/.test(name);
-  return jointPose({
-    torso: [low ? -4 : crawl ? 12 : 0, 0, -3], head: [low ? -6 : -14, 0, 2],
-    leftArm: [crawl ? -28 : -8, 0, -50], leftForearm: [0, 0, crawl ? 74 : 18],
-    rightArm: [crawl ? -12 : -8, 0, 50], rightForearm: [0, 0, crawl ? -48 : -18],
-    leftLeg: [crawl ? -48 : 2, 0, -14], leftShin: [crawl ? 88 : 4, 0, 3],
-    rightLeg: [crawl ? -18 : 2, 0, 14], rightShin: [crawl ? 58 : 4, 0, -3],
+  const fourPoint = jointPose({
+    torso: [12, 0, -3], head: [-14, 0, 2],
+    leftArm: [-28, 0, -50], leftForearm: [0, 0, 74], rightArm: [-28, 0, 50], rightForearm: [0, 0, -74],
+    leftLeg: [-48, 0, -16], leftShin: [88, 0, 5], rightLeg: [-48, 0, 16], rightShin: [88, 0, -5],
   });
+  switch (name) {
+    case "向前爬行": return poseWithBase(fourPoint, { torso: [15, -5, -4], head: [-16, 6, 3], leftArm: [-42, 0, -54], leftForearm: [0, 0, 86], rightArm: [-12, 0, 46], rightForearm: [0, 0, -58], leftLeg: [-62, 0, -18], leftShin: [98, 0, 6], rightLeg: [-26, 0, 20], rightShin: [66, 0, -6] });
+    case "熊爬姿态": return poseWithBase(fourPoint, { torso: [2, 0, -4], head: [-12, 0, 3], leftArm: [-10, 0, -52], leftForearm: [0, 0, 28], rightArm: [-10, 0, 52], rightForearm: [0, 0, -28], leftLeg: [-28, 0, -22], leftShin: [52, 0, 7], rightLeg: [-28, 0, 22], rightShin: [52, 0, -7] });
+    case "平板支撑": return jointPose({ torso: [0, 0, -2], head: [-10, 0, 2], leftArm: [-8, 0, -50], leftForearm: [0, 0, 18], rightArm: [-8, 0, 50], rightForearm: [0, 0, -18], leftLeg: [3, 0, -13], leftShin: [4, 0, 3], rightLeg: [3, 0, 13], rightShin: [4, 0, -3] });
+    case "俯卧撑准备": return jointPose({ torso: [3, 0, -3], head: [-13, 0, 2], leftArm: [-12, 0, -56], leftForearm: [0, 0, 14], rightArm: [-12, 0, 56], rightForearm: [0, 0, -14], leftLeg: [4, 0, -15], leftShin: [5, 0, 3], rightLeg: [4, 0, 15], rightShin: [5, 0, -3] });
+    case "俯卧撑低位": return jointPose({ torso: [-5, 0, -3], head: [-5, 0, 2], leftArm: [-46, 0, -50], leftForearm: [0, 0, 92], rightArm: [-46, 0, 50], rightForearm: [0, 0, -92], leftLeg: [4, 0, -14], leftShin: [5, 0, 3], rightLeg: [4, 0, 14], rightShin: [5, 0, -3] });
+    case "坐地后撑": return createGroundJointPose("后仰撑地");
+    case "跌坐": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [8, -7, -3], head: [-4, 8, 2], leftLeg: [-72, 0, -22], leftShin: [100, 0, 7], rightLeg: [-44, 0, 24], rightShin: [76, 0, -7] });
+    case "跌倒侧撑": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [6, 28, 7], head: [-3, -24, -5], leftArm: [48, -8, -40], leftForearm: [12, 0, 40], rightArm: [-2, 6, 32], rightForearm: [2, 0, -38], leftLeg: [-64, 16, -28], leftShin: [88, 0, 9], rightLeg: [-34, 20, 26], rightShin: [66, 0, -8] });
+    case "倒地支撑": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [22, 18, -5], head: [-14, -14, 3], leftArm: [52, -8, -42], leftForearm: [12, 0, 42], rightArm: [-14, 4, 48], rightForearm: [0, 0, -68], leftLeg: [-62, 0, -20], leftShin: [92, 0, 6], rightLeg: [-28, 0, 24], rightShin: [58, 0, -7] });
+    case "翻滚准备": return jointPose({ torso: [34, 8, -7], head: [18, -12, 4], leftArm: [-18, 0, -40], leftForearm: [0, 0, 78], rightArm: [-12, 0, 42], rightForearm: [0, 0, -76], leftLeg: [-72, 0, -25], leftShin: [102, 0, 8], rightLeg: [-68, 0, 27], rightShin: [100, 0, -8] });
+    case "地面翻滚": return jointPose({ torso: [24, 36, -10], head: [16, -32, 6], leftArm: [-34, -8, -48], leftForearm: [0, 0, 92], rightArm: [-10, 8, 42], rightForearm: [0, 0, -76], leftLeg: [-62, -10, -28], leftShin: [96, 0, 9], rightLeg: [-48, 12, 30], rightShin: [86, 0, -9] });
+    case "滑跪": return jointPose({ torso: [18, -5, -4], head: [-10, 6, 2], leftArm: [-18, 0, -68], leftForearm: [0, 0, -42], rightArm: [-18, 0, 68], rightForearm: [0, 0, 42], leftLeg: [-8, 0, -16], leftShin: [102, 0, 6], rightLeg: [12, 0, 16], rightShin: [102, 0, -6] });
+    case "低姿移动": return poseWithBase(fourPoint, { torso: [4, -12, -5], head: [-8, 16, 3], leftArm: [-38, 0, -56], leftForearm: [0, 0, 80], rightArm: [-10, 0, 46], rightForearm: [0, 0, -50], leftLeg: [-68, 0, -24], leftShin: [100, 0, 8], rightLeg: [-22, 0, 26], rightShin: [58, 0, -8] });
+    case "倒地起身": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [38, 8, -6], head: [-22, -6, 4], leftArm: [48, -8, -38], leftForearm: [10, 0, 42], rightArm: [-12, 0, 52], rightForearm: [0, 0, -72], leftLeg: [-72, 0, -20], leftShin: [96, 0, 6], rightLeg: [-18, 0, 22], rightShin: [48, 0, -7] });
+    case "单手撑地起身": return poseWithBase(createGroundJointPose("手撑地面坐"), { torso: [42, 18, -7], head: [-24, -14, 4], leftArm: [54, -8, -42], leftForearm: [12, 0, 44], rightArm: [-18, 6, 56], rightForearm: [0, 0, -76], leftLeg: [-68, 0, -22], leftShin: [92, 0, 7], rightLeg: [-12, 0, 24], rightShin: [42, 0, -8] });
+    default: return fourPoint;
+  }
 }
 
 function createJumpingJointPose(name: string): JointPose {
@@ -704,156 +817,26 @@ function createJumpingJointPose(name: string): JointPose {
   });
 }
 
-function createSemanticJointPose(item: PoseItem, index: number): JointPose {
-  const text = `${item.name} ${item.tags.join(" ")}`;
-  let pose = cloneJointPose(jointPoses[0]);
-
-  if (item.category === "lying") {
-    pose = createLyingJointPose(item.name);
-  } else if (item.category === "prone") {
-    pose = createProneJointPose(item.name);
-  } else if (item.category === "ground") {
-    pose = createGroundActionJointPose(item.name);
-  } else if (item.category === "sitting") {
-    pose = createSeatedJointPose(item.name);
-  } else if (item.category === "kneeling") {
-    pose = jointPose({ torso: [8, 0, -2], head: [-5, 0, 2], leftArm: [8, 0, -12], leftForearm: [0, 0, 20], rightArm: [8, 0, 12], rightForearm: [0, 0, -20], leftLeg: [-82, 0, -10], leftShin: [92, 0, 4], rightLeg: [2, 0, 12], rightShin: [105, 0, -4] });
-    if (/双膝|低头|抬头/.test(text)) {
-      pose.leftLeg = [10, 0, -12]; pose.leftShin = [92, 0, 4];
-      pose.rightLeg = [10, 0, 12]; pose.rightShin = [92, 0, -4];
-    }
-    if (/低头/.test(text)) pose.head = [24, 0, 0];
-    if (/抬头/.test(text)) pose.head = [-20, 0, 0];
-  } else if (item.category === "squatting") {
-    pose = jointPose({ torso: [18, 0, -2], head: [-10, 0, 2], leftArm: [18, 0, 28], leftForearm: [8, 0, 55], rightArm: [18, 0, -28], rightForearm: [8, 0, -55], leftLeg: [-65, 0, -18], leftShin: [95, 0, 5], rightLeg: [-65, 0, 18], rightShin: [95, 0, -5] });
-    if (/撑膝/.test(text)) {
-      pose.leftArm = [38, 0, -28]; pose.leftForearm = [24, 0, 48];
-      pose.rightArm = [38, 0, 28]; pose.rightForearm = [24, 0, -48];
-    }
-  } else if (item.category === "running") {
-    pose = createRunningJointPose(item.name);
-  } else if (item.category === "walking") {
-    pose = cloneJointPose(jointPoses[4]);
-    if (index % 2) pose = mirrorJointPose(pose);
-    if (/缓慢/.test(text)) { pose.torso = [4, 0, 0]; pose.leftLeg = [-22, 0, -9]; pose.rightLeg = [18, 0, 10]; }
-    if (/大步|猫步/.test(text)) { pose.leftLeg = [-48, 0, -14]; pose.rightLeg = [42, 0, 15]; }
-    if (/低头/.test(text)) pose.head = [20, 0, 0];
-    if (/回头/.test(text)) { pose.torso = [8, 18, -3]; pose.head = [-5, 62, 2]; }
-  } else if (item.category === "jumping") {
-    pose = createJumpingJointPose(item.name);
-  } else if (/落地/.test(text)) {
-    pose = cloneJointPose(/超级英雄/.test(text) ? jointPoses[6] : jointPoses[19]);
-  } else if (/飞踢|高踢|侧踢|踢球/.test(text)) {
-    pose = cloneJointPose(jointPoses[17]);
-    if (/高踢/.test(text)) { pose.rightLeg = [-120, 0, 0]; pose.rightShin = [5, 0, 0]; }
-  } else if (/出拳|挥拳|蓄力|握拳|拳击|战斗|防御|闪避/.test(text)) {
-    if (/出拳|挥拳/.test(text)) {
-      pose = jointPose({ torso: [10, -8, -4], head: [-5, 10, 2], leftArm: [-8, 0, -65], leftForearm: [0, 0, -165], rightArm: [-6, 0, 90], rightForearm: [0, 0, 0], leftLeg: [-24, 0, -14], leftShin: [34, 0, 4], rightLeg: [18, 0, 16], rightShin: [-20, 0, -4] });
-    } else {
-      pose = jointPose({ torso: [8, -5, -3], head: [-4, 8, 2], leftArm: [-10, 0, -65], leftForearm: [0, 0, -165], rightArm: [-10, 0, 65], rightForearm: [0, 0, 165], leftLeg: [-28, 0, -15], leftShin: [38, 0, 4], rightLeg: [22, 0, 16], rightShin: [-24, 0, -4] });
-    }
-  } else if (/剑|瞄准|持枪/.test(text)) {
-    pose = cloneJointPose(/瞄准|持枪/.test(text) ? jointPoses[10] : jointPoses[9]);
-  } else if (/投篮|篮球|运球/.test(text)) {
-    pose = jointPose({ torso: [8, 5, -4], head: [-8, -5, 2], leftArm: [/投篮/.test(text) ? -58 : 26, 0, -38], leftForearm: [0, 0, 82], rightArm: [/投篮/.test(text) ? -72 : 38, 0, 40], rightForearm: [0, 0, -84], leftLeg: [-32, 0, -12], leftShin: [38, 0, 3], rightLeg: [28, 0, 14], rightShin: [-30, 0, -3] });
-  } else if (/挥拍|足球带球/.test(text)) {
-    pose = cloneJointPose(/挥拍/.test(text) ? jointPoses[16] : jointPoses[4]);
-  } else if (/双手抱胸|手臂交叉|半身双手抱胸/.test(text)) {
-    pose = jointPose({ torso: [0, 4, -2], leftArm: [-42, 8, 37], leftForearm: [-18, 0, 55], rightArm: [-18, -8, -37], rightForearm: [8, 0, -55], leftLeg: [0, 0, -7], rightLeg: [0, 0, 7] });
-  } else if (/双手背后/.test(text)) {
-    pose = jointPose({ leftArm: [18, 10, -28], leftForearm: [0, 0, 74], rightArm: [18, -10, 28], rightForearm: [0, 0, -74], leftLeg: [0, 0, -5], rightLeg: [0, 0, 5] });
-  } else if (/叉腰/.test(text)) {
-    pose = cloneJointPose(jointPoses[1]);
-    if (/双手/.test(text)) { pose.rightArm = [8, 8, 42]; pose.rightForearm = [2, 0, -82]; }
-  } else if (/插兜/.test(text)) {
-    pose = jointPose({ torso: [0, 3, -5], head: [0, -5, 3], leftArm: [12, 0, -22], leftForearm: [4, 0, 62], rightArm: [/双手/.test(text) ? 12 : 2, 0, /双手/.test(text) ? 22 : 12], rightForearm: [4, 0, /双手/.test(text) ? -62 : -22], leftLeg: [0, 0, -9], rightLeg: [0, 0, 10] });
-  } else if (/肩部回望/.test(text)) {
-    // The model is turned away by the composition transform; rotate the neck
-    // back toward camera so the title reads as an over-shoulder glance rather
-    // than a plain rear view.
-    pose = jointPose({ torso: [0, -12, -2], head: [0, 78, 4], leftArm: [2, 0, -16], rightArm: [2, 0, 16], leftLeg: [0, 0, -7], rightLeg: [0, 0, 8] });
-  } else if (/托腮|扶下巴|扶脸|扶头|摸发|整理头发|扶颈|捧脸|捂脸|捂嘴|遮脸/.test(text)) {
-    pose = jointPose({ torso: [3, 7, -4], head: [-8, -12, 6], leftArm: [2, 0, 0], leftForearm: [0, 0, 12], rightArm: [40, 0, 40], rightForearm: [0, 0, 150], leftLeg: [0, 0, -6], rightLeg: [0, 0, 7] });
-    if (/双手|捧脸|捂脸|捂嘴|整理头发/.test(text)) {
-      pose.leftArm = [-10, 0, -65]; pose.leftForearm = [0, 0, -165];
-      pose.rightArm = [-10, 0, 65]; pose.rightForearm = [0, 0, 165];
-    }
-  } else if (/展示商品|托举|托物|持物|手机展示|举杯|喝水|看手机|打电话|看书|拿相机|拿包|拎包|行李|耳机|手表|配饰|胸前|腰间/.test(text)) {
-    const bothHands = /双手|托举|持物|看书|看手机|拿相机/.test(text);
-    const handToEar = /耳机|打电话/.test(text);
-    pose = jointPose({ torso: [0, 5, -3], head: [/看手机|看书|手表|相机/.test(text) ? 12 : 0, -8, 2], leftArm: bothHands ? [-30, 0, 0] : [2, 0, 0], leftForearm: [0, 0, bothHands ? 120 : 12], rightArm: handToEar ? [-10, 0, 65] : [-30, 0, bothHands ? 0 : 28], rightForearm: [0, 0, handToEar ? 165 : bothHands ? -120 : 112], leftLeg: [0, 0, -7], rightLeg: [0, 0, 8] });
-  } else if (/指向/.test(text)) {
-    pose = jointPose({ torso: [2, -8, -3], head: [0, 10, 2], leftArm: [2, 0, 0], leftForearm: [0, 0, 12], rightArm: [-6, 0, 90], rightForearm: [0, 0, 0], leftLeg: [0, 0, -6], rightLeg: [0, 0, 7] });
-  } else if (/张开双臂|双臂展开|手臂自然展开|T型/.test(text)) {
-    pose = cloneJointPose(/T型/.test(text) ? jointPoses[12] : jointPoses[11]);
-  } else if (/双手举起|高举|举剑/.test(text)) {
-    pose = cloneJointPose(jointPoses[11]);
-    pose.leftArm = [-20, 0, -180]; pose.rightArm = [-20, 0, 180];
-  } else if (/挥手|招手/.test(text)) {
-    pose = jointPose({ torso: [0, -4, 3], head: [0, 10, -2], leftArm: [0, 0, 0], leftForearm: [0, 0, 12], rightArm: [-8, 0, 125], rightForearm: [0, 0, 55], leftLeg: [0, 0, -6], rightLeg: [0, 0, 7] });
-  } else if (/鼓掌/.test(text)) {
-    pose = jointPose({ leftArm: [-18, 0, -38], leftForearm: [0, 0, 88], rightArm: [-18, 0, 38], rightForearm: [0, 0, -88] });
-  } else if (/前倾|俯身|弯腰|趴桌|扶桌/.test(text)) {
-    pose = jointPose({ torso: [22, 0, -2], head: [-14, 0, 2], leftArm: [24, 0, -28], leftForearm: [18, 0, 54], rightArm: [24, 0, 28], rightForearm: [18, 0, -54], leftLeg: [-8, 0, -8], rightLeg: [8, 0, 9] });
-  } else if (/靠墙|身体靠墙|靠桌|后仰/.test(text)) {
-    pose = jointPose({ torso: [-12, 0, 5], head: [6, -8, -4], leftArm: [0, 0, -20], leftForearm: [0, 0, 28], rightArm: [6, 0, 26], rightForearm: [0, 0, -42], leftLeg: [-4, 0, -12], rightLeg: [18, 0, 16], rightShin: [-28, 0, -4] });
-  } else if (/扶墙|扶椅|开门|推门|拉门|使用电脑|方向盘/.test(text)) {
-    pose = jointPose({ torso: [8, 8, -3], head: [-5, -10, 2], leftArm: [-54, 0, -42], leftForearm: [-10, 0, 24], rightArm: [-48, 0, 46], rightForearm: [-8, 0, -28], leftLeg: [-12, 0, -8], rightLeg: [18, 0, 10] });
-  } else if (/单腿支撑|单腿前伸|交叉腿|一腿微曲|S型|胯部侧移|模特|时装|Pose|Lookbook|红毯|街拍|秀场|高冷|慵懒/.test(text)) {
-    pose = cloneJointPose(jointPoses[1]);
-    pose.leftLeg = [0, 0, -14]; pose.rightLeg = [/前伸/.test(text) ? -22 : 10, 0, 18]; pose.rightShin = [/微曲|慵懒/.test(text) ? -28 : 0, 0, -4];
-  } else if (/低头|失落|沉思/.test(text)) {
-    pose = jointPose({ torso: [8, 0, 3], head: [22, 0, 0], leftArm: [5, 0, -18], rightArm: [5, 0, 18], leftLeg: [0, 0, -5], rightLeg: [0, 0, 6] });
-  } else if (/抬头|昂首|俯视/.test(text)) {
-    pose = jointPose({ torso: [-4, 0, 0], head: [/俯视/.test(text) ? 12 : -18, 0, 0], leftArm: [0, 0, -18], rightArm: [0, 0, 18], leftLeg: [0, 0, -7], rightLeg: [0, 0, 8] });
-  } else if (/A型/.test(text)) {
-    pose = jointPose({ leftArm: [0, 0, -20], rightArm: [0, 0, 20], leftLeg: [0, 0, -16], rightLeg: [0, 0, 16] });
-  } else if (/Power|英雄|强势/.test(text)) {
-    pose = cloneJointPose(jointPoses[2]);
+function createSemanticJointPose(item: PoseItem): JointPose {
+  // V2 does not infer poses by overlapping tags. Every primary category now
+  // resolves through its own authored parameter table, so the title is the
+  // single source of truth for the skeleton shape.
+  switch (item.category) {
+    case "standing": return createStandingJointPose(item.name);
+    case "walking": return createWalkingJointPose(item.name);
+    case "running": return createRunningJointPose(item.name);
+    case "jumping": return createJumpingJointPose(item.name);
+    case "squatting": return createSquattingJointPose(item.name);
+    case "sitting": return createSeatedJointPose(item.name);
+    case "kneeling": return createKneelingJointPose(item.name);
+    case "lying": return createLyingJointPose(item.name);
+    case "prone": return createProneJointPose(item.name);
+    case "leaning": return createLeaningJointPose(item.name);
+    case "ground": return createGroundActionJointPose(item.name);
+    default: return jointPose();
   }
-
-  if (item.category === "standing") {
-    if (/双脚并拢/.test(text)) { pose.leftLeg = [0, 0, -3]; pose.rightLeg = [0, 0, 3]; }
-    if (/双脚分开/.test(text)) { pose.leftLeg = [0, 0, -16]; pose.rightLeg = [0, 0, 16]; }
-    if (/单腿微屈/.test(text)) { pose.rightLeg = [-12, 0, 13]; pose.rightShin = [-24, 0, -4]; }
-    if (/重心左移/.test(text)) { pose.torso = [0, 0, -6]; pose.leftLeg = [0, 0, -12]; pose.rightLeg = [12, 0, 15]; pose.rightShin = [-22, 0, -4]; }
-    if (/重心右移/.test(text)) { pose.torso = [0, 0, 6]; pose.leftLeg = [12, 0, -15]; pose.leftShin = [-22, 0, 4]; pose.rightLeg = [0, 0, 12]; }
-    if (/前后脚/.test(text)) { pose.leftLeg = [-12, 0, -10]; pose.rightLeg = [14, 0, 11]; }
-    if (/交叉腿/.test(text)) { pose.leftLeg = [0, 8, -10]; pose.rightLeg = [-8, -10, 10]; }
-    if (/身前交叠/.test(text)) { pose.leftArm = [12, 0, -20]; pose.leftForearm = [2, 0, 58]; pose.rightArm = [12, 0, 20]; pose.rightForearm = [2, 0, -58]; }
-    if (/单手举起/.test(text)) { pose.rightArm = [-18, 0, 158]; pose.rightForearm = [0, 0, 14]; }
-    if (/侧身/.test(text)) pose.torso = [pose.torso[0], 18, pose.torso[2]];
-    if (/背身/.test(text)) pose.head = [pose.head[0], /回头/.test(text) ? 72 : 0, pose.head[2]];
-  }
-
-  if (item.category === "leaning") {
-    if (/撑墙|撑桌|扶栏杆/.test(text)) {
-      const both = /双手/.test(text);
-      pose.torso = [18, /侧身/.test(text) ? 12 : 0, -3]; pose.head = [-12, 0, 2];
-      pose.leftArm = [-50, 0, -42]; pose.leftForearm = [-8, 0, 24];
-      if (both) { pose.rightArm = [-50, 0, 42]; pose.rightForearm = [-8, 0, -24]; }
-    } else if (/倚|靠/.test(text)) {
-      pose.torso = [-12, /单肩|侧身|侧靠/.test(text) ? 12 : 0, 5]; pose.head = [6, -8, -4];
-      pose.leftLeg = [-4, 0, -12]; pose.rightLeg = [18, 0, 16]; pose.rightShin = [-28, 0, -4];
-    }
-  }
-
-  const variation = (index % 5) - 2;
-  if (!/标准正立|双脚并拢|T型|A型/.test(text)) {
-    pose.torso = [pose.torso[0], pose.torso[1] + variation * 0.8, pose.torso[2] + variation * 0.45];
-    pose.head = [pose.head[0], pose.head[1] - variation * 1.2, pose.head[2]];
-  }
-  return pose;
 }
-
 const poseItemByEngineIndex = new Map(poseItems.map((item) => [item.enginePoseIndex, item]));
-const semanticJointPoses: JointPose[] = [];
-// Bump this whenever the semantic pose solver changes. It forces both the live
-// artboard and the generated covers to discard any pose left by Fast Refresh.
-const poseSolverRevision = "pose-library-v2-jump-safe";
-poseItems.forEach((item) => {
-  semanticJointPoses[item.enginePoseIndex] = createSemanticJointPose(item, item.enginePoseIndex);
-});
 
 function getSemanticTransform(item: PoseItem): PoseTransform {
   const text = `${item.name} ${item.tags.join(" ")}`;
@@ -890,6 +873,132 @@ function getSemanticTransform(item: PoseItem): PoseTransform {
   if (item.category === "kneeling") { yPosition = -0.62; scale = 102; }
   if (/双臂展开|张开双臂|T型|张腿/.test(text)) scale = Math.min(scale, 92);
   return { rotation: [0, yRotation, 0], position: [0, yPosition, 0], scale };
+}
+
+type PoseBoneName =
+  | "Spine"
+  | "Head"
+  | "LeftUpperArm"
+  | "LeftLowerArm"
+  | "RightUpperArm"
+  | "RightLowerArm"
+  | "LeftUpperLeg"
+  | "LeftLowerLeg"
+  | "RightUpperLeg"
+  | "RightLowerLeg";
+
+type PoseRuntimeParameter = {
+  id: string;
+  nameCn: string;
+  nameEn: string;
+  category: PoseCategory;
+  tags: string[];
+  direction: PoseDirection;
+  intensity: PoseIntensity;
+  styleTags: PoseStyle[];
+  basePose: string;
+  rootPosition: [number, number, number];
+  rootRotation: [number, number, number];
+  scale: number;
+  bones: Partial<Record<PoseBoneName, [number, number, number]>>;
+  notes: string;
+};
+
+const jointToBone: Record<keyof JointPose, PoseBoneName> = {
+  torso: "Spine",
+  head: "Head",
+  leftArm: "LeftUpperArm",
+  leftForearm: "LeftLowerArm",
+  rightArm: "RightUpperArm",
+  rightForearm: "RightLowerArm",
+  leftLeg: "LeftUpperLeg",
+  leftShin: "LeftLowerLeg",
+  rightLeg: "RightUpperLeg",
+  rightShin: "RightLowerLeg",
+};
+
+const basePoseNameByCategory: Record<PoseCategory, string> = {
+  standing: "自然站立",
+  walking: "自然行走",
+  running: "自然慢跑",
+  jumping: "原地起跳",
+  squatting: "自然蹲姿",
+  sitting: "自然正坐",
+  kneeling: "双膝跪地",
+  lying: "自然仰躺",
+  prone: "自然俯卧",
+  leaning: "背靠墙站立",
+  ground: "四点支撑",
+};
+
+function getCategoryBaseJointPose(category: PoseCategory): JointPose {
+  return createSemanticJointPose({
+    ...poseItems.find((item) => item.category === category)!,
+    name: basePoseNameByCategory[category],
+    category,
+  });
+}
+
+function rotationsMatch(left: [number, number, number], right: [number, number, number]) {
+  return left.every((value, axis) => Math.abs(value - right[axis]) < 0.001);
+}
+
+function buildPoseRuntimeParameter(item: PoseItem): PoseRuntimeParameter {
+  const basePose = getCategoryBaseJointPose(item.category);
+  const authoredPose = createSemanticJointPose(item);
+  const transform = getSemanticTransform(item);
+  const bones: PoseRuntimeParameter["bones"] = {};
+  (Object.keys(jointToBone) as Array<keyof JointPose>).forEach((joint) => {
+    if (!rotationsMatch(authoredPose[joint], basePose[joint])) {
+      bones[jointToBone[joint]] = [...authoredPose[joint]];
+    }
+  });
+  return {
+    id: item.id,
+    nameCn: item.name,
+    nameEn: item.nameEn,
+    category: item.category,
+    tags: [...item.tags],
+    direction: item.direction,
+    intensity: item.intensity,
+    styleTags: [...item.style],
+    basePose: basePoseNameByCategory[item.category],
+    rootPosition: [...transform.position],
+    rootRotation: [...transform.rotation],
+    scale: transform.scale,
+    bones,
+    notes: "Euler authoring parameters; converted to Quaternion when applied to the skeleton.",
+  };
+}
+
+function resolvePoseRuntimeParameter(parameter: PoseRuntimeParameter): JointPose {
+  const pose = getCategoryBaseJointPose(parameter.category);
+  (Object.entries(jointToBone) as Array<[keyof JointPose, PoseBoneName]>).forEach(([joint, bone]) => {
+    const rotation = parameter.bones[bone];
+    if (rotation) pose[joint] = [...rotation];
+  });
+  return pose;
+}
+
+const poseParametersByEngineIndex = new Map<number, PoseRuntimeParameter>();
+const semanticJointPoses: JointPose[] = [];
+// Bump this whenever authored pose parameters change. It forces both the live
+// artboard and the generated covers to discard poses left by Fast Refresh.
+const poseSolverRevision = "pose-library-v2-parameter-system-1";
+poseItems.forEach((item) => {
+  const parameter = buildPoseRuntimeParameter(item);
+  poseParametersByEngineIndex.set(item.enginePoseIndex, parameter);
+  semanticJointPoses[item.enginePoseIndex] = resolvePoseRuntimeParameter(parameter);
+});
+
+function getPoseTransform(item: PoseItem): PoseTransform {
+  const parameter = poseParametersByEngineIndex.get(item.enginePoseIndex);
+  if (!parameter) return getSemanticTransform(item);
+  return {
+    rotation: [...parameter.rootRotation],
+    position: [...parameter.rootPosition],
+    scale: parameter.scale,
+  };
 }
 
 function rotateAround(point: THREE.Vector3, pivot: THREE.Vector3, rotation: [number, number, number]) {
@@ -1128,6 +1237,10 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
       { side: "left", anchor: "chest", offset: [0.48, -1.28, 0.92], pole: [0.9, -0.62, 0.72], handDirection: [0, 0, -1] },
       { side: "right", anchor: "chest", offset: [-0.48, -1.28, 1.02], pole: [-0.9, -0.62, 0.78], handDirection: [0, 0, -1] },
     ];
+  } else if (item.category === "running" && /急停|侧向|回头|转弯/.test(name)) {
+    // These poses intentionally use their authored asymmetric arm rotations.
+    // Applying the generic running IK here would erase the named action.
+    targets = [];
   } else if (item.category === "running") {
     // A readable contralateral running swing: one bent arm in front of the
     // chest and the opposite hand behind the hip. This replaces the previous
@@ -1546,7 +1659,7 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
   poseIndices.forEach((poseIndex) => {
     const item = poseItemByEngineIndex.get(poseIndex);
     if (!item) return;
-    const transform = getSemanticTransform(item);
+    const transform = getPoseTransform(item);
     const root = new THREE.Group();
     const clone = cloneSkeleton(model);
     const rig = createRigBinding(clone);
@@ -1751,7 +1864,7 @@ export default function Home() {
       if (Array.isArray(recent)) setRecentIds(recent.filter((id): id is string => typeof id === "string").slice(0, 20));
       const restoredPose = poseItems.find((pose) => pose.id === lastSelected && pose.status === "ready");
       if (restoredPose) {
-        const preset = getSemanticTransform(restoredPose);
+        const preset = getPoseTransform(restoredPose);
         setSelectedPoseId(restoredPose.id);
         setEditor((current) => ({
           ...current,
@@ -1887,7 +2000,7 @@ export default function Home() {
       flash("Pose 资源缺失，请稍后重试");
       return;
     }
-    const preset = getSemanticTransform(pose);
+    const preset = getPoseTransform(pose);
     commit((current) => ({
       ...current,
       pose: pose.enginePoseIndex,
