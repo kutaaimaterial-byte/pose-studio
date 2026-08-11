@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -14,6 +15,8 @@ import {
   ArrowsLeftRight,
   ArrowsOutCardinal,
   Check,
+  Camera,
+  Copy,
   Cube,
   DownloadSimple,
   Eye,
@@ -21,6 +24,7 @@ import {
   GridFour,
   HouseLine,
   Info,
+  Lightbulb,
   MagnifyingGlass,
   Minus,
   DotsThree,
@@ -55,9 +59,15 @@ import {
 } from "./pose-data";
 
 type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
-type ToolMode = "translate" | "rotate";
+type ToolMode = "translate" | "rotate" | "pose";
 type InspectorTab = "model" | "camera" | "scene";
 type QuickView = "常用" | "最近" | null;
+type CameraPresetId = "commercial" | "cinematic" | "ecommerce" | "custom";
+type ShotSize = "close" | "medium" | "full" | "long";
+type LightingPresetId = "studio" | "cinematic" | "night" | "soft" | "custom";
+type PromptPlatform = "midjourney" | "flux" | "gpt-image" | "seedance" | "jimeng";
+type IKControlId = "leftHand" | "rightHand" | "leftFoot" | "rightFoot" | "head";
+type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 
 type EditorState = {
   pose: number;
@@ -67,6 +77,19 @@ type EditorState = {
   rotation: [number, number, number];
   scale: number;
   fov: number;
+  focalLength: number;
+  cameraHeight: number;
+  shotSize: ShotSize;
+  cameraPreset: CameraPresetId;
+  lightingPreset: LightingPresetId;
+  keyLight: number;
+  fillLight: number;
+  rimLight: number;
+  exposure: number;
+  keyColor: string;
+  fillColor: string;
+  rimColor: string;
+  ikTargets: IKTargetMap;
   background: string;
   shadow: boolean;
   grid: boolean;
@@ -81,6 +104,19 @@ const initialState: EditorState = {
   rotation: [0, 0, 0],
   scale: 100,
   fov: 34,
+  focalLength: 85,
+  cameraHeight: 1.55,
+  shotSize: "full",
+  cameraPreset: "commercial",
+  lightingPreset: "studio",
+  keyLight: 4.6,
+  fillLight: 1.35,
+  rimLight: 2.1,
+  exposure: 1.05,
+  keyColor: "#ffffff",
+  fillColor: "#e8f1ff",
+  rimColor: "#cbd5ff",
+  ikTargets: {},
   background: "#eef0f4",
   shadow: true,
   grid: false,
@@ -97,9 +133,64 @@ const ratioSize: Record<Ratio, [number, number]> = {
   "1:1": [1400, 1400],
 };
 
-const presetCameraPosition: [number, number, number] = [4.8, 3, 7.2];
+const presetCameraPosition: [number, number, number] = [4.7, 2.8, 8.4];
 const presetCameraTarget: [number, number, number] = [0, 1.55, 0];
 const presetCameraFov = 34;
+
+const cameraPresets: Record<Exclude<CameraPresetId, "custom">, {
+  label: string;
+  focalLength: number;
+  position: [number, number, number];
+  target: [number, number, number];
+  shotSize: ShotSize;
+}> = {
+  commercial: { label: "商业摄影", focalLength: 85, position: [4.7, 2.8, 8.4], target: [0, 1.55, 0], shotSize: "full" },
+  cinematic: { label: "电影英雄", focalLength: 24, position: [5.4, 1.1, 7.4], target: [0, 1.9, 0], shotSize: "full" },
+  ecommerce: { label: "电商模特", focalLength: 50, position: [0, 2.25, 8.7], target: [0, 1.65, 0], shotSize: "full" },
+};
+
+const shotDistance: Record<ShotSize, number> = { close: 3.8, medium: 5.1, full: 8.5, long: 11.5 };
+const shotLabels: Record<ShotSize, string> = { close: "特写", medium: "半身", full: "全身", long: "远景" };
+const shotLabelsEn: Record<ShotSize, string> = { close: "close-up", medium: "medium", full: "full-body", long: "long" };
+const directionLabelsEn: Record<PoseDirection, string> = {
+  front: "front",
+  "front-left": "front-left three-quarter",
+  "front-right": "front-right three-quarter",
+  side: "side",
+  back: "back",
+  "look-back": "looking back",
+};
+const intensityLabelsEn: Record<PoseIntensity, string> = { static: "static", light: "subtle", medium: "dynamic", strong: "strong dynamic" };
+const cameraPresetLabelsEn: Record<CameraPresetId, string> = {
+  commercial: "commercial photography",
+  cinematic: "cinematic hero camera",
+  ecommerce: "e-commerce model photography",
+  custom: "custom camera",
+};
+const lightingPresetLabelsEn: Record<LightingPresetId, string> = {
+  studio: "commercial studio lighting",
+  cinematic: "cinematic side rim lighting",
+  night: "blue and orange night lighting",
+  soft: "soft portrait lighting",
+  custom: "custom lighting",
+};
+
+const lightingPresets: Record<Exclude<LightingPresetId, "custom">, {
+  label: string;
+  key: number;
+  fill: number;
+  rim: number;
+  exposure: number;
+  background: string;
+  keyColor: number;
+  fillColor: number;
+  rimColor: number;
+}> = {
+  studio: { label: "商业棚拍", key: 4.6, fill: 1.35, rim: 2.1, exposure: 1.05, background: "#eef0f4", keyColor: 0xffffff, fillColor: 0xe8f1ff, rimColor: 0xcbd5ff },
+  cinematic: { label: "电影侧逆光", key: 3.8, fill: 0.55, rim: 4.2, exposure: 0.95, background: "#dfe4ec", keyColor: 0xffd8b5, fillColor: 0x92a9ce, rimColor: 0x9ab7ff },
+  night: { label: "蓝橙夜景", key: 3.4, fill: 0.7, rim: 4.8, exposure: 0.9, background: "#cbd4df", keyColor: 0xffb06b, fillColor: 0x6f91d6, rimColor: 0x7aa7ff },
+  soft: { label: "柔光人像", key: 3.1, fill: 2.2, rim: 1.1, exposure: 1.08, background: "#f1f2f4", keyColor: 0xfff5e9, fillColor: 0xf0f5ff, rimColor: 0xe3e7ff },
+};
 
 type JointPose = {
   hips: [number, number, number];
@@ -1709,6 +1800,53 @@ function applyHeadIKTarget(rig: RigBinding, targetInRig: [number, number, number
   return true;
 }
 
+const ikControlBoneMap: Record<IKControlId, HumanoidBoneName> = {
+  leftHand: "LeftHand",
+  rightHand: "RightHand",
+  leftFoot: "LeftFoot",
+  rightFoot: "RightFoot",
+  head: "Head",
+};
+
+function getIKControlPosition(rig: RigBinding, control: IKControlId, targets: IKTargetMap) {
+  const stored = targets[control];
+  if (stored) return new THREE.Vector3(...stored);
+  return getRigBonePosition(rig, ikControlBoneMap[control]);
+}
+
+function getIKPole(rig: RigBinding, control: Exclude<IKControlId, "head">, target: [number, number, number]): [number, number, number] {
+  const isLeft = control.startsWith("left");
+  const isHand = control.endsWith("Hand");
+  const rootBone = isHand
+    ? (isLeft ? "LeftUpperArm" : "RightUpperArm")
+    : (isLeft ? "LeftUpperLeg" : "RightUpperLeg");
+  const root = getRigBonePosition(rig, rootBone) ?? new THREE.Vector3();
+  const pole = root.clone().lerp(new THREE.Vector3(...target), 0.48);
+  pole.x += isLeft ? 0.48 : -0.48;
+  pole.z += isHand ? 0.62 : 0.48;
+  if (!isHand) pole.y -= 0.1;
+  return [pole.x, pole.y, pole.z];
+}
+
+function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
+  (Object.entries(targets) as Array<[IKControlId, [number, number, number]]>).forEach(([control, target]) => {
+    if (control === "head") {
+      applyHeadIKTarget(rig, target);
+      return;
+    }
+    const effector: TwoBoneEffector = control === "leftHand"
+      ? "LeftHand"
+      : control === "rightHand"
+        ? "RightHand"
+        : control === "leftFoot"
+          ? "LeftFoot"
+          : "RightFoot";
+    solveRigEffectorTarget(rig, effector, target, getIKPole(rig, control, target));
+  });
+  rig.root.updateMatrixWorld(true);
+  if (targets.leftFoot || targets.rightFoot) groundRigInParentSpace(rig);
+}
+
 function applyArmIKTarget(rig: RigBinding, target: ArmIKTarget, safetyFactor: number) {
   const upperArm = rig.humanoidBones[target.side === "left" ? "LeftUpperArm" : "RightUpperArm"];
   const lowerArm = rig.humanoidBones[target.side === "left" ? "LeftLowerArm" : "RightLowerArm"];
@@ -2050,10 +2188,13 @@ function cloneState(state: EditorState): EditorState {
     ...state,
     position: [...state.position],
     rotation: [...state.rotation],
+    ikTargets: Object.fromEntries(
+      Object.entries(state.ikTargets).map(([key, value]) => [key, value ? [...value] : value]),
+    ) as IKTargetMap,
   };
 }
 
-type ModelEditState = Pick<EditorState, "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible">;
+type ModelEditState = Pick<EditorState, "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible" | "ikTargets">;
 type ModelListItem = { id: string; name: string };
 
 function getModelEditState(state: EditorState): ModelEditState {
@@ -2064,6 +2205,9 @@ function getModelEditState(state: EditorState): ModelEditState {
     rotation: [...state.rotation],
     scale: state.scale,
     visible: state.visible,
+    ikTargets: Object.fromEntries(
+      Object.entries(state.ikTargets).map(([key, value]) => [key, value ? [...value] : value]),
+    ) as IKTargetMap,
   };
 }
 
@@ -2083,6 +2227,10 @@ export default function Home() {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const transformControlsRef = useRef<TransformControls | null>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const controlPointRefs = useRef<Partial<Record<IKControlId, HTMLButtonElement>>>({});
   const modelRootRef = useRef<THREE.Group | null>(null);
   const templateModelRef = useRef<THREE.Object3D | null>(null);
   const modelRootsRef = useRef<Record<string, THREE.Group>>({});
@@ -2090,6 +2238,7 @@ export default function Home() {
   const modelRigsRef = useRef<Record<string, RigBinding | null>>({});
   const modelStatesRef = useRef<Record<string, ModelEditState>>({});
   const modelCounterRef = useRef(2);
+  const selectedModelIdRef = useRef("model-1");
   const deformableMeshesRef = useRef<THREE.Mesh[]>([]);
   const frameRef = useRef<number | null>(null);
   const historyRef = useRef<EditorState[]>([]);
@@ -2122,12 +2271,14 @@ export default function Home() {
   const [mobilePanel, setMobilePanel] = useState<"library" | "inspector" | null>(null);
   const [toast, setToast] = useState("");
   const [saveState, setSaveState] = useState("已保存 · 刚刚");
-  const [aiLoading, setAiLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [modelList, setModelList] = useState<ModelListItem[]>([{ id: "model-1", name: "机器人 01" }]);
   const [selectedModelId, setSelectedModelId] = useState("model-1");
   const [toolMode, setToolMode] = useState<ToolMode>("translate");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
+  const [activeIKControl, setActiveIKControl] = useState<IKControlId | null>(null);
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptPlatform, setPromptPlatform] = useState<PromptPlatform>("midjourney");
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
   const [modelInfo, setModelInfo] = useState({ loaded: false, hasSkeleton: false, label: "正在加载 GLB…" });
 
@@ -2152,6 +2303,25 @@ export default function Home() {
   }, [body, category, debouncedQuery, direction, favoriteIds, hand, intensity, quickView, recentIds, style]);
 
   const selectedPose = useMemo(() => poseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [selectedPoseId]);
+  const generatedPrompt = useMemo(() => {
+    const cameraLabel = editor.cameraPreset === "custom" ? "自定义镜头" : cameraPresets[editor.cameraPreset].label;
+    const lightingLabel = editor.lightingPreset === "custom" ? "自定义灯光" : lightingPresets[editor.lightingPreset].label;
+    const directionLabel = directionOptions.find(([, value]) => value === selectedPose.direction)?.[0] ?? "正面";
+    const intensityLabel = intensityOptions.find(([, value]) => value === selectedPose.intensity)?.[0] ?? "静态";
+    const platformSuffix: Record<PromptPlatform, { cn: string; en: string }> = {
+      midjourney: { cn: `Midjourney，画幅 ${editor.ratio}`, en: `Midjourney, --ar ${editor.ratio.replace(":", ":")}` },
+      flux: { cn: "Flux，高细节真实摄影", en: "Flux, highly detailed realistic photography" },
+      "gpt-image": { cn: "GPT Image，准确人体结构与自然手部", en: "GPT Image, accurate anatomy and natural hands" },
+      seedance: { cn: "Seedance，电影级动作镜头，运动连贯", en: "Seedance, cinematic action shot, coherent motion" },
+      jimeng: { cn: "即梦，写实人物摄影，动作自然", en: "Jimeng, realistic character photography, natural movement" },
+    };
+    const tagsCn = selectedPose.tags.slice(0, 3).join("、");
+    const tagsEn = [selectedPose.nameEn, selectedPose.category, ...selectedPose.style.slice(0, 2)].filter(Boolean).join(", ");
+    return {
+      chinese: `${selectedPose.name}人体姿态，${directionLabel}，${intensityLabel}，${tagsCn}，${cameraLabel}，${shotLabels[editor.shotSize]}景别，${editor.focalLength}mm 镜头，${lightingLabel}，真实人体比例，骨骼与手脚自然，无穿模，8K 摄影质量，${platformSuffix[promptPlatform].cn}`,
+      english: `${selectedPose.nameEn || selectedPose.name}, ${tagsEn}, ${directionLabelsEn[selectedPose.direction]} view, ${intensityLabelsEn[selectedPose.intensity]} movement, ${cameraPresetLabelsEn[editor.cameraPreset]}, ${shotLabelsEn[editor.shotSize]} shot, ${editor.focalLength}mm lens, ${lightingPresetLabelsEn[editor.lightingPreset]}, realistic human proportions, natural anatomy and hands, no body intersection, 8k photography, ${platformSuffix[promptPlatform].en}`,
+    };
+  }, [editor.cameraPreset, editor.focalLength, editor.lightingPreset, editor.ratio, editor.shotSize, promptPlatform, selectedPose]);
   const hasActiveFilters = category !== "all" || direction !== "any" || intensity !== "any" || hand !== "any" || body !== "any" || style !== "any" || query.length > 0 || quickView !== null;
 
   useEffect(() => {
@@ -2169,7 +2339,7 @@ export default function Home() {
       setPoseThumbnails({});
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [poseSolverRevision]);
+  }, []);
 
   useEffect(() => {
     const grid = poseGridRef.current;
@@ -2204,22 +2374,28 @@ export default function Home() {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [filteredPoses, modelInfo.loaded, poseSolverRevision]);
+  }, [filteredPoses, modelInfo.loaded]);
 
   useEffect(() => {
     try {
       const favorites = JSON.parse(window.localStorage.getItem("poseboard.favoriteIds") ?? "[]");
       const recent = JSON.parse(window.localStorage.getItem("poseboard.recentIds") ?? "[]");
+      const savedProject = JSON.parse(window.localStorage.getItem("poseboard.project.v2") ?? "null") as { editor?: Partial<EditorState>; selectedPoseId?: string } | null;
       const lastSelected = window.localStorage.getItem("poseboard.lastSelectedId");
       if (Array.isArray(favorites)) setFavoriteIds(favorites.filter((id): id is string => typeof id === "string"));
       if (Array.isArray(recent)) setRecentIds(recent.filter((id): id is string => typeof id === "string").slice(0, 20));
-      const restoredPose = poseItems.find((pose) => pose.id === lastSelected && pose.status === "ready");
+      const restoredPose = poseItems.find((pose) => pose.id === (savedProject?.selectedPoseId ?? lastSelected) && pose.status === "ready");
+      if (savedProject?.editor) {
+        setEditor((current) => cloneState({
+          ...current,
+          ...savedProject.editor,
+          ikTargets: savedProject.editor?.ikTargets ?? {},
+          pose: restoredPose?.enginePoseIndex ?? savedProject.editor?.pose ?? current.pose,
+        }));
+      }
       if (restoredPose) {
         setSelectedPoseId(restoredPose.id);
-        setEditor((current) => ({
-          ...current,
-          pose: restoredPose.enginePoseIndex,
-        }));
+        if (!savedProject?.editor) setEditor((current) => ({ ...current, pose: restoredPose.enginePoseIndex }));
       }
     } finally {
       setPersistenceReady(true);
@@ -2234,8 +2410,17 @@ export default function Home() {
   }, [favoriteIds, persistenceReady, recentIds, selectedPoseId]);
 
   useEffect(() => {
+    if (!persistenceReady) return;
+    window.localStorage.setItem("poseboard.project.v2", JSON.stringify({ version: "2.0", selectedPoseId, editor }));
+  }, [editor, persistenceReady, selectedPoseId]);
+
+  useEffect(() => {
     editorLatestRef.current = editor;
   }, [editor]);
+
+  useEffect(() => {
+    selectedModelIdRef.current = selectedModelId;
+  }, [selectedModelId]);
 
   useEffect(() => () => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -2325,6 +2510,7 @@ export default function Home() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMobilePanel(null);
+        setPromptOpen(false);
         return;
       }
       const target = event.target;
@@ -2351,6 +2537,7 @@ export default function Home() {
       ...current,
       pose: pose.enginePoseIndex,
       mirrored: false,
+      ikTargets: {},
     }));
     setSelectedPoseId(pose.id);
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
@@ -2403,6 +2590,163 @@ export default function Home() {
     setToolMode(mode);
     setInspectorTab("model");
     if (controlsRef.current) controlsRef.current.enabled = true;
+  };
+
+  const beginIKDrag = (control: IKControlId, event: React.PointerEvent<HTMLButtonElement>) => {
+    const rig = modelRigsRef.current[selectedModelId];
+    const camera = cameraRef.current;
+    const renderer = rendererRef.current;
+    if (!rig || !camera || !renderer) return;
+    const startLocal = getIKControlPosition(rig, control, editorLatestRef.current.ikTargets);
+    if (!startLocal) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveIKControl(control);
+    beginContinuousEdit();
+    if (controlsRef.current) controlsRef.current.enabled = false;
+
+    const startWorld = rig.root.localToWorld(startLocal.clone());
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), startWorld);
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const worldTarget = new THREE.Vector3();
+
+    const move = (pointerEvent: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(
+        ((pointerEvent.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1,
+        -((pointerEvent.clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1,
+      );
+      raycaster.setFromCamera(pointer, camera);
+      if (!raycaster.ray.intersectPlane(plane, worldTarget)) return;
+      const local = rig.root.worldToLocal(worldTarget.clone());
+      const target: [number, number, number] = [local.x, local.y, local.z];
+      updateContinuousEdit((current) => ({
+        ...current,
+        ikTargets: { ...current.ikTargets, [control]: target },
+      }));
+    };
+
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (controlsRef.current) controlsRef.current.enabled = true;
+      setActiveIKControl(null);
+      endContinuousEdit();
+      flash(`${control === "head" ? "头部朝向" : control.includes("Hand") ? "手部" : "脚部"}已更新`);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  const resetIKEdits = () => {
+    commit((current) => ({ ...current, ikTargets: {} }));
+    setActiveIKControl(null);
+    flash("已恢复预设骨骼姿态");
+  };
+
+  const applyCameraPreset = (presetId: Exclude<CameraPresetId, "custom">) => {
+    const preset = cameraPresets[presetId];
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (camera && controls) {
+      camera.position.set(...preset.position);
+      controls.target.set(...preset.target);
+      controls.update();
+      controls.saveState();
+    }
+    commit((current) => ({
+      ...current,
+      cameraPreset: presetId,
+      focalLength: preset.focalLength,
+      cameraHeight: preset.target[1],
+      shotSize: preset.shotSize,
+    }));
+    flash(`已应用${preset.label}镜头`);
+  };
+
+  const updateCameraComposition = (patch: Partial<Pick<EditorState, "focalLength" | "cameraHeight" | "shotSize">>, continuous = false) => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const nextHeight = patch.cameraHeight ?? editorLatestRef.current.cameraHeight;
+    const nextShot = patch.shotSize ?? editorLatestRef.current.shotSize;
+    if (camera && controls) {
+      const target = controls.target.clone();
+      const direction = camera.position.clone().sub(target).normalize();
+      target.y = nextHeight;
+      controls.target.copy(target);
+      camera.position.copy(target.clone().addScaledVector(direction, shotDistance[nextShot]));
+      controls.update();
+    }
+    const updater = (current: EditorState) => ({ ...current, ...patch, cameraPreset: "custom" as const });
+    if (continuous) updateContinuousEdit(updater);
+    else commit(updater);
+  };
+
+  const applyLightingPreset = (presetId: Exclude<LightingPresetId, "custom">) => {
+    const preset = lightingPresets[presetId];
+    const toHex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
+    commit((current) => ({
+      ...current,
+      lightingPreset: presetId,
+      keyLight: preset.key,
+      fillLight: preset.fill,
+      rimLight: preset.rim,
+      exposure: preset.exposure,
+      keyColor: toHex(preset.keyColor),
+      fillColor: toHex(preset.fillColor),
+      rimColor: toHex(preset.rimColor),
+      background: preset.background,
+    }));
+    flash(`已应用${preset.label}`);
+  };
+
+  const updateLightingValue = (key: "keyLight" | "fillLight" | "rimLight" | "exposure", value: number) => {
+    updateContinuousEdit((current) => ({ ...current, [key]: value, lightingPreset: "custom" }));
+  };
+
+  const copyPrompt = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      flash("Prompt 已复制");
+    } catch {
+      flash("复制失败，请手动选择文本");
+    }
+  };
+
+  const downloadTextFile = (filename: string, content: string, type = "text/plain") => {
+    const blob = new Blob([content], { type: `${type};charset=utf-8` });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const exportProjectJson = () => {
+    const project = {
+      version: "2.0",
+      pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets },
+      camera: {
+        preset: editor.cameraPreset,
+        focalLength: editor.focalLength,
+        height: editor.cameraHeight,
+        shotSize: editor.shotSize,
+        ratio: editor.ratio,
+      },
+      lighting: {
+        preset: editor.lightingPreset,
+        key: editor.keyLight,
+        fill: editor.fillLight,
+        rim: editor.rimLight,
+        exposure: editor.exposure,
+      },
+      prompt: { platform: promptPlatform, ...generatedPrompt },
+    };
+    downloadTextFile(`poseboard-${selectedPose.id}.json`, JSON.stringify(project, null, 2), "application/json");
+    flash("项目 JSON 已导出");
   };
 
   const updateVector = (kind: "position" | "rotation", axis: number, value: number) => {
@@ -2477,6 +2821,7 @@ export default function Home() {
       rotation: [0, side * -12, 0],
       scale: 92,
       visible: true,
+      ikTargets: {},
     };
 
     modelRootsRef.current[id] = root;
@@ -2563,7 +2908,7 @@ export default function Home() {
     transformControls.addEventListener("dragging-changed", handleTransformDragging);
     transformControls.addEventListener("mouseUp", handleTransformMouseUp);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x6d7480, 2.2));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x6d7480, 1.35));
     const key = new THREE.DirectionalLight(0xffffff, 4.6);
     key.position.set(4, 8, 5);
     key.castShadow = true;
@@ -2575,9 +2920,16 @@ export default function Home() {
     key.shadow.bias = -0.00015;
     scene.add(key);
 
+    const fill = new THREE.DirectionalLight(0xe8f1ff, 1.35);
+    fill.position.set(-3, 3.5, 4.5);
+    scene.add(fill);
+
     const rim = new THREE.DirectionalLight(0xcbd5ff, 2.1);
     rim.position.set(-5, 4, -3);
     scene.add(rim);
+    keyLightRef.current = key;
+    fillLightRef.current = fill;
+    rimLightRef.current = rim;
 
     const root = new THREE.Group();
     scene.add(root);
@@ -2642,7 +2994,7 @@ export default function Home() {
         modelStatesRef.current["model-1"] = getModelEditState(initialState);
         deformableMeshesRef.current = originalMeshes;
         transformControls.attach(root);
-        setModelInfo({ loaded: true, hasSkeleton, label: hasSkeleton ? "Quaternius Humanoid · 64 骨骼" : "Pose preview · Prototype mapping" });
+        setModelInfo({ loaded: true, hasSkeleton, label: hasSkeleton ? "Quaternius Humanoid · 65 骨骼 · 19 核心映射" : "Pose preview · Prototype mapping" });
       },
       undefined,
       () => setModelInfo({ loaded: false, hasSkeleton: false, label: "GLB 加载失败" }),
@@ -2661,6 +3013,23 @@ export default function Home() {
 
     const tick = () => {
       controls.update();
+      const rig = modelRigsRef.current[selectedModelIdRef.current];
+      if (rig && cameraRef.current && rendererRef.current) {
+        const rect = rendererRef.current.domElement.getBoundingClientRect();
+        (Object.keys(ikControlBoneMap) as IKControlId[]).forEach((control) => {
+          const element = controlPointRefs.current[control];
+          if (!element) return;
+          const point = getIKControlPosition(rig, control, editorLatestRef.current.ikTargets);
+          if (!point) {
+            element.style.display = "none";
+            return;
+          }
+          const world = rig.root.localToWorld(point.clone()).project(cameraRef.current!);
+          const visible = world.z > -1 && world.z < 1;
+          element.style.display = visible ? "grid" : "none";
+          element.style.transform = `translate(${((world.x + 1) * 0.5 * rect.width) - 18}px, ${((-world.y + 1) * 0.5 * rect.height) - 18}px)`;
+        });
+      }
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(tick);
     };
@@ -2687,8 +3056,11 @@ export default function Home() {
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
+      keyLightRef.current = null;
+      fillLightRef.current = null;
+      rimLightRef.current = null;
     };
-  }, [poseSolverRevision]);
+  }, []);
 
   useEffect(() => {
     const transformControls = transformControlsRef.current;
@@ -2720,7 +3092,10 @@ export default function Home() {
       transformControlsRef.current.getHelper().visible = editor.visible && transformActive;
     }
     const rig = modelRigsRef.current[selectedModelId];
-    if (rig) applyRigPose(rig, editor.pose, editor.mirrored);
+    if (rig) {
+      applyRigPose(rig, editor.pose, editor.mirrored);
+      applyEditorIKTargets(rig, editor.ikTargets);
+    }
     else deformableMeshesRef.current.forEach((mesh) => applyRigidPose(mesh, editor.pose, editor.mirrored));
     if (viewportRef.current) {
       viewportRef.current.dataset.poseSafety = String(rig?.root.userData.poseboardSafetyFactor ?? 1);
@@ -2728,11 +3103,24 @@ export default function Home() {
       viewportRef.current.dataset.poseSolverRevision = poseSolverRevision;
     }
     renderer.shadowMap.enabled = editor.shadow;
-    camera.fov = editor.fov;
+    camera.setFocalLength(editor.focalLength);
     camera.updateProjectionMatrix();
+    renderer.toneMappingExposure = editor.exposure;
+    if (keyLightRef.current) {
+      keyLightRef.current.intensity = editor.keyLight;
+      keyLightRef.current.color.set(editor.keyColor);
+    }
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = editor.fillLight;
+      fillLightRef.current.color.set(editor.fillColor);
+    }
+    if (rimLightRef.current) {
+      rimLightRef.current.intensity = editor.rimLight;
+      rimLightRef.current.color.set(editor.rimColor);
+    }
     scene.background = new THREE.Color(editor.background);
     if (scene.fog instanceof THREE.Fog) scene.fog.color.set(editor.background);
-  }, [editor, modelInfo.loaded, selectedModelId, toolMode, poseSolverRevision]);
+  }, [editor, modelInfo.loaded, selectedModelId, toolMode]);
 
   const exportPng = async () => {
     const renderer = rendererRef.current;
@@ -2787,20 +3175,13 @@ export default function Home() {
     setInspectorTab("model");
     setMobilePanel(null);
     setSelectedPoseId(defaultPose.id);
-    controlsRef.current?.reset();
+    if (cameraRef.current && controlsRef.current) {
+      cameraRef.current.position.set(...cameraPresets.commercial.position);
+      controlsRef.current.target.set(...cameraPresets.commercial.target);
+      controlsRef.current.update();
+      controlsRef.current.saveState();
+    }
     flash("场景已重置");
-  };
-
-  const aiSuggestPose = () => {
-    if (aiLoading || !modelInfo.loaded) return;
-    setAiLoading(true);
-    const available = filteredPoses.filter((pose) => pose.status === "ready");
-    const nextPose = available[(available.findIndex((pose) => pose.id === selectedPose.id) + 7 + available.length) % Math.max(available.length, 1)] ?? defaultPose;
-    window.setTimeout(() => {
-      selectPose(nextPose);
-      setAiLoading(false);
-      flash(`AI 推荐：${nextPose.name}`);
-    }, 720);
   };
 
   const currentSize = ratioSize[editor.ratio];
@@ -2828,13 +3209,14 @@ export default function Home() {
           <button className="reset-scene-button" onClick={resetAll} title="重置整个场景"><ArrowCounterClockwise size={17} /><span>重置场景</span></button>
           <button className="icon-button mobile-only" aria-expanded={mobilePanel === "library"} onClick={() => setMobilePanel(mobilePanel === "library" ? null : "library")} title="姿势库" aria-label="打开姿势库"><SidebarSimple size={19} /></button>
           <button className="icon-button mobile-only" aria-expanded={mobilePanel === "inspector"} onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} title="检查器" aria-label="打开检查器"><SlidersHorizontal size={19} /></button>
+          <button className="icon-button mobile-only" onClick={() => setPromptOpen(true)} title="生成 Prompt" aria-label="生成 Prompt"><Sparkle size={19} /></button>
         </div>
 
         <div className="toolbar-right">
           <button className="icon-button" onClick={undo} disabled={!canUndo} title="撤销 ⌘/Ctrl Z" aria-label="撤销"><ArrowCounterClockwise size={18} /></button>
           <button className="icon-button" onClick={redo} disabled={!canRedo} title="重做 ⌘/Ctrl Shift Z" aria-label="重做"><ArrowClockwise size={18} /></button>
           <span className="toolbar-separator" />
-          <button className={`ai-button ${aiLoading ? "loading" : ""}`} onClick={aiSuggestPose} disabled={aiLoading || !modelInfo.loaded} aria-busy={aiLoading}><Sparkle size={17} weight="fill" /> {aiLoading ? "分析构图…" : "AI 推荐"}</button>
+          <button className="ai-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded}><Sparkle size={17} weight="fill" /> 生成 Prompt</button>
           <button className={`export-button ${exporting ? "loading" : ""}`} onClick={exportPng} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? "导出中…" : "导出 PNG"}</button>
         </div>
       </header>
@@ -2938,6 +3320,7 @@ export default function Home() {
             <div className="tool-dock" role="toolbar" aria-label="模型编辑模式">
               <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title="点击模型后移动"><ArrowsOutCardinal size={16} /> 选择并移动</button>
               <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title="旋转模型"><ArrowClockwise size={16} /> 旋转</button>
+              <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title="拖动手脚和头部调整骨骼"><Sparkle size={16} /> 姿态编辑</button>
             </div>
             <div className="canvas-actions">
               <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? "构图线已关闭" : "构图线已开启"); }} title="构图线" aria-label="切换构图线"><GridFour size={17} /></button>
@@ -2950,11 +3333,30 @@ export default function Home() {
               <div className="artboard-label"><span /> ARTBOARD · {currentSize[0]} × {currentSize[1]}</div>
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
+                <div className={`control-point-layer ${toolMode === "pose" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={toolMode !== "pose"}>
+                  {([
+                    ["leftHand", "左手"],
+                    ["rightHand", "右手"],
+                    ["leftFoot", "左脚"],
+                    ["rightFoot", "右脚"],
+                    ["head", "头部朝向"],
+                  ] as Array<[IKControlId, string]>).map(([control, label]) => (
+                    <button
+                      key={control}
+                      ref={(element) => { if (element) controlPointRefs.current[control] = element; else delete controlPointRefs.current[control]; }}
+                      className={`control-point ${activeIKControl === control ? "selected" : ""}`}
+                      onPointerDown={(event) => beginIKDrag(control, event)}
+                      aria-label={`拖动${label}控制点`}
+                      tabIndex={toolMode === "pose" ? 0 : -1}
+                    ><span /><small>{label}</small></button>
+                  ))}
+                </div>
                 {!modelInfo.loaded && <div className="model-loader"><span /><p>{modelInfo.label}</p></div>}
                 {editor.grid && <div className="composition-grid"><i /><i /><b /><b /></div>}
                 <div className="viewport-hint">
                   {toolMode === "translate" && "选择并移动 · 点击机器人选中，拖动彩色箭头移动"}
                   {toolMode === "rotate" && "旋转模式 · 拖动彩色圆环旋转当前模型"}
+                  {toolMode === "pose" && "姿态编辑 · 拖动手、脚或头部控制点，骨骼将自动求解"}
                 </div>
               </div>
             </div>
@@ -2999,9 +3401,16 @@ export default function Home() {
               </div>
 
               <div className="active-tool-card">
-                <span>{toolMode === "translate" ? <ArrowsOutCardinal size={18} /> : <ArrowClockwise size={18} />}</span>
-                <div><small>当前模式</small><strong>{toolMode === "translate" ? "选择并移动" : "旋转模型"}</strong></div>
+                <span>{toolMode === "translate" ? <ArrowsOutCardinal size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <Sparkle size={18} />}</span>
+                <div><small>当前模式</small><strong>{toolMode === "translate" ? "选择并移动" : toolMode === "rotate" ? "旋转模型" : "IK 姿态编辑"}</strong></div>
               </div>
+
+              {toolMode === "pose" && <InspectorSection title="IK 姿态编辑" onReset={resetIKEdits}>
+                <div className={`control-point-info ${activeIKControl ? "selected" : ""}`}>
+                  <span><Sparkle size={17} weight="fill" /></span>
+                  <div><strong>{activeIKControl ? "正在调整骨骼" : "拖动画面中的控制点"}</strong><small>手部自动联动肩、上臂和前臂；脚部联动髋、腿和脚；头部控制视线。</small></div>
+                </div>
+              </InspectorSection>}
 
               <InspectorSection title="模型变换" onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
                 <VectorField label="位置" values={editor.position} step={0.05} onChange={(axis, value) => updateVector("position", axis, value)} />
@@ -3010,13 +3419,35 @@ export default function Home() {
               </InspectorSection>
             </>}
 
-            {inspectorTab === "camera" && <InspectorSection title="镜头设置" onReset={() => { commit((current) => ({ ...current, fov: 34 })); controlsRef.current?.reset(); }}>
-              <ControlRow label="视场角"><div className="range-with-value"><input type="range" min="18" max="70" value={editor.fov} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, fov: Number(event.target.value) }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label="相机视场角" /><output>{editor.fov}°</output></div></ControlRow>
+            {inspectorTab === "camera" && <InspectorSection title="镜头系统" onReset={() => applyCameraPreset("commercial")}>
+              <div className="preset-grid camera-presets">
+                {(Object.entries(cameraPresets) as Array<[Exclude<CameraPresetId, "custom">, (typeof cameraPresets)[Exclude<CameraPresetId, "custom">]]>).map(([id, preset]) => (
+                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}><Camera size={16} /><span>{preset.label}</span><small>{preset.focalLength}mm</small></button>
+                ))}
+              </div>
+              <ControlRow label="焦距"><div className="range-with-value"><input type="range" min="18" max="120" value={editor.focalLength} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ focalLength: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label="相机焦距" /><output>{editor.focalLength}mm</output></div></ControlRow>
+              <ControlRow label="高度"><div className="range-with-value"><input type="range" min="0.4" max="3.2" step="0.05" value={editor.cameraHeight} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ cameraHeight: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label="相机高度" /><output>{editor.cameraHeight.toFixed(2)}</output></div></ControlRow>
+              <ControlRow label="景别"><select value={editor.shotSize} onChange={(event) => updateCameraComposition({ shotSize: event.target.value as ShotSize })} aria-label="相机景别">{(Object.entries(shotLabels) as Array<[ShotSize, string]>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></ControlRow>
               <ControlRow label="投影"><select defaultValue="perspective" aria-label="相机投影"><option value="perspective">透视</option></select></ControlRow>
-              <div className="camera-tip"><span><Info size={17} /></span><p>在画板空白区域拖动旋转镜头，滚轮缩放视图。</p></div>
+              <div className="camera-tip"><span><Info size={17} /></span><p>预设会同时调整焦距、机位和景别；画板空白处仍可自由旋转镜头。</p></div>
             </InspectorSection>}
 
             {inspectorTab === "scene" && <>
+              <InspectorSection title="灯光系统" onReset={() => applyLightingPreset("studio")}>
+                <div className="preset-grid lighting-presets">
+                  {(Object.entries(lightingPresets) as Array<[Exclude<LightingPresetId, "custom">, (typeof lightingPresets)[Exclude<LightingPresetId, "custom">]]>).map(([id, preset]) => (
+                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}><Lightbulb size={16} /><span>{preset.label}</span></button>
+                  ))}
+                </div>
+                {([
+                  ["主光", "keyLight", editor.keyLight],
+                  ["补光", "fillLight", editor.fillLight],
+                  ["轮廓光", "rimLight", editor.rimLight],
+                  ["曝光", "exposure", editor.exposure],
+                ] as Array<[string, "keyLight" | "fillLight" | "rimLight" | "exposure", number]>).map(([label, key, value]) => (
+                  <ControlRow key={key} label={label}><div className="range-with-value"><input type="range" min={key === "exposure" ? "0.6" : "0"} max={key === "exposure" ? "1.5" : "6"} step="0.05" value={value} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateLightingValue(key, Number(event.target.value))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={label} /><output>{value.toFixed(2)}</output></div></ControlRow>
+                ))}
+              </InspectorSection>
               <InspectorSection title="场景外观" onReset={() => commit((current) => ({ ...current, background: "#eef0f4", shadow: true }))}>
                 <ControlRow label="背景"><label className="color-control"><span>{editor.background.toUpperCase()}</span><input type="color" value={editor.background} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, background: event.target.value }))} onBlur={endContinuousEdit} aria-label="场景背景颜色" /></label></ControlRow>
                 <ToggleRow label="模型阴影" active={editor.shadow} onClick={() => commit((current) => ({ ...current, shadow: !current.shadow }))} />
@@ -3029,6 +3460,38 @@ export default function Home() {
           </div>
         </aside>
       </section>
+
+      {promptOpen && <div className="prompt-backdrop">
+        <section className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
+          <div className="prompt-heading">
+            <div><span><Sparkle size={16} weight="fill" /> AI Prompt Generator</span><h2 id="prompt-title">从姿势、镜头与灯光生成提示词</h2></div>
+            <button onClick={() => setPromptOpen(false)} aria-label="关闭 Prompt 面板"><X size={18} /></button>
+          </div>
+          <div className="platform-tabs" role="tablist" aria-label="AI 平台">
+            {([
+              ["midjourney", "Midjourney"],
+              ["flux", "Flux"],
+              ["gpt-image", "GPT Image"],
+              ["seedance", "Seedance"],
+              ["jimeng", "即梦"],
+            ] as Array<[PromptPlatform, string]>).map(([value, label]) => <button key={value} className={promptPlatform === value ? "active" : ""} onClick={() => setPromptPlatform(value)} role="tab" aria-selected={promptPlatform === value}>{label}</button>)}
+          </div>
+          <div className="prompt-fields">
+            <label><span>中文 Prompt</span><textarea readOnly value={generatedPrompt.chinese} /><button onClick={() => copyPrompt(generatedPrompt.chinese)}><Copy size={15} />复制中文</button></label>
+            <label><span>English Prompt</span><textarea readOnly value={generatedPrompt.english} /><button onClick={() => copyPrompt(generatedPrompt.english)}><Copy size={15} />Copy English</button></label>
+          </div>
+          <div className="prompt-summary">
+            <span>Pose <b>{selectedPose.name}</b></span>
+            <span>Camera <b>{editor.focalLength}mm · {shotLabels[editor.shotSize]}</b></span>
+            <span>Light <b>{editor.lightingPreset === "custom" ? "自定义" : lightingPresets[editor.lightingPreset].label}</b></span>
+          </div>
+          <div className="prompt-footer">
+            <button onClick={exportProjectJson}>导出项目 JSON</button>
+            <button onClick={() => { downloadTextFile(`poseboard-${selectedPose.id}-prompt.md`, `# ${selectedPose.name}\n\n## 中文 Prompt\n\n${generatedPrompt.chinese}\n\n## English Prompt\n\n${generatedPrompt.english}\n`, "text/markdown"); flash("Prompt Markdown 已导出"); }}>导出 Markdown</button>
+            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} />复制全部</button>
+          </div>
+        </section>
+      </div>}
 
       <div className={`toast ${toast ? "show" : ""}`} role="status" aria-live="polite">{toast}</div>
       {mobilePanel && <button className="mobile-scrim" onClick={() => setMobilePanel(null)} aria-label="关闭面板" />}
