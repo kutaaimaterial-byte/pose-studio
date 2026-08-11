@@ -34,24 +34,29 @@ import {
   X,
 } from "@phosphor-icons/react";
 import {
-  compositionOptions,
+  bodyOptions,
   defaultPose,
-  facingOptions,
+  directionOptions,
+  getPoseCategoryLabel,
+  getPoseTabLabel,
+  handOptions,
   intensityOptions,
-  poseCategories,
+  poseCategoryTabs,
   poseItems,
-  useCaseOptions,
-  type PoseCategory,
-  type PoseComposition,
-  type PoseFacing,
+  styleOptions,
+  type PoseBody,
+  type PoseCategoryTab,
+  type PoseDirection,
+  type PoseHand,
   type PoseIntensity,
   type PoseItem,
+  type PoseStyle,
 } from "./pose-data";
 
 type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
 type ToolMode = "translate" | "rotate";
 type InspectorTab = "model" | "camera" | "scene";
-type QuickView = "常用" | "收藏" | "最近" | null;
+type QuickView = "常用" | "最近" | null;
 
 type EditorState = {
   pose: number;
@@ -180,6 +185,8 @@ function createSeatedJointPose(name: string): JointPose {
   });
 
   switch (name) {
+    case "自然正坐":
+      break;
     case "放松坐姿":
       pose.torso = [-3, 5, 0]; pose.head = [2, -6, 0];
       pose.leftArm = [4, -4, -18]; pose.leftForearm = [5, 0, 32];
@@ -189,13 +196,24 @@ function createSeatedJointPose(name: string): JointPose {
       pose.leftLeg = [-74, 0, -3]; pose.rightLeg = [-74, 0, 3];
       pose.leftShin = [78, 0, 1]; pose.rightShin = [78, 0, -1];
       break;
+    case "双腿打开坐":
     case "双腿分开坐":
       pose.leftLeg = [-70, 0, -19]; pose.rightLeg = [-70, 0, 19];
       pose.leftShin = [74, 0, 5]; pose.rightShin = [74, 0, -5];
       break;
+    case "双腿前伸坐":
+      pose.leftLeg = [-44, 0, -9]; pose.leftShin = [10, 0, 2];
+      pose.rightLeg = [-44, 0, 9]; pose.rightShin = [10, 0, -2];
+      pose.torso = [2, -3, 0];
+      break;
+    case "单腿屈膝坐":
     case "单腿前伸坐":
       pose.rightLeg = [-48, 0, 13]; pose.rightShin = [22, 0, -2];
       pose.torso = [1, -4, 0];
+      break;
+    case "双腿屈膝坐":
+      pose.leftLeg = [-54, 0, -18]; pose.leftShin = [98, 0, 6];
+      pose.rightLeg = [-54, 0, 18]; pose.rightShin = [98, 0, -6];
       break;
     case "双腿交叉坐":
     case "沙发双腿交叉":
@@ -203,6 +221,7 @@ function createSeatedJointPose(name: string): JointPose {
       pose.rightLeg = [-74, -13, 12]; pose.rightShin = [76, 0, -6];
       if (name.startsWith("沙发")) { pose.torso = [-3, 5, 0]; pose.head = [2, -5, 0]; }
       break;
+    case "翘腿坐":
     case "翘二郎腿":
       pose.leftLeg = [-72, 0, -8]; pose.leftShin = [78, 0, 3];
       pose.rightLeg = [-100, -22, -30]; pose.rightShin = [104, 0, -8];
@@ -213,6 +232,7 @@ function createSeatedJointPose(name: string): JointPose {
       pose.torso = [10, 0, 0]; pose.head = [-8, 0, 0];
       pose.leftLeg = [-70, 0, -13]; pose.rightLeg = [-70, 0, 13];
       break;
+    case "身体后仰坐":
     case "身体后靠坐":
       // A mild spinal lean reads as reclining without folding the head behind the torso.
       pose.torso = [-7, 0, 0]; pose.head = [6, 0, 0];
@@ -232,6 +252,22 @@ function createSeatedJointPose(name: string): JointPose {
       pose.torso = [-1, 8, 0]; pose.head = [1, -8, 0];
       pose.leftArm = [18, -8, -30]; pose.leftForearm = [10, 0, 48];
       pose.rightLeg = [-68, 0, 17]; pose.rightShin = [80, 0, -4];
+      break;
+    case "双臂抱胸坐":
+      pose.leftArm = [-42, 8, 37]; pose.leftForearm = [-18, 0, 55];
+      pose.rightArm = [-18, -8, -37]; pose.rightForearm = [8, 0, -55];
+      break;
+    case "盘腿坐":
+      pose.torso = [7, 0, 0]; pose.head = [-6, 0, 0];
+      pose.leftLeg = [-90, 0, -42]; pose.leftShin = [104, 0, -72];
+      pose.rightLeg = [-90, 0, 42]; pose.rightShin = [104, 0, 72];
+      break;
+    case "后手撑地坐":
+      pose.torso = [-13, 0, 0]; pose.head = [10, 0, 0];
+      pose.leftArm = [40, 0, -34]; pose.leftForearm = [8, 0, 38];
+      pose.rightArm = [40, 0, 34]; pose.rightForearm = [8, 0, -38];
+      pose.leftLeg = [-55, 0, -20]; pose.leftShin = [92, 0, 6];
+      pose.rightLeg = [-55, 0, 20]; pose.rightShin = [92, 0, -6];
       break;
     case "侧坐":
       pose.torso = [2, 12, 2]; pose.head = [-2, -12, -2];
@@ -421,7 +457,8 @@ function createRunningJointPose(name: string): JointPose {
   // only rotating the model made "start", "side run", and "look back" read as
   // the same airborne leap.
   switch (name) {
-    case "起跑动作":
+    case "冲刺起步":
+    case "起跑准备":
       return jointPose({
         torso: [55, -5, -3], head: [-38, 6, 2],
         leftArm: [28, 0, -30], leftForearm: [18, 0, 64],
@@ -429,7 +466,7 @@ function createRunningJointPose(name: string): JointPose {
         leftLeg: [-78, 0, -19], leftShin: [108, 0, 7],
         rightLeg: [-38, 0, 18], rightShin: [68, 0, -5],
       });
-    case "侧面奔跑":
+    case "侧向奔跑":
       return jointPose({
         torso: [16, 5, -3], head: [-10, -5, 2],
         leftArm: [-22, 0, -52], leftForearm: [2, 0, -118],
@@ -437,7 +474,7 @@ function createRunningJointPose(name: string): JointPose {
         leftLeg: [42, 0, -17], leftShin: [12, 0, 5],
         rightLeg: [-58, 0, 18], rightShin: [84, 0, -6],
       });
-    case "跑步回头":
+    case "回头奔跑":
       return jointPose({
         torso: [16, 20, -3], head: [-8, 76, 3],
         leftArm: [22, 0, -42], leftForearm: [4, 0, 88],
@@ -445,7 +482,24 @@ function createRunningJointPose(name: string): JointPose {
         leftLeg: [-54, 0, -18], leftShin: [78, 0, 6],
         rightLeg: [38, 0, 18], rightShin: [18, 0, -5],
       });
-    case "疾跑冲刺":
+    case "急停姿态":
+      return jointPose({
+        torso: [32, 10, -5], head: [-20, -8, 3],
+        leftArm: [-12, 0, -70], leftForearm: [4, 0, -128],
+        rightArm: [-12, 0, 70], rightForearm: [4, 0, 128],
+        leftLeg: [-72, 0, -24], leftShin: [98, 0, 7],
+        rightLeg: [-26, 0, 24], rightShin: [54, 0, -7],
+      });
+    case "自然慢跑":
+    case "正常跑步":
+      return jointPose({
+        torso: [12, -4, -2], head: [-8, 5, 1],
+        leftArm: [-4, 0, -42], leftForearm: [2, 0, -92],
+        rightArm: [16, 0, 38], rightForearm: [2, 0, -78],
+        leftLeg: [-42, 0, -15], leftShin: [62, 0, 5],
+        rightLeg: [30, 0, 16], rightShin: [10, 0, -4],
+      });
+    case "全力冲刺":
     default:
       return jointPose({
         torso: [24, -8, -4], head: [-16, 8, 2],
@@ -457,23 +511,103 @@ function createRunningJointPose(name: string): JointPose {
   }
 }
 
+function createLyingJointPose(name: string): JointPose {
+  const pose = jointPose({
+    head: [0, 0, 0],
+    leftArm: [0, 0, -24], leftForearm: [0, 0, 8],
+    rightArm: [0, 0, 24], rightForearm: [0, 0, -8],
+    leftLeg: [-4, 0, -7], leftShin: [3, 0, 1],
+    rightLeg: [-4, 0, 7], rightShin: [3, 0, -1],
+  });
+  if (/单腿屈膝/.test(name)) {
+    pose.rightLeg = [-54, -8, 20]; pose.rightShin = [88, 0, -6];
+  }
+  if (/双腿屈膝/.test(name)) {
+    pose.leftLeg = [-52, 8, -18]; pose.leftShin = [86, 0, 6];
+    pose.rightLeg = [-52, -8, 18]; pose.rightShin = [86, 0, -6];
+  }
+  if (/双手张开/.test(name)) {
+    pose.leftArm = [0, 0, -74]; pose.rightArm = [0, 0, 74];
+  }
+  if (/双手枕头/.test(name)) {
+    pose.leftArm = [-52, 0, -76]; pose.leftForearm = [0, 0, 118];
+    pose.rightArm = [-52, 0, 76]; pose.rightForearm = [0, 0, -118];
+  }
+  if (/侧卧/.test(name)) {
+    pose.torso = [0, 0, /左/.test(name) ? -8 : 8];
+    pose.head = [0, /回头/.test(name) ? 38 : -10, /左/.test(name) ? 8 : -8];
+    pose.leftArm = [-50, 0, -48]; pose.leftForearm = [0, 0, 98];
+    pose.rightArm = [10, 0, 30]; pose.rightForearm = [4, 0, -44];
+    pose.leftLeg = [/蜷缩/.test(name) ? -48 : 6, 0, -14];
+    pose.leftShin = [/蜷缩/.test(name) ? 82 : 8, 0, 3];
+    pose.rightLeg = [/蜷缩/.test(name) ? -58 : -28, 0, 22];
+    pose.rightShin = [/蜷缩/.test(name) ? 92 : 58, 0, -8];
+  }
+  if (/半躺支撑|单肘撑起/.test(name)) {
+    pose.torso = [-24, 8, 0]; pose.head = [17, -7, 0];
+    pose.leftArm = [32, -8, -38]; pose.leftForearm = [6, 0, 46];
+    pose.rightLeg = [-44, 0, 20]; pose.rightShin = [82, 0, -6];
+  }
+  return pose;
+}
+
+function createProneJointPose(name: string): JointPose {
+  const pose = jointPose({
+    torso: [0, 0, -2], head: [-14, /回头/.test(name) ? 46 : 10, 0],
+    leftArm: [-48, 0, -42], leftForearm: [0, 0, 92],
+    rightArm: [-48, 0, 42], rightForearm: [0, 0, -92],
+    leftLeg: [3, 0, -7], leftShin: [6, 0, 1],
+    rightLeg: [3, 0, 8], rightShin: [6, 0, -1],
+  });
+  if (/双肘撑起/.test(name)) pose.torso = [-14, 0, -3];
+  if (/单肘撑起/.test(name)) {
+    pose.torso = [-12, 8, -3]; pose.leftArm = [-48, 0, -42]; pose.rightArm = [4, 0, 26]; pose.rightForearm = [0, 0, -40];
+  }
+  if (/双手撑起上身/.test(name)) {
+    pose.torso = [-28, 0, -4]; pose.leftArm = [-12, 0, -52]; pose.leftForearm = [0, 0, 18]; pose.rightArm = [-12, 0, 52]; pose.rightForearm = [0, 0, -18];
+  }
+  if (/单腿屈起/.test(name)) pose.rightShin = [78, 0, -2];
+  if (/双腿屈起/.test(name)) { pose.leftShin = [78, 0, 2]; pose.rightShin = [78, 0, -2]; }
+  if (/向前伸手/.test(name)) {
+    pose.leftArm = [-76, 0, -10]; pose.leftForearm = [0, 0, 8]; pose.rightArm = [-76, 0, 10]; pose.rightForearm = [0, 0, -8];
+  }
+  if (/低姿观察/.test(name)) { pose.torso = [-8, 0, -3]; pose.head = [-24, 22, 2]; }
+  return pose;
+}
+
+function createGroundActionJointPose(name: string): JointPose {
+  if (/坐地后撑|跌坐|跌倒侧撑|倒地支撑|倒地起身|单手撑地起身/.test(name)) {
+    const pose = createGroundJointPose(/坐地后撑/.test(name) ? "后仰撑地" : "手撑地面坐");
+    if (/侧撑/.test(name)) { pose.torso = [2, 18, 4]; pose.head = [-2, -18, -3]; }
+    if (/起身/.test(name)) { pose.torso = [30, 8, -4]; pose.leftLeg = [-70, 0, -18]; pose.rightLeg = [-20, 0, 20]; }
+    return pose;
+  }
+  if (/滑跪/.test(name)) return jointPose({ torso: [18, 0, -4], head: [-10, 0, 2], leftArm: [-18, 0, -58], rightArm: [-18, 0, 58], leftLeg: [-8, 0, -12], leftShin: [98, 0, 5], rightLeg: [10, 0, 12], rightShin: [98, 0, -5] });
+  if (/翻滚/.test(name)) return jointPose({ torso: [28, 12, -8], head: [22, -18, 5], leftArm: [-28, 0, -46], leftForearm: [0, 0, 86], rightArm: [-18, 0, 44], rightForearm: [0, 0, -82], leftLeg: [-62, 0, -24], leftShin: [96, 0, 8], rightLeg: [-52, 0, 26], rightShin: [90, 0, -8] });
+  const low = /俯卧撑低位|低姿移动/.test(name);
+  const crawl = /四点支撑|爬行|熊爬/.test(name);
+  return jointPose({
+    torso: [low ? -4 : crawl ? 12 : 0, 0, -3], head: [low ? -6 : -14, 0, 2],
+    leftArm: [crawl ? -28 : -8, 0, -50], leftForearm: [0, 0, crawl ? 74 : 18],
+    rightArm: [crawl ? -12 : -8, 0, 50], rightForearm: [0, 0, crawl ? -48 : -18],
+    leftLeg: [crawl ? -48 : 2, 0, -14], leftShin: [crawl ? 88 : 4, 0, 3],
+    rightLeg: [crawl ? -18 : 2, 0, 14], rightShin: [crawl ? 58 : 4, 0, -3],
+  });
+}
+
 function createSemanticJointPose(item: PoseItem, index: number): JointPose {
-  const text = `${item.nameZh} ${item.subcategory ?? ""} ${item.tags.join(" ")}`;
+  const text = `${item.name} ${item.tags.join(" ")}`;
   let pose = cloneJointPose(jointPoses[0]);
 
-  if (item.category === "地面") {
-    pose = createGroundJointPose(item.nameZh);
-  } else if (/平躺|曲腿躺卧|单腿抬起躺卧/.test(text)) {
-    pose = jointPose({ leftArm: [0, 0, -26], rightArm: [0, 0, 26], leftLeg: [-8, 0, -8], rightLeg: [/曲腿|抬起/.test(text) ? -58 : -8, 0, 8], rightShin: [/曲腿|抬起/.test(text) ? 82 : 0, 0, 0] });
-  } else if (/侧躺|手撑头侧躺|杂志大片躺姿/.test(text)) {
-    pose = jointPose({ torso: [0, 0, 8], head: [0, -12, -8], leftArm: [-64, 0, -52], leftForearm: [0, 0, 102], rightArm: [8, 0, 30], rightForearm: [0, 0, -42], leftLeg: [8, 0, -14], rightLeg: [-28, 0, 22], rightShin: [58, 0, -8] });
-  } else if (/趴卧/.test(text)) {
-    pose = jointPose({ head: [-18, 18, 0], leftArm: [-72, 0, -38], leftForearm: [0, 0, 82], rightArm: [-72, 0, 38], rightForearm: [0, 0, -82], leftLeg: [4, 0, -7], rightLeg: [-24, 0, 8], rightShin: [64, 0, 0] });
-  } else if (/坐地|盘腿|撑地|抱膝|半躺/.test(text) && item.category === "地面" || /坐地低头/.test(text)) {
-    pose = jointPose({ torso: [/后仰|半躺/.test(text) ? -22 : 8, 0, 0], head: [/低头|抱膝/.test(text) ? 22 : -5, 0, 0], leftArm: [/撑/.test(text) ? 36 : -20, 0, -34], leftForearm: [/撑/.test(text) ? 14 : 0, 0, 76], rightArm: [/撑/.test(text) ? 36 : -20, 0, 34], rightForearm: [/撑/.test(text) ? 14 : 0, 0, -76], leftLeg: [-78, 0, /盘腿/.test(text) ? -34 : -12], leftShin: [/伸直/.test(text) ? 6 : 88, 0, /盘腿/.test(text) ? 24 : 4], rightLeg: [/单腿曲起/.test(text) ? -36 : -78, 0, /盘腿/.test(text) ? 34 : 12], rightShin: [/伸直/.test(text) ? 6 : 88, 0, /盘腿/.test(text) ? -24 : -4] });
-  } else if (item.category === "坐姿" || /坐姿|坐椅|坐桌/.test(text)) {
-    pose = createSeatedJointPose(item.nameZh);
-  } else if (/跪/.test(text)) {
+  if (item.category === "lying") {
+    pose = createLyingJointPose(item.name);
+  } else if (item.category === "prone") {
+    pose = createProneJointPose(item.name);
+  } else if (item.category === "ground") {
+    pose = createGroundActionJointPose(item.name);
+  } else if (item.category === "sitting") {
+    pose = createSeatedJointPose(item.name);
+  } else if (item.category === "kneeling") {
     pose = jointPose({ torso: [8, 0, -2], head: [-5, 0, 2], leftArm: [8, 0, -12], leftForearm: [0, 0, 20], rightArm: [8, 0, 12], rightForearm: [0, 0, -20], leftLeg: [-82, 0, -10], leftShin: [92, 0, 4], rightLeg: [2, 0, 12], rightShin: [105, 0, -4] });
     if (/双膝|低头|抬头/.test(text)) {
       pose.leftLeg = [10, 0, -12]; pose.leftShin = [92, 0, 4];
@@ -481,21 +615,27 @@ function createSemanticJointPose(item: PoseItem, index: number): JointPose {
     }
     if (/低头/.test(text)) pose.head = [24, 0, 0];
     if (/抬头/.test(text)) pose.head = [-20, 0, 0];
-  } else if (/蹲|深蹲|半蹲/.test(text)) {
+  } else if (item.category === "squatting") {
     pose = jointPose({ torso: [18, 0, -2], head: [-10, 0, 2], leftArm: [18, 0, 28], leftForearm: [8, 0, 55], rightArm: [18, 0, -28], rightForearm: [8, 0, -55], leftLeg: [-65, 0, -18], leftShin: [95, 0, 5], rightLeg: [-65, 0, 18], rightShin: [95, 0, -5] });
     if (/撑膝/.test(text)) {
       pose.leftArm = [38, 0, -28]; pose.leftForearm = [24, 0, 48];
       pose.rightArm = [38, 0, 28]; pose.rightForearm = [24, 0, -48];
     }
-  } else if (/起跑|跑|冲刺|追逐|逃跑|冲锋/.test(text)) {
-    pose = createRunningJointPose(item.nameZh);
-  } else if (/行走|走秀|踱步/.test(text)) {
+  } else if (item.category === "running") {
+    pose = createRunningJointPose(item.name);
+  } else if (item.category === "walking") {
     pose = cloneJointPose(jointPoses[4]);
     if (index % 2) pose = mirrorJointPose(pose);
-  } else if (/跳|跨越|跃下/.test(text)) {
+    if (/缓慢/.test(text)) { pose.torso = [4, 0, 0]; pose.leftLeg = [-22, 0, -9]; pose.rightLeg = [18, 0, 10]; }
+    if (/大步|猫步/.test(text)) { pose.leftLeg = [-48, 0, -14]; pose.rightLeg = [42, 0, 15]; }
+    if (/低头/.test(text)) pose.head = [20, 0, 0];
+    if (/回头/.test(text)) { pose.torso = [8, 18, -3]; pose.head = [-5, 62, 2]; }
+  } else if (item.category === "jumping") {
     pose = cloneJointPose(jointPoses[5]);
     if (/张腿/.test(text)) { pose.leftLeg = [-42, 0, -44]; pose.rightLeg = [-42, 0, 44]; }
-    if (/欢呼/.test(text)) { pose.leftArm = [-20, 0, -180]; pose.rightArm = [-20, 0, 180]; }
+    if (/抱膝/.test(text)) { pose.leftLeg = [-82, 0, -26]; pose.leftShin = [108, 0, 8]; pose.rightLeg = [-82, 0, 26]; pose.rightShin = [108, 0, -8]; }
+    if (/向上伸手/.test(text)) { pose.leftArm = [-20, 0, -174]; pose.rightArm = [-20, 0, 174]; }
+    if (/落地|缓冲/.test(text)) pose = cloneJointPose(jointPoses[19]);
   } else if (/落地/.test(text)) {
     pose = cloneJointPose(/超级英雄/.test(text) ? jointPoses[6] : jointPoses[19]);
   } else if (/飞踢|高踢|侧踢|踢球/.test(text)) {
@@ -567,6 +707,32 @@ function createSemanticJointPose(item: PoseItem, index: number): JointPose {
     pose = cloneJointPose(jointPoses[2]);
   }
 
+  if (item.category === "standing") {
+    if (/双脚并拢/.test(text)) { pose.leftLeg = [0, 0, -3]; pose.rightLeg = [0, 0, 3]; }
+    if (/双脚分开/.test(text)) { pose.leftLeg = [0, 0, -16]; pose.rightLeg = [0, 0, 16]; }
+    if (/单腿微屈/.test(text)) { pose.rightLeg = [-12, 0, 13]; pose.rightShin = [-24, 0, -4]; }
+    if (/重心左移/.test(text)) { pose.torso = [0, 0, -6]; pose.leftLeg = [0, 0, -12]; pose.rightLeg = [12, 0, 15]; pose.rightShin = [-22, 0, -4]; }
+    if (/重心右移/.test(text)) { pose.torso = [0, 0, 6]; pose.leftLeg = [12, 0, -15]; pose.leftShin = [-22, 0, 4]; pose.rightLeg = [0, 0, 12]; }
+    if (/前后脚/.test(text)) { pose.leftLeg = [-12, 0, -10]; pose.rightLeg = [14, 0, 11]; }
+    if (/交叉腿/.test(text)) { pose.leftLeg = [0, 8, -10]; pose.rightLeg = [-8, -10, 10]; }
+    if (/身前交叠/.test(text)) { pose.leftArm = [12, 0, -20]; pose.leftForearm = [2, 0, 58]; pose.rightArm = [12, 0, 20]; pose.rightForearm = [2, 0, -58]; }
+    if (/单手举起/.test(text)) { pose.rightArm = [-18, 0, 158]; pose.rightForearm = [0, 0, 14]; }
+    if (/侧身/.test(text)) pose.torso = [pose.torso[0], 18, pose.torso[2]];
+    if (/背身/.test(text)) pose.head = [pose.head[0], /回头/.test(text) ? 72 : 0, pose.head[2]];
+  }
+
+  if (item.category === "leaning") {
+    if (/撑墙|撑桌|扶栏杆/.test(text)) {
+      const both = /双手/.test(text);
+      pose.torso = [18, /侧身/.test(text) ? 12 : 0, -3]; pose.head = [-12, 0, 2];
+      pose.leftArm = [-50, 0, -42]; pose.leftForearm = [-8, 0, 24];
+      if (both) { pose.rightArm = [-50, 0, 42]; pose.rightForearm = [-8, 0, -24]; }
+    } else if (/倚|靠/.test(text)) {
+      pose.torso = [-12, /单肩|侧身|侧靠/.test(text) ? 12 : 0, 5]; pose.head = [6, -8, -4];
+      pose.leftLeg = [-4, 0, -12]; pose.rightLeg = [18, 0, 16]; pose.rightShin = [-28, 0, -4];
+    }
+  }
+
   const variation = (index % 5) - 2;
   if (!/标准正立|双脚并拢|T型|A型/.test(text)) {
     pose.torso = [pose.torso[0], pose.torso[1] + variation * 0.8, pose.torso[2] + variation * 0.45];
@@ -579,68 +745,46 @@ const poseItemByEngineIndex = new Map(poseItems.map((item) => [item.enginePoseIn
 const semanticJointPoses: JointPose[] = [];
 // Bump this whenever the semantic pose solver changes. It forces both the live
 // artboard and the generated covers to discard any pose left by Fast Refresh.
-const poseSolverRevision = "full-visual-qa-v21";
+const poseSolverRevision = "pose-library-v2";
 poseItems.forEach((item) => {
   semanticJointPoses[item.enginePoseIndex] = createSemanticJointPose(item, item.enginePoseIndex);
 });
 
 function getSemanticTransform(item: PoseItem): PoseTransform {
-  const text = `${item.nameZh} ${item.subcategory ?? ""} ${item.tags.join(" ")}`;
-  const facing = item.facing[0];
-  let yRotation = facing === "left45" ? 34 : facing === "right45" ? -34 : facing === "leftSide" ? 82 : facing === "rightSide" ? -82 : facing === "back" ? 176 : facing === "overShoulder" ? 146 : 0;
-  if (item.nameZh === "微侧身站立") yRotation = 30;
-  else if (/45°/.test(item.nameZh)) yRotation = facing === "right45" ? -45 : 45;
-  else if (item.nameZh === "跑步回头") yRotation = -52;
+  const text = `${item.name} ${item.tags.join(" ")}`;
+  let yRotation = item.previewAngle;
+  if (item.name === "侧身站立") yRotation = 30;
+  else if (item.name === "回头奔跑") yRotation = -52;
   else if (/回眸|回头|回望/.test(text)) yRotation = item.enginePoseIndex % 2 ? 146 : -146;
   if (/背身|背向|背部|背面/.test(text) && !/回/.test(text)) yRotation = 176;
-  if (yRotation === 0 && item.category === "坐姿") yRotation = -28;
-  if (yRotation === 0 && (/蹲|深蹲|半蹲|跪/.test(text))) yRotation = -24;
-  if (yRotation === 0 && /跑|冲刺|追逐|逃跑|冲锋/.test(text)) yRotation = -28;
-  if (yRotation === 0 && /飞踢|高踢|侧踢|踢球/.test(text)) yRotation = -42;
+  if (yRotation === 0 && item.category === "sitting") yRotation = -24;
+  if (yRotation === 0 && (item.category === "squatting" || item.category === "kneeling")) yRotation = -22;
+  if (yRotation === 0 && item.category === "running") yRotation = -28;
 
-  if (item.category === "地面") {
-    if (/平躺|曲腿躺卧/.test(item.nameZh)) {
-      // Align the body axis with the camera's horizontal axis, then offset the
-      // foot-root pivot so the whole figure is centred instead of swinging out.
-      return { rotation: [34, 0, 90], position: [0.76, 1.15, -0.51], scale: 112 };
+  if (item.category === "lying") {
+    const sideAngle = /侧卧/.test(item.name) ? (item.name.startsWith("左") ? -18 : 18) : 0;
+    return { rotation: [34, sideAngle, 90], position: [0.76, 1.15, -0.51], scale: /半躺/.test(item.name) ? 102 : 110 };
+  }
+  if (item.category === "prone") {
+    return { rotation: [-34, /回头/.test(item.name) ? 146 : 180, 90], position: [-0.76, 1.15, 0.51], scale: 106 };
+  }
+  if (item.category === "ground") {
+    if (/四点支撑|爬行|熊爬|平板支撑|俯卧撑|翻滚|低姿移动/.test(item.name)) {
+      return { rotation: [34, yRotation || -20, 90], position: [0.72, 0.92, -0.5], scale: 104 };
     }
-    if (item.nameZh === "侧躺") {
-      return { rotation: [34, 0, 90], position: [0.76, 1.15, -0.51], scale: 110 };
-    }
-    if (item.nameZh === "趴卧") {
-      return { rotation: [-34, 180, 90], position: [-0.76, 1.15, 0.51], scale: 106 };
-    }
-    const groundFacing = item.nameZh === "侧坐地面" ? (item.enginePoseIndex % 2 ? 38 : -38) : -18;
-    return {
-      rotation: [0, groundFacing, 0],
-      position: [0, item.nameZh === "半躺" ? -0.5 : -0.54, 0],
-      scale: item.nameZh === "半躺" ? 100 : 104,
-    };
+    return { rotation: [0, yRotation || -22, 0], position: [0, /滑跪/.test(item.name) ? -0.64 : -0.54, 0], scale: 102 };
   }
 
-  const xRotation = 0;
-  let zRotation = 0;
   let yPosition = 0;
   let scale = 100;
-  if (/跑|冲刺/.test(text)) { yPosition = -0.2; scale = 118; }
-  if (item.nameZh === "起跑动作") { yPosition = -0.54; scale = 114; }
-  if (/跳|跨越|跃下|飞踢/.test(text)) { yPosition = 0.22; scale = 94; }
-  if (/坐姿|坐椅|坐桌|高凳|沙发/.test(text) && item.category !== "地面") yPosition = -0.42;
-  if (/蹲|半蹲/.test(text)) { yPosition = -0.48; scale = 104; }
-  if (/跪/.test(text)) { yPosition = -0.62; scale = 102; }
-  if (item.category === "地面") { yPosition = -0.48; scale = 94; }
-  if (/平躺|曲腿躺卧|单腿抬起躺卧/.test(text)) { zRotation = 86; yPosition = 0.08; scale = 82; }
-  if (/侧躺|手撑头侧躺|杂志大片躺姿/.test(text)) { zRotation = 79; yRotation += 16; yPosition = 0.04; scale = 84; }
-  if (/趴卧/.test(text)) { zRotation = -84; yPosition = 0.06; scale = 84; }
-  if (item.category === "特写") {
-    // Close-up presets must crop at the waist/chest in both the generated cover
-    // and the live artboard. Moving the foot-root down keeps the head in frame
-    // while the larger scale removes the irrelevant lower body.
-    scale = 270;
-    yPosition = -4.9;
-  }
+  if (item.category === "running") { yPosition = -0.2; scale = 116; }
+  if (/起跑准备|冲刺起步/.test(item.name)) { yPosition = -0.54; scale = 114; }
+  if (item.category === "jumping") { yPosition = /落地|缓冲/.test(item.name) ? -0.42 : 0.22; scale = 94; }
+  if (item.category === "sitting") yPosition = -0.42;
+  if (item.category === "squatting") { yPosition = -0.48; scale = 104; }
+  if (item.category === "kneeling") { yPosition = -0.62; scale = 102; }
   if (/双臂展开|张开双臂|T型|张腿/.test(text)) scale = Math.min(scale, 92);
-  return { rotation: [xRotation, yRotation, zRotation], position: [0, yPosition, 0], scale };
+  return { rotation: [0, yRotation, 0], position: [0, yPosition, 0], scale };
 }
 
 function rotateAround(point: THREE.Vector3, pivot: THREE.Vector3, rotation: [number, number, number]) {
@@ -851,17 +995,17 @@ function mirrorArmIKTargets(targets: ArmIKTarget[]) {
 
 function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTarget[] {
   if (!item) return [];
-  const name = item.nameZh;
+  const name = item.name;
   let targets: ArmIKTarget[] = [];
 
-  if (name === "起跑动作") {
+  if (/起跑准备|冲刺起步/.test(name)) {
     // Sprinter start: both hands reach below and slightly ahead of the pelvis.
     // Separate X/Z offsets keep the palms from overlapping each other.
     targets = [
       { side: "left", anchor: "chest", offset: [0.48, -1.28, 0.92], pole: [0.9, -0.62, 0.72], handDirection: [0, 0, -1] },
       { side: "right", anchor: "chest", offset: [-0.48, -1.28, 1.02], pole: [-0.9, -0.62, 0.78], handDirection: [0, 0, -1] },
     ];
-  } else if (/疾跑冲刺|侧面奔跑|跑步回头/.test(name)) {
+  } else if (item.category === "running") {
     // A readable contralateral running swing: one bent arm in front of the
     // chest and the opposite hand behind the hip. This replaces the previous
     // unconstrained rotations that put a palm over the face or above the head.
@@ -869,14 +1013,14 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
       { side: "left", anchor: "chest", offset: [0.38, 0.02, 0.42], pole: [0.9, -0.18, 0.52], handDirection: [0, 0, 1] },
       { side: "right", anchor: "pelvis", offset: [-0.48, 0.24, -0.36], pole: [-0.9, -0.18, -0.35], handDirection: [0, 0, -1] },
     ];
-  } else if (/双手抱胸|手臂交叉|半身双手抱胸/.test(name)) {
+  } else if (/双手抱胸|双臂抱胸|手臂交叉/.test(name)) {
     // Keep one forearm slightly farther forward so the crossed arms layer instead
     // of occupying the same plane or entering the chest.
     targets = [
       { side: "left", anchor: "chest", offset: [-0.1, 0.11, 0.42], pole: [0.9, -0.12, 0.5], handDirection: [-1, 0.08, 0] },
       { side: "right", anchor: "chest", offset: [0.1, -0.02, 0.58], pole: [-0.9, -0.2, 0.64], handDirection: [1, 0.08, 0] },
     ];
-  } else if (name === "盘腿坐地") {
+  } else if (name === "盘腿坐") {
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.34, -0.17, 0.5], pole: [0.8, -0.16, 0.5], handDirection: [0, 0, 1] },
       { side: "right", anchor: "pelvis", offset: [-0.34, -0.17, 0.5], pole: [-0.8, -0.16, 0.5], handDirection: [0, 0, 1] },
@@ -886,21 +1030,21 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
       { side: "left", anchor: "pelvis", offset: [0.34, -0.2, 0.78], pole: [0.78, -0.14, 0.5], handDirection: [0, 0, 1] },
       { side: "right", anchor: "pelvis", offset: [-0.34, -0.2, 0.78], pole: [-0.78, -0.14, 0.5], handDirection: [0, 0, 1] },
     ];
-  } else if (/手撑地面坐/.test(name)) {
+  } else if (/单手撑地起身|倒地支撑/.test(name)) {
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.46, -0.38, -0.22], pole: [0.86, -0.34, 0.16], handDirection: [0, 0, -1] },
       { side: "right", anchor: "pelvis", offset: [-0.46, -0.38, -0.22], pole: [-0.86, -0.34, 0.16], handDirection: [0, 0, -1] },
     ];
-  } else if (/后仰撑地/.test(name)) {
+  } else if (/坐地后撑|后手撑地坐/.test(name)) {
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.5, -0.3, -0.5], pole: [0.92, -0.22, -0.06], handDirection: [0, 0, -1] },
       { side: "right", anchor: "pelvis", offset: [-0.5, -0.3, -0.5], pole: [-0.92, -0.22, -0.06], handDirection: [0, 0, -1] },
     ];
-  } else if (name === "半躺") {
+  } else if (name === "半躺支撑") {
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.5, -0.24, -0.46], pole: [0.9, -0.2, -0.02], handDirection: [0, 0, -1] },
     ];
-  } else if (/标准坐姿|双腿并拢坐|双手放腿上|高凳标准坐/.test(name)) {
+  } else if (/自然正坐|双腿并拢坐|双手放腿上/.test(name)) {
     targets = [
       { side: "left", anchor: "pelvis", offset: [0.3, -0.08, 0.48], pole: [0.76, -0.05, 0.45], handDirection: [0, 0, 1] },
       { side: "right", anchor: "pelvis", offset: [-0.3, -0.08, 0.48], pole: [-0.76, -0.05, 0.45], handDirection: [0, 0, 1] },
@@ -1143,7 +1287,7 @@ function applyRigPose(rig: RigBinding, poseIndex: number, mirrored = false) {
   const sourcePose = semanticJointPoses[poseIndex] ?? jointPoses[0];
   const pose = mirrored ? mirrorJointPose(sourcePose) : sourcePose;
   const poseItem = poseItemByEngineIndex.get(poseIndex);
-  const safetyText = poseItem ? `${poseItem.nameZh} ${poseItem.tags.join(" ")}` : "";
+  const safetyText = poseItem ? `${poseItem.name} ${poseItem.tags.join(" ")}` : "";
   const armIKTargets = getArmIKTargets(poseItem, mirrored);
   const ikSides = new Set(armIKTargets.map(({ side }) => side));
   const collisionProfile: RigCollisionProfile = {
@@ -1376,11 +1520,12 @@ export default function Home() {
   const [zoom, setZoom] = useState(76);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [category, setCategory] = useState<PoseCategory | "全部">("全部");
-  const [composition, setComposition] = useState<PoseComposition | "any">("any");
-  const [facing, setFacing] = useState<PoseFacing | "any">("any");
+  const [category, setCategory] = useState<PoseCategoryTab>("all");
+  const [direction, setDirection] = useState<PoseDirection | "any">("any");
   const [intensity, setIntensity] = useState<PoseIntensity | "any">("any");
-  const [activeUseCases, setActiveUseCases] = useState<string[]>([]);
+  const [hand, setHand] = useState<PoseHand | "any">("any");
+  const [body, setBody] = useState<PoseBody | "any">("any");
+  const [style, setStyle] = useState<PoseStyle | "any">("any");
   const [quickView, setQuickView] = useState<QuickView>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -1403,23 +1548,24 @@ export default function Home() {
     const keyword = debouncedQuery.trim().toLowerCase();
     let candidates = poseItems;
     if (quickView === "常用") candidates = candidates.filter((pose) => pose.featured);
-    if (quickView === "收藏") candidates = candidates.filter((pose) => favoriteIds.includes(pose.id));
     if (quickView === "最近") {
       candidates = recentIds.map((id) => poseItems.find((pose) => pose.id === id)).filter((pose): pose is PoseItem => Boolean(pose));
     }
+    if (category === "favorites") candidates = candidates.filter((pose) => favoriteIds.includes(pose.id));
     return candidates.filter((pose) => {
-      const searchable = [pose.nameZh, pose.nameEn, ...pose.aliases, ...pose.tags, ...pose.useCases].filter(Boolean).join(" ").toLowerCase();
-      return (category === "全部" || pose.category === category)
-        && (composition === "any" || pose.composition.includes(composition))
-        && (facing === "any" || pose.facing.includes(facing))
+      const searchable = [pose.name, pose.nameEn, ...pose.aliases, ...pose.tags, pose.category, getPoseCategoryLabel(pose.category)].filter(Boolean).join(" ").toLowerCase();
+      return (category === "all" || category === "favorites" || pose.category === category)
+        && (direction === "any" || pose.direction === direction)
         && (intensity === "any" || pose.intensity === intensity)
-        && activeUseCases.every((useCase) => pose.useCases.includes(useCase) || pose.tags.includes(useCase))
+        && (hand === "any" || pose.hand.includes(hand))
+        && (body === "any" || pose.body.includes(body))
+        && (style === "any" || pose.style.includes(style))
         && (!keyword || searchable.includes(keyword));
     });
-  }, [activeUseCases, category, composition, debouncedQuery, facing, favoriteIds, intensity, quickView, recentIds]);
+  }, [body, category, debouncedQuery, direction, favoriteIds, hand, intensity, quickView, recentIds, style]);
 
   const selectedPose = useMemo(() => poseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [selectedPoseId]);
-  const hasActiveFilters = category !== "全部" || composition !== "any" || facing !== "any" || intensity !== "any" || activeUseCases.length > 0 || query.length > 0 || quickView !== null;
+  const hasActiveFilters = category !== "all" || direction !== "any" || intensity !== "any" || hand !== "any" || body !== "any" || style !== "any" || query.length > 0 || quickView !== null;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 200);
@@ -1630,26 +1776,23 @@ export default function Home() {
     setSelectedPoseId(pose.id);
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
     setMobilePanel(null);
-    flash(`已应用「${pose.nameZh}」`);
+    flash(`已应用「${pose.name}」`);
   };
 
   const clearPoseFilters = () => {
     setQuery("");
     setQuickView(null);
-    setCategory("全部");
-    setComposition("any");
-    setFacing("any");
+    setCategory("all");
+    setDirection("any");
     setIntensity("any");
-    setActiveUseCases([]);
+    setHand("any");
+    setBody("any");
+    setStyle("any");
   };
 
   const toggleFavorite = (pose: PoseItem) => {
     setFavoriteIds((ids) => ids.includes(pose.id) ? ids.filter((id) => id !== pose.id) : [...ids, pose.id]);
-    flash(favoriteIds.includes(pose.id) ? `已取消收藏「${pose.nameZh}」` : `已收藏「${pose.nameZh}」`);
-  };
-
-  const toggleUseCase = (useCase: string) => {
-    setActiveUseCases((items) => items.includes(useCase) ? items.filter((item) => item !== useCase) : [...items, useCase]);
+    flash(favoriteIds.includes(pose.id) ? `已取消收藏「${pose.name}」` : `已收藏「${pose.name}」`);
   };
 
   const selectAdjacentPose = (offset: number) => {
@@ -1670,9 +1813,11 @@ export default function Home() {
     setQuickView(null);
     setCategory(selectedPose.category);
     setQuery(selectedPose.tags[0] ?? selectedPose.category);
-    setComposition("any");
-    setFacing("any");
+    setDirection("any");
     setIntensity("any");
+    setHand("any");
+    setBody("any");
+    setStyle("any");
   };
 
   const activateTool = (mode: ToolMode) => {
@@ -2038,7 +2183,7 @@ export default function Home() {
 
       const link = document.createElement("a");
       link.href = renderer.domElement.toDataURL("image/png");
-      link.download = `poseboard-${selectedPose.nameZh}-${targetWidth}x${targetHeight}.png`;
+      link.download = `poseboard-${selectedPose.name}-${targetWidth}x${targetHeight}.png`;
       link.click();
       flash(`PNG 已按 ${editor.ratio} 画幅导出`);
     } catch {
@@ -2073,7 +2218,7 @@ export default function Home() {
     window.setTimeout(() => {
       selectPose(nextPose);
       setAiLoading(false);
-      flash(`AI 推荐：${nextPose.nameZh}`);
+      flash(`AI 推荐：${nextPose.name}`);
     }, 720);
   };
 
@@ -2123,15 +2268,14 @@ export default function Home() {
 
             <div className="search-field" role="search">
               <span><MagnifyingGlass size={18} /></span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姿势，例如：站立 / 跑步 / 模特 / 战斗" aria-label="搜索姿势" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姿势，例如：回头 / 冲刺 / 叉腰" aria-label="搜索姿势" />
               {query && <button className="clear-search" onClick={() => setQuery("")} aria-label="清除搜索" title="清除搜索"><X size={15} /></button>}
             </div>
 
             <div className="quick-entry" aria-label="快捷入口">
-              {(["常用", "收藏", "最近"] as const).map((item) => (
+              {(["常用", "最近"] as const).map((item) => (
                 <button key={item} className={quickView === item ? "active" : ""} aria-pressed={quickView === item} onClick={() => setQuickView(quickView === item ? null : item)}>
-                  {item === "收藏" && <Star size={14} weight={quickView === item ? "fill" : "regular"} />}
-                  {item}{item === "收藏" ? ` ${favoriteIds.length}` : item === "最近" ? ` ${recentIds.length}` : ""}
+                  {item}{item === "最近" ? ` ${recentIds.length}` : ""}
                 </button>
               ))}
               <button className={`filter-toggle ${filtersExpanded ? "active" : ""}`} aria-expanded={filtersExpanded} onClick={() => setFiltersExpanded((value) => !value)} title="展开或收起筛选">
@@ -2140,21 +2284,21 @@ export default function Home() {
             </div>
 
             <div className="category-list" role="listbox" aria-label="姿势一级分类">
-              {poseCategories.map((item) => <button key={item} className={category === item ? "active" : ""} role="option" aria-selected={category === item} onClick={() => { setCategory(item); setQuickView(null); }}>{item}</button>)}
+              {poseCategoryTabs.map((item) => <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={item.english} onClick={() => { setCategory(item.value); setQuickView(null); }}>
+                {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}{item.label}{item.value === "favorites" ? ` ${favoriteIds.length}` : ""}
+              </button>)}
             </div>
 
             {filtersExpanded && <div className="pose-filters">
-              <FilterChips label="构图" options={compositionOptions} value={composition} onChange={(value) => setComposition(value as PoseComposition | "any")} />
-              <FilterChips label="朝向" options={facingOptions} value={facing} onChange={(value) => setFacing(value as PoseFacing | "any")} />
-              <FilterChips label="强度" options={intensityOptions} value={intensity} onChange={(value) => setIntensity(value as PoseIntensity | "any")} />
-              <div className="filter-row use-case-filter">
-                <span>用途</span>
-                <div>{useCaseOptions.map((item) => <button key={item} className={activeUseCases.includes(item) ? "active" : ""} aria-pressed={activeUseCases.includes(item)} onClick={() => toggleUseCase(item)}>{item}</button>)}</div>
-              </div>
+              <FilterChips label="朝向" options={directionOptions} value={direction} onChange={(value) => setDirection(value as PoseDirection | "any")} />
+              <FilterChips label="动态程度" options={intensityOptions} value={intensity} onChange={(value) => setIntensity(value as PoseIntensity | "any")} />
+              <FilterChips label="手部" options={handOptions} value={hand} onChange={(value) => setHand(value as PoseHand | "any")} />
+              <FilterChips label="身体" options={bodyOptions} value={body} onChange={(value) => setBody(value as PoseBody | "any")} />
+              <FilterChips label="风格" options={styleOptions} value={style} onChange={(value) => setStyle(value as PoseStyle | "any")} />
             </div>}
 
             <div className="result-line">
-              <strong>{quickView ?? category}</strong><span>· {filteredPoses.length}</span>
+              <strong>{quickView ?? getPoseTabLabel(category)}</strong><span>· {filteredPoses.length}</span>
               {hasActiveFilters && <button onClick={clearPoseFilters}>清空筛选</button>}
             </div>
           </div>
@@ -2165,36 +2309,36 @@ export default function Home() {
               const favorited = favoriteIds.includes(pose.id);
               const unavailable = pose.status !== "ready";
               return <article key={pose.id} data-pose-index={pose.enginePoseIndex} className={`pose-card ${selected ? "active" : ""} ${unavailable ? "disabled" : ""}`}>
-                <button className="pose-card-main" aria-pressed={selected} onClick={() => selectPose(pose)} disabled={unavailable} title={pose.status === "incompatible" ? "当前模型不兼容此 Pose" : pose.status === "missing" ? "Pose 资源缺失" : `应用 ${pose.nameZh}`}>
+                <button className="pose-card-main" aria-pressed={selected} onClick={() => selectPose(pose)} disabled={unavailable} title={pose.status === "incompatible" ? "当前模型不兼容此 Pose" : pose.status === "missing" ? "Pose 资源缺失" : `应用 ${pose.name}`}>
                   <span className="pose-thumb">
                     {poseThumbnails[pose.enginePoseIndex]
-                      ? <img src={poseThumbnails[pose.enginePoseIndex]} alt={`${pose.nameZh} 白膜姿态预览`} loading="lazy" />
+                      ? <img src={poseThumbnails[pose.enginePoseIndex]} alt={`${pose.name} 白膜姿态预览`} loading="lazy" />
                       : <i className="pose-thumb-loading" />}
                     {unavailable && <em>{pose.status === "missing" ? "资源缺失" : "骨骼不兼容"}</em>}
                   </span>
-                  <span className="pose-card-body"><strong>{pose.nameZh}</strong><small>{[pose.category, ...pose.tags].slice(0, 3).join(" · ")}</small></span>
+                  <span className="pose-card-body"><strong>{pose.name}</strong><small>{[getPoseCategoryLabel(pose.category), ...pose.tags].slice(0, 3).join(" · ")}</small></span>
                   {selected && <span className="selected-dot"><Check size={14} weight="bold" /></span>}
                 </button>
                 <div className="pose-card-actions">
-                  <button className={favorited ? "favorite active" : "favorite"} onClick={() => toggleFavorite(pose)} aria-label={favorited ? `取消收藏 ${pose.nameZh}` : `收藏 ${pose.nameZh}`} title={favorited ? "取消收藏" : "收藏"}><Star size={15} weight={favorited ? "fill" : "regular"} /></button>
-                  <button onClick={() => flash(`Pose ID · ${pose.id}`)} aria-label={`更多 ${pose.nameZh}`} title={`Pose ID · ${pose.id}`}><DotsThree size={17} weight="bold" /></button>
+                  <button className={favorited ? "favorite active" : "favorite"} onClick={() => toggleFavorite(pose)} aria-label={favorited ? `取消收藏 ${pose.name}` : `收藏 ${pose.name}`} title={favorited ? "取消收藏" : "收藏"}><Star size={15} weight={favorited ? "fill" : "regular"} /></button>
+                  <button onClick={() => flash(`Pose ID · ${pose.id}`)} aria-label={`更多 ${pose.name}`} title={`Pose ID · ${pose.id}`}><DotsThree size={17} weight="bold" /></button>
                 </div>
               </article>;
             })}
 
             {!filteredPoses.length && <div className="pose-empty-state">
-              <span>{quickView === "收藏" ? <Star size={20} /> : <MagnifyingGlass size={20} />}</span>
-              <strong>{quickView === "收藏" ? "还没有收藏姿势" : quickView === "最近" ? "还没有最近使用" : "没有匹配的姿势"}</strong>
-              <p>{quickView === "收藏" ? "点击卡片上的星标加入收藏。" : "清空筛选，或从下面的常用 Pose 开始。"}</p>
+              <span>{category === "favorites" ? <Star size={20} /> : <MagnifyingGlass size={20} />}</span>
+              <strong>{category === "favorites" ? "还没有收藏姿势" : quickView === "最近" ? "还没有最近使用" : "没有匹配的姿势"}</strong>
+              <p>{category === "favorites" ? "点击卡片上的星标加入收藏。" : "清空筛选，或从下面的常用 Pose 开始。"}</p>
               <button onClick={clearPoseFilters}>清空筛选</button>
               <div className="empty-recommendations">
-                {poseItems.filter((pose) => pose.featured).slice(0, 3).map((pose) => <button key={pose.id} onClick={() => selectPose(pose)}>{pose.nameZh}</button>)}
+                {poseItems.filter((pose) => pose.featured).slice(0, 3).map((pose) => <button key={pose.id} onClick={() => selectPose(pose)}>{pose.name}</button>)}
               </div>
             </div>}
           </div>
 
           <div className="current-pose-toolbar" aria-label="当前姿势快捷控制">
-            <div className="current-pose-meta"><span>当前姿势</span><strong>{selectedPose.nameZh}</strong><small>{selectedPose.category} · {selectedPose.id}</small></div>
+            <div className="current-pose-meta"><span>当前姿势</span><strong>{selectedPose.name}</strong><small>{getPoseCategoryLabel(selectedPose.category)} · {selectedPose.id}</small></div>
             <div className="current-pose-actions">
               <button className={editor.mirrored ? "active" : ""} onClick={() => { commit((current) => ({ ...current, mirrored: !current.mirrored })); flash(editor.mirrored ? "已恢复原始姿态" : "已镜像骨骼姿态"); }} aria-pressed={editor.mirrored} title="镜像骨骼姿态"><ArrowsLeftRight size={16} /></button>
               <button onClick={() => selectAdjacentPose(-1)} title="上一个"><ArrowLeft size={16} /></button>
