@@ -57,6 +57,13 @@ import {
   type PoseItem,
   type PoseStyle,
 } from "./pose-data";
+import {
+  analyzePromptToPose,
+  promptToPoseExamples,
+  promptToPoseJson,
+  type PromptToPoseResult,
+  type SemanticPoseModifiers,
+} from "./prompt-to-pose";
 
 type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
 type ToolMode = "translate" | "rotate" | "pose";
@@ -131,6 +138,7 @@ type EditorState = {
   fillColor: string;
   rimColor: string;
   ikTargets: IKTargetMap;
+  semanticModifiers: SemanticPoseModifiers;
   background: string;
   shadow: boolean;
   grid: boolean;
@@ -158,6 +166,7 @@ const initialState: EditorState = {
   fillColor: "#e8f1ff",
   rimColor: "#cbd5ff",
   ikTargets: {},
+  semanticModifiers: {},
   background: "#eef0f4",
   shadow: true,
   grid: false,
@@ -1979,6 +1988,39 @@ function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
   if (targets.leftFoot || targets.rightFoot) groundRigInParentSpace(rig);
 }
 
+function applySemanticBoneDelta(rig: RigBinding, boneName: HumanoidBoneName, rotation: [number, number, number]) {
+  const bone = rig.humanoidBones[boneName];
+  if (!bone) return;
+  const delta = new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation.map(THREE.MathUtils.degToRad) as [number, number, number], "XYZ"));
+  bone.quaternion.multiply(delta).normalize();
+}
+
+function applySemanticPoseModifiers(rig: RigBinding, modifiers: SemanticPoseModifiers) {
+  if (modifiers.bodyLean === "forward") {
+    applySemanticBoneDelta(rig, "Spine", [8, 0, 0]);
+    applySemanticBoneDelta(rig, "Chest", [5, 0, 0]);
+  } else if (modifiers.bodyLean === "backward") {
+    applySemanticBoneDelta(rig, "Spine", [-8, 0, 0]);
+    applySemanticBoneDelta(rig, "Chest", [-5, 0, 0]);
+  } else if (modifiers.bodyLean === "side") {
+    applySemanticBoneDelta(rig, "Spine", [0, 0, 8]);
+  }
+  if (modifiers.bodyDirection === "side") applySemanticBoneDelta(rig, "Hips", [0, 48, 0]);
+  if (modifiers.torso === "turn") applySemanticBoneDelta(rig, "Chest", [0, 12, 0]);
+  if (modifiers.torso === "twist") applySemanticBoneDelta(rig, "Chest", [0, 18, 0]);
+  if (modifiers.head === "look_back") {
+    applySemanticBoneDelta(rig, "Neck", [0, 22, 0]);
+    applySemanticBoneDelta(rig, "Head", [0, 26, 0]);
+  } else if (modifiers.head === "look_down") {
+    applySemanticBoneDelta(rig, "Head", [14, 0, 0]);
+  } else if (modifiers.head === "look_up") {
+    applySemanticBoneDelta(rig, "Head", [-14, 0, 0]);
+  }
+  if (modifiers.rightHand === "holding_weapon") applySemanticBoneDelta(rig, "RightHand", [0, 0, -20]);
+  if (modifiers.leftHand === "holding_weapon") applySemanticBoneDelta(rig, "LeftHand", [0, 0, 20]);
+  rig.root.updateMatrixWorld(true);
+}
+
 function applyArmIKTarget(rig: RigBinding, target: ArmIKTarget, safetyFactor: number) {
   const upperArm = rig.humanoidBones[target.side === "left" ? "LeftUpperArm" : "RightUpperArm"];
   const lowerArm = rig.humanoidBones[target.side === "left" ? "LeftLowerArm" : "RightLowerArm"];
@@ -2320,13 +2362,14 @@ function cloneState(state: EditorState): EditorState {
     ...state,
     position: [...state.position],
     rotation: [...state.rotation],
+    semanticModifiers: { ...state.semanticModifiers },
     ikTargets: Object.fromEntries(
       Object.entries(state.ikTargets).map(([key, value]) => [key, value ? [...value] : value]),
     ) as IKTargetMap,
   };
 }
 
-type ModelEditState = Pick<EditorState, "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible" | "ikTargets">;
+type ModelEditState = Pick<EditorState, "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible" | "ikTargets" | "semanticModifiers">;
 type ModelListItem = { id: string; name: string };
 
 function getModelEditState(state: EditorState): ModelEditState {
@@ -2337,6 +2380,7 @@ function getModelEditState(state: EditorState): ModelEditState {
     rotation: [...state.rotation],
     scale: state.scale,
     visible: state.visible,
+    semanticModifiers: { ...state.semanticModifiers },
     ikTargets: Object.fromEntries(
       Object.entries(state.ikTargets).map(([key, value]) => [key, value ? [...value] : value]),
     ) as IKTargetMap,
@@ -2409,6 +2453,10 @@ export default function Home() {
   const [toolMode, setToolMode] = useState<ToolMode>("translate");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
   const [activeIKControl, setActiveIKControl] = useState<IKControlId | null>(null);
+  const [promptToPoseOpen, setPromptToPoseOpen] = useState(false);
+  const [poseText, setPoseText] = useState<string>(promptToPoseExamples[0]);
+  const [promptToPoseResult, setPromptToPoseResult] = useState<PromptToPoseResult | null>(null);
+  const [sourcePosePrompt, setSourcePosePrompt] = useState("");
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptPlatform, setPromptPlatform] = useState<PromptPlatform>("midjourney");
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
@@ -2449,11 +2497,12 @@ export default function Home() {
     };
     const tagsCn = selectedPose.tags.slice(0, 3).join("、");
     const tagsEn = [selectedPose.nameEn, selectedPose.category, ...selectedPose.style.slice(0, 2)].filter(Boolean).join(", ");
+    const sourceContext = sourcePosePrompt ? `创作描述：${sourcePosePrompt}。` : "";
     return {
-      chinese: `${selectedPose.name}人体姿态，${directionLabel}，${intensityLabel}，${tagsCn}，${cameraLabel}，${shotLabels[editor.shotSize]}景别，${editor.focalLength}mm 镜头，${lightingLabel}，真实人体比例，骨骼与手脚自然，无穿模，8K 摄影质量，${platformSuffix[promptPlatform].cn}`,
+      chinese: `${sourceContext}${selectedPose.name}人体姿态，${directionLabel}，${intensityLabel}，${tagsCn}，${cameraLabel}，${shotLabels[editor.shotSize]}景别，${editor.focalLength}mm 镜头，${lightingLabel}，真实人体比例，骨骼与手脚自然，无穿模，8K 摄影质量，${platformSuffix[promptPlatform].cn}`,
       english: `${selectedPose.nameEn || selectedPose.name}, ${tagsEn}, ${directionLabelsEn[selectedPose.direction]} view, ${intensityLabelsEn[selectedPose.intensity]} movement, ${cameraPresetLabelsEn[editor.cameraPreset]}, ${shotLabelsEn[editor.shotSize]} shot, ${editor.focalLength}mm lens, ${lightingPresetLabelsEn[editor.lightingPreset]}, realistic human proportions, natural anatomy and hands, no body intersection, 8k photography, ${platformSuffix[promptPlatform].en}`,
     };
-  }, [editor.cameraPreset, editor.focalLength, editor.lightingPreset, editor.ratio, editor.shotSize, promptPlatform, selectedPose]);
+  }, [editor.cameraPreset, editor.focalLength, editor.lightingPreset, editor.ratio, editor.shotSize, promptPlatform, selectedPose, sourcePosePrompt]);
   const hasActiveFilters = category !== "all" || direction !== "any" || intensity !== "any" || hand !== "any" || body !== "any" || style !== "any" || query.length > 0 || quickView !== null;
 
   useEffect(() => {
@@ -2522,6 +2571,7 @@ export default function Home() {
           ...current,
           ...savedProject.editor,
           ikTargets: savedProject.editor?.ikTargets ?? {},
+          semanticModifiers: savedProject.editor?.semanticModifiers ?? {},
           pose: restoredPose?.enginePoseIndex ?? savedProject.editor?.pose ?? current.pose,
         }));
       }
@@ -2642,6 +2692,7 @@ export default function Home() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMobilePanel(null);
+        setPromptToPoseOpen(false);
         setPromptOpen(false);
         return;
       }
@@ -2670,8 +2721,10 @@ export default function Home() {
       pose: pose.enginePoseIndex,
       mirrored: false,
       ikTargets: {},
+      semanticModifiers: {},
     }));
     setSelectedPoseId(pose.id);
+    setSourcePosePrompt("");
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
     setMobilePanel(null);
     flash(`已应用「${pose.name}」`);
@@ -2835,6 +2888,66 @@ export default function Home() {
     flash(`已应用${preset.label}`);
   };
 
+  const analyzePoseText = () => {
+    const input = poseText.trim();
+    if (!input) {
+      flash("请先输入人物动作描述");
+      return;
+    }
+    const result = analyzePromptToPose(input);
+    setPromptToPoseResult(result);
+    flash(`已匹配「${result.pose.name}」`);
+  };
+
+  const applyPromptToPose = () => {
+    const result = promptToPoseResult;
+    if (!result) {
+      analyzePoseText();
+      return;
+    }
+    const cameraPreset = cameraPresets[result.cameraPreset];
+    const lightingPreset = lightingPresets[result.lightingPreset];
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (camera && controls) {
+      camera.position.set(...cameraPreset.position);
+      controls.target.set(...cameraPreset.target);
+      controls.update();
+      controls.saveState();
+    }
+    const toHex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
+    commit((current) => ({
+      ...current,
+      pose: result.pose.enginePoseIndex,
+      mirrored: false,
+      ikTargets: {},
+      semanticModifiers: { ...result.modifiers },
+      cameraPreset: result.cameraPreset,
+      focalLength: cameraPreset.focalLength,
+      cameraHeight: cameraPreset.target[1],
+      shotSize: cameraPreset.shotSize,
+      lightingPreset: result.lightingPreset,
+      keyLight: lightingPreset.key,
+      fillLight: lightingPreset.fill,
+      rimLight: lightingPreset.rim,
+      exposure: lightingPreset.exposure,
+      keyColor: toHex(lightingPreset.keyColor),
+      fillColor: toHex(lightingPreset.fillColor),
+      rimColor: toHex(lightingPreset.rimColor),
+      background: lightingPreset.background,
+    }));
+    setSelectedPoseId(result.pose.id);
+    setSourcePosePrompt(result.input);
+    setRecentIds((ids) => [result.pose.id, ...ids.filter((id) => id !== result.pose.id)].slice(0, 20));
+    clearPoseFilters();
+    setCategory(result.category);
+    setToolMode("pose");
+    setInspectorTab("model");
+    setMobilePanel(null);
+    setPromptToPoseOpen(false);
+    flash(`文字姿态已应用：${result.pose.name}`);
+  };
+
   const updateLightingValue = (key: "keyLight" | "fillLight" | "rimLight" | "exposure", value: number) => {
     updateContinuousEdit((current) => ({ ...current, [key]: value, lightingPreset: "custom" }));
   };
@@ -2859,8 +2972,9 @@ export default function Home() {
 
   const exportProjectJson = () => {
     const project = {
-      version: "2.0",
-      pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets },
+      version: "3.0",
+      pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers },
+      promptToPose: sourcePosePrompt && promptToPoseResult ? { input: sourcePosePrompt, ...promptToPoseJson(promptToPoseResult) } : null,
       camera: {
         preset: editor.cameraPreset,
         focalLength: editor.focalLength,
@@ -2954,6 +3068,7 @@ export default function Home() {
       scale: 92,
       visible: true,
       ikTargets: {},
+      semanticModifiers: {},
     };
 
     modelRootsRef.current[id] = root;
@@ -3226,6 +3341,7 @@ export default function Home() {
     const rig = modelRigsRef.current[selectedModelId];
     if (rig) {
       applyRigPose(rig, editor.pose, editor.mirrored);
+      applySemanticPoseModifiers(rig, editor.semanticModifiers);
       applyEditorIKTargets(rig, editor.ikTargets);
     }
     else deformableMeshesRef.current.forEach((mesh) => applyRigidPose(mesh, editor.pose, editor.mirrored));
@@ -3307,6 +3423,8 @@ export default function Home() {
     setInspectorTab("model");
     setMobilePanel(null);
     setSelectedPoseId(defaultPose.id);
+    setSourcePosePrompt("");
+    setPromptToPoseResult(null);
     if (cameraRef.current && controlsRef.current) {
       cameraRef.current.position.set(...cameraPresets.commercial.position);
       controlsRef.current.target.set(...cameraPresets.commercial.target);
@@ -3341,14 +3459,16 @@ export default function Home() {
           <button className="reset-scene-button" onClick={resetAll} title="重置整个场景"><ArrowCounterClockwise size={17} /><span>重置场景</span></button>
           <button className="icon-button mobile-only" aria-expanded={mobilePanel === "library"} onClick={() => setMobilePanel(mobilePanel === "library" ? null : "library")} title="姿势库" aria-label="打开姿势库"><SidebarSimple size={19} /></button>
           <button className="icon-button mobile-only" aria-expanded={mobilePanel === "inspector"} onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} title="检查器" aria-label="打开检查器"><SlidersHorizontal size={19} /></button>
-          <button className="icon-button mobile-only" onClick={() => setPromptOpen(true)} title="生成 Prompt" aria-label="生成 Prompt"><Sparkle size={19} /></button>
+          <button className="icon-button mobile-only" onClick={() => setPromptToPoseOpen(true)} title="文字生成姿态" aria-label="文字生成姿态"><Sparkle size={19} weight="fill" /></button>
+          <button className="icon-button mobile-only" onClick={() => setPromptOpen(true)} title="生成绘图 Prompt" aria-label="生成绘图 Prompt"><Copy size={18} /></button>
         </div>
 
         <div className="toolbar-right">
           <button className="icon-button" onClick={undo} disabled={!canUndo} title="撤销 ⌘/Ctrl Z" aria-label="撤销"><ArrowCounterClockwise size={18} /></button>
           <button className="icon-button" onClick={redo} disabled={!canRedo} title="重做 ⌘/Ctrl Shift Z" aria-label="重做"><ArrowClockwise size={18} /></button>
           <span className="toolbar-separator" />
-          <button className="ai-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded}><Sparkle size={17} weight="fill" /> 生成 Prompt</button>
+          <button className="pose-ai-button" onClick={() => setPromptToPoseOpen(true)} disabled={!modelInfo.loaded} title="用文字生成 3D 姿态"><Sparkle size={17} weight="fill" /> 文字姿态</button>
+          <button className="icon-button prompt-output-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded} title="生成绘图 Prompt" aria-label="生成绘图 Prompt"><Copy size={17} /></button>
           <button className={`export-button ${exporting ? "loading" : ""}`} onClick={exportPng} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? "导出中…" : "导出 PNG"}</button>
         </div>
       </header>
@@ -3586,6 +3706,53 @@ export default function Home() {
           </div>
         </aside>
       </section>
+
+      {promptToPoseOpen && <div className="prompt-backdrop">
+        <section className="prompt-dialog pose-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="pose-prompt-title">
+          <div className="prompt-heading">
+            <div><span><Sparkle size={16} weight="fill" /> Prompt To Pose</span><h2 id="pose-prompt-title">用自然语言生成 3D 人体姿态</h2></div>
+            <button onClick={() => setPromptToPoseOpen(false)} aria-label="关闭文字生成姿态面板"><X size={18} /></button>
+          </div>
+          <div className="pose-prompt-input">
+            <label htmlFor="pose-prompt-text">描述人物正在做什么</label>
+            <textarea
+              id="pose-prompt-text"
+              value={poseText}
+              onChange={(event) => { setPoseText(event.target.value); setPromptToPoseResult(null); }}
+              placeholder="例如：一个武士单膝跪地，右手握刀，身体前倾，准备战斗"
+            />
+            <div className="pose-prompt-examples" aria-label="动作描述示例">
+              {promptToPoseExamples.map((example, index) => <button key={example} onClick={() => { setPoseText(example); setPromptToPoseResult(null); }}>示例 {index + 1}</button>)}
+            </div>
+            <button className="pose-analyze-button" onClick={analyzePoseText}><Sparkle size={16} weight="fill" /> 解析并匹配姿态</button>
+          </div>
+
+          {promptToPoseResult ? <>
+            <div className="pose-match-card">
+              <span className="pose-match-icon"><Check size={18} weight="bold" /></span>
+              <div><small>Skeleton Pose 匹配</small><h3>{promptToPoseResult.pose.name}</h3><p>{promptToPoseResult.categoryLabel} · {promptToPoseResult.tags.join(" · ")}</p></div>
+              <strong>{Math.round(promptToPoseResult.confidence * 100)}%</strong>
+            </div>
+            <div className="pose-semantic-grid">
+              <section><span>结构化动作参数</span><pre>{JSON.stringify(promptToPoseJson(promptToPoseResult), null, 2)}</pre></section>
+              <section><span>解析与推荐</span><ul>{promptToPoseResult.explanation.map((item) => <li key={item}>{item}</li>)}</ul></section>
+            </div>
+            <div className="prompt-summary pose-result-summary">
+              <span>Category <b>{promptToPoseResult.category}</b></span>
+              <span>Base Pose <b>{promptToPoseResult.basePose}</b></span>
+              <span>Camera <b>{cameraPresets[promptToPoseResult.cameraPreset].label}</b></span>
+              <span>Light <b>{lightingPresets[promptToPoseResult.lightingPreset].label}</b></span>
+            </div>
+            <div className="prompt-footer">
+              <button onClick={() => copyPrompt(JSON.stringify(promptToPoseJson(promptToPoseResult), null, 2))}><Copy size={15} />复制 JSON</button>
+              <button className="primary" onClick={applyPromptToPose}><Sparkle size={16} weight="fill" />应用到 3D 骨骼</button>
+            </div>
+          </> : <div className="pose-prompt-empty">
+            <Sparkle size={22} />
+            <div><strong>语义 → Pose 数据库 → Skeleton</strong><p>系统会识别主姿态、身体方向、手腿动作、情绪与风格，再选择最接近的骨骼预设并推荐镜头和灯光。</p></div>
+          </div>}
+        </section>
+      </div>}
 
       {promptOpen && <div className="prompt-backdrop">
         <section className="prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
