@@ -595,6 +595,115 @@ function createGroundActionJointPose(name: string): JointPose {
   });
 }
 
+function createJumpingJointPose(name: string): JointPose {
+  if (/向前跳跃/.test(name)) {
+    return jointPose({
+      torso: [18, -4, -3], head: [-9, 4, 2],
+      leftArm: [-12, 0, -68], leftForearm: [2, 0, -108],
+      rightArm: [24, 0, 52], rightForearm: [4, 0, -76],
+      leftLeg: [-52, 0, -16], leftShin: [64, 0, 5],
+      rightLeg: [38, 0, 17], rightShin: [-32, 0, -5],
+    });
+  }
+  if (/大跨步跳跃/.test(name)) {
+    return jointPose({
+      torso: [16, 2, -4], head: [-8, -2, 2],
+      leftArm: [-20, 0, -76], leftForearm: [0, 0, -104],
+      rightArm: [18, 0, 66], rightForearm: [0, 0, -88],
+      leftLeg: [-74, 0, -12], leftShin: [18, 0, 3],
+      rightLeg: [60, 0, 14], rightShin: [12, 0, -3],
+    });
+  }
+  if (/单腿起跳/.test(name)) {
+    return jointPose({
+      torso: [12, -5, -3], head: [-7, 5, 2],
+      leftArm: [14, 0, -72], leftForearm: [0, 0, -82],
+      rightArm: [-14, 0, 78], rightForearm: [0, 0, 92],
+      leftLeg: [-80, 0, -18], leftShin: [94, 0, 5],
+      rightLeg: [16, 0, 12], rightShin: [-18, 0, -4],
+    });
+  }
+  if (/双腿腾空/.test(name)) {
+    return jointPose({
+      torso: [14, 0, -2], head: [-8, 0, 1],
+      leftArm: [24, 0, -82], leftForearm: [0, 0, -72],
+      rightArm: [24, 0, 82], rightForearm: [0, 0, 72],
+      leftLeg: [-48, 0, -20], leftShin: [72, 0, 5],
+      rightLeg: [-48, 0, 20], rightShin: [72, 0, -5],
+    });
+  }
+  if (/抱膝跳/.test(name)) {
+    return jointPose({
+      torso: [22, 0, -3], head: [-10, 0, 2],
+      leftArm: [34, 0, -36], leftForearm: [18, 0, 72],
+      rightArm: [34, 0, 36], rightForearm: [18, 0, -72],
+      leftLeg: [-82, 0, -24], leftShin: [104, 0, 7],
+      rightLeg: [-82, 0, 24], rightShin: [104, 0, -7],
+    });
+  }
+  if (/张腿跳/.test(name)) {
+    return jointPose({
+      torso: [2, 0, -2], head: [-6, 0, 1],
+      leftArm: [-8, 0, -96], leftForearm: [0, 0, -18],
+      rightArm: [-8, 0, 96], rightForearm: [0, 0, 18],
+      leftLeg: [-26, 0, -52], leftShin: [18, 0, 6],
+      rightLeg: [-26, 0, 52], rightShin: [18, 0, -6],
+    });
+  }
+  if (/腾空转身/.test(name)) {
+    return jointPose({
+      torso: [8, 34, -6], head: [-7, -30, 4],
+      leftArm: [-10, -8, -86], leftForearm: [0, 0, -64],
+      rightArm: [16, 8, 70], rightForearm: [0, 0, 88],
+      leftLeg: [-50, -10, -22], leftShin: [72, 0, 6],
+      rightLeg: [-28, 12, 24], rightShin: [58, 0, -6],
+    });
+  }
+  if (/向上伸手跳/.test(name)) {
+    return jointPose({
+      torso: [-4, 0, -2], head: [-14, 0, 1],
+      leftArm: [-46, 0, -136], leftForearm: [2, 0, -12],
+      rightArm: [-46, 0, 136], rightForearm: [2, 0, 12],
+      leftLeg: [-32, 0, -16], leftShin: [52, 0, 4],
+      rightLeg: [-40, 0, 17], rightShin: [62, 0, -4],
+    });
+  }
+  if (/跨越障碍/.test(name)) {
+    return jointPose({
+      torso: [24, -3, -4], head: [-10, 3, 2],
+      leftArm: [18, 0, -88], leftForearm: [0, 0, -62],
+      rightArm: [-12, 0, 82], rightForearm: [0, 0, 96],
+      leftLeg: [-88, 0, -16], leftShin: [22, 0, 4],
+      rightLeg: [20, 0, 18], rightShin: [84, 0, -5],
+    });
+  }
+  if (/跳跃落地/.test(name)) {
+    return jointPose({
+      torso: [28, 0, -4], head: [-10, 0, 2],
+      leftArm: [-8, 0, -74], leftForearm: [0, 0, -46],
+      rightArm: [-8, 0, 74], rightForearm: [0, 0, 46],
+      leftLeg: [-58, 0, -20], leftShin: [88, 0, 6],
+      rightLeg: [-54, 0, 20], rightShin: [84, 0, -6],
+    });
+  }
+  if (/落地缓冲/.test(name)) {
+    return jointPose({
+      torso: [40, 0, -5], head: [-16, 0, 3],
+      leftArm: [28, 0, -66], leftForearm: [10, 0, -52],
+      rightArm: [28, 0, 66], rightForearm: [10, 0, 52],
+      leftLeg: [-78, 0, -22], leftShin: [106, 0, 7],
+      rightLeg: [-78, 0, 22], rightShin: [106, 0, -7],
+    });
+  }
+  return jointPose({
+    torso: [10, 0, -2], head: [-7, 0, 1],
+    leftArm: [18, 0, -42], leftForearm: [4, 0, 58],
+    rightArm: [18, 0, 42], rightForearm: [4, 0, -58],
+    leftLeg: [-40, 0, -14], leftShin: [68, 0, 4],
+    rightLeg: [-34, 0, 14], rightShin: [62, 0, -4],
+  });
+}
+
 function createSemanticJointPose(item: PoseItem, index: number): JointPose {
   const text = `${item.name} ${item.tags.join(" ")}`;
   let pose = cloneJointPose(jointPoses[0]);
@@ -631,11 +740,7 @@ function createSemanticJointPose(item: PoseItem, index: number): JointPose {
     if (/低头/.test(text)) pose.head = [20, 0, 0];
     if (/回头/.test(text)) { pose.torso = [8, 18, -3]; pose.head = [-5, 62, 2]; }
   } else if (item.category === "jumping") {
-    pose = cloneJointPose(jointPoses[5]);
-    if (/张腿/.test(text)) { pose.leftLeg = [-42, 0, -44]; pose.rightLeg = [-42, 0, 44]; }
-    if (/抱膝/.test(text)) { pose.leftLeg = [-82, 0, -26]; pose.leftShin = [108, 0, 8]; pose.rightLeg = [-82, 0, 26]; pose.rightShin = [108, 0, -8]; }
-    if (/向上伸手/.test(text)) { pose.leftArm = [-20, 0, -174]; pose.rightArm = [-20, 0, 174]; }
-    if (/落地|缓冲/.test(text)) pose = cloneJointPose(jointPoses[19]);
+    pose = createJumpingJointPose(item.name);
   } else if (/落地/.test(text)) {
     pose = cloneJointPose(/超级英雄/.test(text) ? jointPoses[6] : jointPoses[19]);
   } else if (/飞踢|高踢|侧踢|踢球/.test(text)) {
@@ -745,7 +850,7 @@ const poseItemByEngineIndex = new Map(poseItems.map((item) => [item.enginePoseIn
 const semanticJointPoses: JointPose[] = [];
 // Bump this whenever the semantic pose solver changes. It forces both the live
 // artboard and the generated covers to discard any pose left by Fast Refresh.
-const poseSolverRevision = "pose-library-v2";
+const poseSolverRevision = "pose-library-v2-jump-safe";
 poseItems.forEach((item) => {
   semanticJointPoses[item.enginePoseIndex] = createSemanticJointPose(item, item.enginePoseIndex);
 });
@@ -932,6 +1037,24 @@ const rigJointOrder: RigJoint[] = [
   "rightLeg",
   "rightShin",
 ];
+
+const rigJointRotationLimits: Record<RigJoint, [[number, number], [number, number], [number, number]]> = {
+  torso: [[-55, 55], [-50, 50], [-35, 35]],
+  head: [[-45, 45], [-85, 85], [-35, 35]],
+  leftArm: [[-110, 110], [-60, 60], [-140, 140]],
+  leftForearm: [[-60, 60], [-45, 45], [-140, 140]],
+  rightArm: [[-110, 110], [-60, 60], [-140, 140]],
+  rightForearm: [[-60, 60], [-45, 45], [-140, 140]],
+  leftLeg: [[-115, 95], [-50, 50], [-60, 60]],
+  leftShin: [[-115, 115], [-25, 25], [-25, 25]],
+  rightLeg: [[-115, 95], [-50, 50], [-60, 60]],
+  rightShin: [[-115, 115], [-25, 25], [-25, 25]],
+};
+
+function getSafeRigJointRotation(joint: RigJoint, source: [number, number, number], safetyFactor: number): [number, number, number] {
+  const limits = rigJointRotationLimits[joint];
+  return source.map((value, axis) => THREE.MathUtils.clamp(value * safetyFactor, limits[axis][0], limits[axis][1])) as [number, number, number];
+}
 
 function createRigBinding(root: THREE.Object3D): RigBinding | null {
   const bonesByName = new Map<string, THREE.Bone>();
@@ -1304,7 +1427,7 @@ function applyRigPose(rig: RigBinding, poseIndex: number, mirrored = false) {
     rigJointOrder.forEach((joint) => {
       const anatomicalSide = joint === "leftArm" || joint === "leftForearm" ? "right" : joint === "rightArm" || joint === "rightForearm" ? "left" : null;
       if (anatomicalSide && ikSides.has(anatomicalSide)) return;
-      const rotation = pose[joint].map((value) => value * safetyFactor) as [number, number, number];
+      const rotation = getSafeRigJointRotation(joint, pose[joint], safetyFactor);
       // The supplied character is authored in a T-pose, while PoseBoard presets use
       // relaxed arms as their zero position. Fold that bind-pose offset into shoulders.
       if (joint === "leftArm") rotation[2] += 90;
