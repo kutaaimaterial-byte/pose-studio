@@ -66,8 +66,49 @@ type CameraPresetId = "commercial" | "cinematic" | "ecommerce" | "custom";
 type ShotSize = "close" | "medium" | "full" | "long";
 type LightingPresetId = "studio" | "cinematic" | "night" | "soft" | "custom";
 type PromptPlatform = "midjourney" | "flux" | "gpt-image" | "seedance" | "jimeng";
-type IKControlId = "leftHand" | "rightHand" | "leftFoot" | "rightFoot" | "head";
+type IKControlId =
+  | "hips"
+  | "chest"
+  | "head"
+  | "leftShoulder"
+  | "rightShoulder"
+  | "leftElbow"
+  | "rightElbow"
+  | "leftHand"
+  | "rightHand"
+  | "leftHandDirection"
+  | "rightHandDirection"
+  | "leftHip"
+  | "rightHip"
+  | "leftKnee"
+  | "rightKnee"
+  | "leftFoot"
+  | "rightFoot"
+  | "leftFootDirection"
+  | "rightFootDirection";
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
+
+const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; kind: "core" | "joint" | "effector" | "direction" }> = [
+  { id: "head", label: "头部朝向", kind: "effector" },
+  { id: "chest", label: "胸腔", kind: "core" },
+  { id: "hips", label: "骨盆", kind: "core" },
+  { id: "leftShoulder", label: "左肩", kind: "joint" },
+  { id: "rightShoulder", label: "右肩", kind: "joint" },
+  { id: "leftElbow", label: "左肘", kind: "joint" },
+  { id: "rightElbow", label: "右肘", kind: "joint" },
+  { id: "leftHand", label: "左手", kind: "effector" },
+  { id: "rightHand", label: "右手", kind: "effector" },
+  { id: "leftHandDirection", label: "左手方向", kind: "direction" },
+  { id: "rightHandDirection", label: "右手方向", kind: "direction" },
+  { id: "leftHip", label: "左髋", kind: "joint" },
+  { id: "rightHip", label: "右髋", kind: "joint" },
+  { id: "leftKnee", label: "左膝", kind: "joint" },
+  { id: "rightKnee", label: "右膝", kind: "joint" },
+  { id: "leftFoot", label: "左脚", kind: "effector" },
+  { id: "rightFoot", label: "右脚", kind: "effector" },
+  { id: "leftFootDirection", label: "左脚方向", kind: "direction" },
+  { id: "rightFootDirection", label: "右脚方向", kind: "direction" },
+];
 
 type EditorState = {
   pose: number;
@@ -1801,20 +1842,53 @@ function applyHeadIKTarget(rig: RigBinding, targetInRig: [number, number, number
 }
 
 const ikControlBoneMap: Record<IKControlId, HumanoidBoneName> = {
+  hips: "Hips",
+  chest: "Chest",
+  head: "Head",
+  leftShoulder: "LeftUpperArm",
+  rightShoulder: "RightUpperArm",
+  leftElbow: "LeftLowerArm",
+  rightElbow: "RightLowerArm",
   leftHand: "LeftHand",
   rightHand: "RightHand",
+  leftHandDirection: "LeftHand",
+  rightHandDirection: "RightHand",
+  leftHip: "LeftUpperLeg",
+  rightHip: "RightUpperLeg",
+  leftKnee: "LeftLowerLeg",
+  rightKnee: "RightLowerLeg",
   leftFoot: "LeftFoot",
   rightFoot: "RightFoot",
-  head: "Head",
+  leftFootDirection: "LeftFoot",
+  rightFootDirection: "RightFoot",
+};
+
+const ikDirectionControlConfig: Partial<Record<IKControlId, { bone: HumanoidBoneName; child: string; distance: number }>> = {
+  leftHandDirection: { bone: "LeftHand", child: "middle_01_l", distance: 0.34 },
+  rightHandDirection: { bone: "RightHand", child: "middle_01_r", distance: 0.34 },
+  leftFootDirection: { bone: "LeftFoot", child: "ball_l", distance: 0.42 },
+  rightFootDirection: { bone: "RightFoot", child: "ball_r", distance: 0.42 },
 };
 
 function getIKControlPosition(rig: RigBinding, control: IKControlId, targets: IKTargetMap) {
   const stored = targets[control];
-  if (stored) return new THREE.Vector3(...stored);
+  const directionConfig = ikDirectionControlConfig[control];
+  if (directionConfig) {
+    if (stored) return new THREE.Vector3(...stored);
+    const origin = getRigBonePosition(rig, directionConfig.bone);
+    const child = rig.bonesByName.get(directionConfig.child);
+    const childPosition = child ? getRigBonePosition(rig, child) : null;
+    if (!origin) return null;
+    const direction = childPosition?.clone().sub(origin).normalize() ?? new THREE.Vector3(0, 0, 1);
+    return origin.clone().addScaledVector(direction, directionConfig.distance);
+  }
+  if ((control === "leftHand" || control === "rightHand" || control === "leftFoot" || control === "rightFoot" || control === "head") && stored) {
+    return new THREE.Vector3(...stored);
+  }
   return getRigBonePosition(rig, ikControlBoneMap[control]);
 }
 
-function getIKPole(rig: RigBinding, control: Exclude<IKControlId, "head">, target: [number, number, number]): [number, number, number] {
+function getIKPole(rig: RigBinding, control: "leftHand" | "rightHand" | "leftFoot" | "rightFoot", target: [number, number, number]): [number, number, number] {
   const isLeft = control.startsWith("left");
   const isHand = control.endsWith("Hand");
   const rootBone = isHand
@@ -1828,21 +1902,79 @@ function getIKPole(rig: RigBinding, control: Exclude<IKControlId, "head">, targe
   return [pole.x, pole.y, pole.z];
 }
 
+function aimEditorJoint(
+  rig: RigBinding,
+  boneName: HumanoidBoneName,
+  childName: HumanoidBoneName,
+  target: [number, number, number] | undefined,
+) {
+  if (!target) return;
+  const bone = rig.humanoidBones[boneName];
+  const child = rig.humanoidBones[childName];
+  const rest = bone ? rig.restQuaternions.get(bone) : undefined;
+  if (!bone || !child || !rest) return;
+  aimRigBoneAt(bone, child, rig.root.localToWorld(new THREE.Vector3(...target)), rest);
+}
+
+function aimEditorEndDirection(
+  rig: RigBinding,
+  boneName: HumanoidBoneName,
+  childRawName: string,
+  target: [number, number, number] | undefined,
+) {
+  if (!target) return;
+  const bone = rig.humanoidBones[boneName];
+  const child = rig.bonesByName.get(childRawName);
+  const rest = bone ? rig.restQuaternions.get(bone) : undefined;
+  if (!bone || !child || !rest) return;
+  aimRigBoneAt(bone, child, rig.root.localToWorld(new THREE.Vector3(...target)), rest);
+}
+
+function moveRigBoneToTarget(rig: RigBinding, boneName: HumanoidBoneName, target: [number, number, number] | undefined) {
+  if (!target) return;
+  const bone = rig.humanoidBones[boneName];
+  if (!bone?.parent) return;
+  rig.root.updateMatrixWorld(true);
+  const targetWorld = rig.root.localToWorld(new THREE.Vector3(...target));
+  bone.position.copy(bone.parent.worldToLocal(targetWorld));
+  bone.updateMatrixWorld(true);
+}
+
+function solveEditorPole(
+  rig: RigBinding,
+  effector: TwoBoneEffector,
+  pole: [number, number, number] | undefined,
+  effectorTarget: [number, number, number] | undefined,
+) {
+  if (!pole) return;
+  const current = effectorTarget ?? getRigBonePosition(rig, effector)?.toArray() as [number, number, number] | undefined;
+  if (current) solveRigEffectorTarget(rig, effector, current, pole);
+}
+
 function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
-  (Object.entries(targets) as Array<[IKControlId, [number, number, number]]>).forEach(([control, target]) => {
-    if (control === "head") {
-      applyHeadIKTarget(rig, target);
-      return;
-    }
-    const effector: TwoBoneEffector = control === "leftHand"
-      ? "LeftHand"
-      : control === "rightHand"
-        ? "RightHand"
-        : control === "leftFoot"
-          ? "LeftFoot"
-          : "RightFoot";
-    solveRigEffectorTarget(rig, effector, target, getIKPole(rig, control, target));
-  });
+  moveRigBoneToTarget(rig, "Hips", targets.hips);
+  aimEditorJoint(rig, "Spine", "Chest", targets.chest);
+  aimEditorJoint(rig, "LeftUpperArm", "LeftLowerArm", targets.leftShoulder);
+  aimEditorJoint(rig, "RightUpperArm", "RightLowerArm", targets.rightShoulder);
+  aimEditorJoint(rig, "LeftUpperLeg", "LeftLowerLeg", targets.leftHip);
+  aimEditorJoint(rig, "RightUpperLeg", "RightLowerLeg", targets.rightHip);
+
+  solveEditorPole(rig, "LeftHand", targets.leftElbow, targets.leftHand);
+  solveEditorPole(rig, "RightHand", targets.rightElbow, targets.rightHand);
+  solveEditorPole(rig, "LeftFoot", targets.leftKnee, targets.leftFoot);
+  solveEditorPole(rig, "RightFoot", targets.rightKnee, targets.rightFoot);
+
+  if (targets.leftHand) solveRigEffectorTarget(rig, "LeftHand", targets.leftHand, targets.leftElbow ?? getIKPole(rig, "leftHand", targets.leftHand));
+  if (targets.rightHand) solveRigEffectorTarget(rig, "RightHand", targets.rightHand, targets.rightElbow ?? getIKPole(rig, "rightHand", targets.rightHand));
+  if (targets.leftFoot) solveRigEffectorTarget(rig, "LeftFoot", targets.leftFoot, targets.leftKnee ?? getIKPole(rig, "leftFoot", targets.leftFoot));
+  if (targets.rightFoot) solveRigEffectorTarget(rig, "RightFoot", targets.rightFoot, targets.rightKnee ?? getIKPole(rig, "rightFoot", targets.rightFoot));
+
+  aimEditorEndDirection(rig, "LeftHand", "middle_01_l", targets.leftHandDirection);
+  aimEditorEndDirection(rig, "RightHand", "middle_01_r", targets.rightHandDirection);
+  aimEditorEndDirection(rig, "LeftFoot", "ball_l", targets.leftFootDirection);
+  aimEditorEndDirection(rig, "RightFoot", "ball_r", targets.rightFootDirection);
+  if (targets.head) applyHeadIKTarget(rig, targets.head);
+
   rig.root.updateMatrixWorld(true);
   if (targets.leftFoot || targets.rightFoot) groundRigInParentSpace(rig);
 }
@@ -2634,7 +2766,7 @@ export default function Home() {
       if (controlsRef.current) controlsRef.current.enabled = true;
       setActiveIKControl(null);
       endContinuousEdit();
-      flash(`${control === "head" ? "头部朝向" : control.includes("Hand") ? "手部" : "脚部"}已更新`);
+      flash(`${ikControlDefinitions.find(({ id }) => id === control)?.label ?? "关节"}已更新`);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
@@ -3320,7 +3452,7 @@ export default function Home() {
             <div className="tool-dock" role="toolbar" aria-label="模型编辑模式">
               <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title="点击模型后移动"><ArrowsOutCardinal size={16} /> 选择并移动</button>
               <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title="旋转模型"><ArrowClockwise size={16} /> 旋转</button>
-              <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title="拖动手脚和头部调整骨骼"><Sparkle size={16} /> 姿态编辑</button>
+              <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title="拖动关节与方向控制柄调整骨骼"><Sparkle size={16} /> 姿态编辑</button>
             </div>
             <div className="canvas-actions">
               <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? "构图线已关闭" : "构图线已开启"); }} title="构图线" aria-label="切换构图线"><GridFour size={17} /></button>
@@ -3334,17 +3466,11 @@ export default function Home() {
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
                 <div className={`control-point-layer ${toolMode === "pose" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={toolMode !== "pose"}>
-                  {([
-                    ["leftHand", "左手"],
-                    ["rightHand", "右手"],
-                    ["leftFoot", "左脚"],
-                    ["rightFoot", "右脚"],
-                    ["head", "头部朝向"],
-                  ] as Array<[IKControlId, string]>).map(([control, label]) => (
+                  {ikControlDefinitions.map(({ id: control, label, kind }) => (
                     <button
                       key={control}
                       ref={(element) => { if (element) controlPointRefs.current[control] = element; else delete controlPointRefs.current[control]; }}
-                      className={`control-point ${activeIKControl === control ? "selected" : ""}`}
+                      className={`control-point ${kind} ${activeIKControl === control ? "selected" : ""}`}
                       onPointerDown={(event) => beginIKDrag(control, event)}
                       aria-label={`拖动${label}控制点`}
                       tabIndex={toolMode === "pose" ? 0 : -1}
@@ -3356,7 +3482,7 @@ export default function Home() {
                 <div className="viewport-hint">
                   {toolMode === "translate" && "选择并移动 · 点击机器人选中，拖动彩色箭头移动"}
                   {toolMode === "rotate" && "旋转模式 · 拖动彩色圆环旋转当前模型"}
-                  {toolMode === "pose" && "姿态编辑 · 拖动手、脚或头部控制点，骨骼将自动求解"}
+                  {toolMode === "pose" && "姿态编辑 · 圆点调整关节位置，橙色菱形控制手掌与脚尖方向"}
                 </div>
               </div>
             </div>
@@ -3408,7 +3534,7 @@ export default function Home() {
               {toolMode === "pose" && <InspectorSection title="IK 姿态编辑" onReset={resetIKEdits}>
                 <div className={`control-point-info ${activeIKControl ? "selected" : ""}`}>
                   <span><Sparkle size={17} weight="fill" /></span>
-                  <div><strong>{activeIKControl ? "正在调整骨骼" : "拖动画面中的控制点"}</strong><small>手部自动联动肩、上臂和前臂；脚部联动髋、腿和脚；头部控制视线。</small></div>
+                  <div><strong>{activeIKControl ? "正在调整骨骼" : "19 个人体骨骼控制点"}</strong><small>蓝色圆点控制位置；橙色菱形控制手掌与脚尖方向；紫色控制胸腔和骨盆；小型圆点控制肩、肘、髋与膝。</small></div>
                 </div>
               </InspectorSection>}
 
