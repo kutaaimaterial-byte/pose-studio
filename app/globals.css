@@ -106,10 +106,9 @@ button:disabled:active { transform: none; }
 .quick-entry button:active { transform: translateY(1px); }
 .quick-entry button.active { color: #0878df; border-color: #c9e3fb; background: #edf6ff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.72); }
 .quick-entry .filter-toggle { margin-left: auto; }
-.category-list { display: flex; flex-wrap: nowrap; gap: 3px; margin: 0 16px 11px; padding: 4px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: #c7ced8 transparent; border: 1px solid #e6e9ee; border-radius: 12px; background: #f3f5f8; }
-.category-list::-webkit-scrollbar { height: 4px; }
-.category-list::-webkit-scrollbar-thumb { border-radius: 99px; background: #c7ced8; }
-.category-list button { min-width: 42px; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; border: 0; border-radius: 8px; background: transparent; color: #667184; padding: 0 10px; cursor: pointer; font-size: 12px; font-weight: 650; white-space: nowrap; transition: color .14s, background .14s, box-shadow .14s, transform .14s; }
+.category-list { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 0 16px 11px; padding: 4px; overflow: hidden; border: 1px solid #e6e9ee; border-radius: 12px; background: #f3f5f8; }
+.category-list button { min-width: 0; width: 100%; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 8px; background: transparent; color: #667184; padding: 0 4px; cursor: pointer; font-size: 12px; font-weight: 650; white-space: nowrap; transition: color .14s, background .14s, box-shadow .14s, transform .14s; }
+.category-list button:nth-child(2), .category-list button:nth-child(12), .category-list button:nth-child(13) { grid-column: span 2; }
 .category-list button:hover { background: rgba(255,255,255,.72); color: var(--text); }
 .category-list button:active { transform: scale(.97); }
 .category-list button.active { background: white; color: #0878df; box-shadow: 0 1px 2px rgba(35,45,61,.08), 0 3px 8px rgba(35,45,61,.06); }
