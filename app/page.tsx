@@ -3444,7 +3444,8 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-block">
           <span className="brand-mark">P</span>
-          <span className="brand-name">PoseBoard <b>AI</b></span>
+          <span className="brand-name">PoseBoard</span>
+          <span className="brand-edition">3D STUDIO</span>
           <span className="file-state" aria-live="polite">{saveState}</span>
         </div>
 
