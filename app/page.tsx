@@ -16,6 +16,7 @@ import {
   ArrowsOutCardinal,
   Check,
   Camera,
+  Clipboard,
   Copy,
   Cube,
   DownloadSimple,
@@ -2555,6 +2556,7 @@ export default function Home() {
   const modelMeshesRef = useRef<Record<string, THREE.Mesh[]>>({});
   const modelRigsRef = useRef<Record<string, RigBinding | null>>({});
   const modelStatesRef = useRef<Record<string, ModelEditState>>({});
+  const modelClipboardRef = useRef<ModelEditState | null>(null);
   const modelCounterRef = useRef(2);
   const selectedModelIdRef = useRef("model-1");
   const deformableMeshesRef = useRef<THREE.Mesh[]>([]);
@@ -2595,6 +2597,7 @@ export default function Home() {
   const [exporting, setExporting] = useState(false);
   const [modelList, setModelList] = useState<ModelListItem[]>([{ id: "model-1", name: "机器人 01" }]);
   const [selectedModelId, setSelectedModelId] = useState("model-1");
+  const [hasCopiedModel, setHasCopiedModel] = useState(false);
   const [toolMode, setToolMode] = useState<ToolMode>("translate");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
   const [activeIKControl, setActiveIKControl] = useState<IKControlId | null>(null);
@@ -3540,24 +3543,36 @@ export default function Home() {
     flash(text(`Character ${String(sequence).padStart(2, "0")} added`, `角色 ${String(sequence).padStart(2, "0")} 已添加`));
   };
 
-  const duplicateSelectedModel = () => {
+  const copySelectedModel = () => {
+    if (!modelInfo.loaded) return;
+    modelClipboardRef.current = cloneModelEditState(getModelEditState(editorLatestRef.current));
+    setHasCopiedModel(true);
+    flash(text("Character copied · ⌘/Ctrl C", "角色已复制 · ⌘/Ctrl C"));
+  };
+
+  const pasteCopiedModel = () => {
     if (modelList.length >= 8) {
       flash(text("You can add up to 8 characters", "当前画板最多添加 8 个角色"));
       return;
     }
+    if (!modelClipboardRef.current) {
+      flash(text("Copy a character before pasting", "请先复制一个角色"));
+      return;
+    }
     const sequence = modelCounterRef.current;
     modelCounterRef.current += 1;
-    const source = cloneModelEditState(getModelEditState(editorLatestRef.current));
+    const source = cloneModelEditState(modelClipboardRef.current);
     source.position = [source.position[0] + 0.48, source.position[1], source.position[2] + 0.28];
     const created = createModelInstance(source, sequence);
     if (!created) return;
+    modelClipboardRef.current = cloneModelEditState(source);
     modelRootRef.current = created.root;
     deformableMeshesRef.current = created.meshes;
     setModelList((items) => [...items, created.item]);
     setSelectedModelId(created.id);
     setEditor((current) => ({ ...current, ...cloneModelEditState(source) }));
     setActiveIKControl(null);
-    flash(text(`Character duplicated · ⌘/Ctrl D`, `角色已复制 · ⌘/Ctrl D`));
+    flash(text(`Character pasted · ⌘/Ctrl V`, `角色已粘贴 · ⌘/Ctrl V`));
   };
 
   const deleteSelectedModel = () => {
@@ -3606,11 +3621,13 @@ export default function Home() {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)) return;
       if (promptOpen || promptToPoseOpen || event.repeat) return;
-      const duplicate = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "d";
+      const copy = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "c";
+      const paste = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "v";
       const remove = !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Delete" || event.key === "Backspace");
-      if (!duplicate && !remove) return;
+      if (!copy && !paste && !remove) return;
       event.preventDefault();
-      if (duplicate) duplicateSelectedModel();
+      if (copy) copySelectedModel();
+      else if (paste) pasteCopiedModel();
       else deleteSelectedModel();
     };
     document.addEventListener("keydown", handleModelShortcuts);
@@ -4272,7 +4289,8 @@ export default function Home() {
                   ))}
                 </div>
                 <div className="model-stack-actions" aria-label={text("Selected character actions", "所选角色操作")}>
-                  <button onClick={duplicateSelectedModel} disabled={!modelInfo.loaded || modelList.length >= 8} title={text("Duplicate selected character · ⌘/Ctrl D", "复制所选角色 · ⌘/Ctrl D")}><Copy size={15} /><span>{text("Duplicate", "复制角色")}</span><kbd>⌘D</kbd></button>
+                  <button onClick={copySelectedModel} disabled={!modelInfo.loaded} title={text("Copy selected character · ⌘/Ctrl C", "复制所选角色 · ⌘/Ctrl C")}><Copy size={15} /><span>{text("Copy", "复制")}</span><kbd>⌘C</kbd></button>
+                  <button onClick={pasteCopiedModel} disabled={!hasCopiedModel || modelList.length >= 8} title={text("Paste copied character · ⌘/Ctrl V", "粘贴已复制角色 · ⌘/Ctrl V")}><Clipboard size={15} /><span>{text("Paste", "粘贴")}</span><kbd>⌘V</kbd></button>
                   <button className="delete" onClick={deleteSelectedModel} disabled={modelList.length <= 1} title={text("Delete selected character · Delete/Backspace", "删除所选角色 · Delete/Backspace")}><Trash size={15} /><span>{text("Delete", "删除角色")}</span><kbd>⌫</kbd></button>
                 </div>
               </div>
