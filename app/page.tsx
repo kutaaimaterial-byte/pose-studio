@@ -21,20 +21,25 @@ import {
   DownloadSimple,
   Eye,
   EyeSlash,
+  FloppyDisk,
   GridFour,
   HouseLine,
   Info,
   Lightbulb,
+  Lock,
+  LockOpen,
   MagnifyingGlass,
   Minus,
   DotsThree,
   FunnelSimple,
+  Perspective,
   Plus,
   Shuffle,
   SidebarSimple,
   SlidersHorizontal,
   Sparkle,
   Star,
+  Trash,
   X,
 } from "@phosphor-icons/react";
 import {
@@ -71,6 +76,18 @@ import {
   type PromptToPoseResult,
   type SemanticPoseModifiers,
 } from "./prompt-to-pose";
+import {
+  PerspectiveGridOverlay,
+  cameraLinkedPerspective,
+  clonePerspectiveGrid,
+  drawPerspectiveOverlay,
+  initialPerspectiveGrid,
+  normalizePerspectiveGrid,
+  perspectiveDefaultsForMode,
+  rebuildGroundGrid,
+  type PerspectiveGridMode,
+  type PerspectiveGridState,
+} from "./perspective-grid";
 
 type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
 type Language = "en" | "zh";
@@ -151,7 +168,7 @@ const styleOptionsEn = [
 ] as const;
 
 const compactPoseTabLabelsEn: Record<PoseCategoryTab, string> = {
-  all: "All", favorites: "Favorites", standing: "Stand", walking: "Walk", running: "Run", jumping: "Jump",
+  all: "All", favorites: "Favorites", saved: "Saved", standing: "Stand", walking: "Walk", running: "Run", jumping: "Jump",
   squatting: "Squat", sitting: "Sit", kneeling: "Kneel", lying: "Lie", prone: "Prone", leaning: "Lean", ground: "Ground",
 };
 
@@ -187,7 +204,21 @@ type EditorState = {
   background: string;
   shadow: boolean;
   grid: boolean;
+  perspectiveGrid: PerspectiveGridState;
   visible: boolean;
+};
+
+type SavedPoseRecord = {
+  id: string;
+  basePoseId: string;
+  name: string;
+  nameEn: string;
+  category: PoseCategory;
+  ikTargets: IKTargetMap;
+  semanticModifiers: SemanticPoseModifiers;
+  mirrored: boolean;
+  thumbnail: string;
+  updatedAt: number;
 };
 
 const initialState: EditorState = {
@@ -215,6 +246,7 @@ const initialState: EditorState = {
   background: "#eef0f4",
   shadow: true,
   grid: false,
+  perspectiveGrid: clonePerspectiveGrid(initialPerspectiveGrid),
   visible: true,
 };
 
@@ -2409,11 +2441,72 @@ function cloneState(state: EditorState): EditorState {
     ...state,
     position: [...state.position],
     rotation: [...state.rotation],
+    perspectiveGrid: clonePerspectiveGrid(state.perspectiveGrid ?? initialPerspectiveGrid),
     semanticModifiers: { ...state.semanticModifiers },
     ikTargets: Object.fromEntries(
       Object.entries(state.ikTargets).map(([key, value]) => [key, value ? [...value] : value]),
     ) as IKTargetMap,
   };
+}
+
+function cloneIKTargets(targets: IKTargetMap): IKTargetMap {
+  return Object.fromEntries(
+    Object.entries(targets).map(([key, value]) => [key, value ? [...value] : value]),
+  ) as IKTargetMap;
+}
+
+function readSavedPoseRecords(value: unknown): SavedPoseRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Partial<SavedPoseRecord>;
+    const basePose = poseItems.find((pose) => pose.id === record.basePoseId);
+    if (!basePose || typeof record.id !== "string" || typeof record.name !== "string" || typeof record.nameEn !== "string") return [];
+    const rawTargets = record.ikTargets && typeof record.ikTargets === "object" ? record.ikTargets : {};
+    const ikTargets = Object.fromEntries(
+      Object.entries(rawTargets).filter((entry): entry is [string, [number, number, number]] => (
+        Array.isArray(entry[1]) && entry[1].length === 3 && entry[1].every((part) => typeof part === "number" && Number.isFinite(part))
+      )),
+    ) as IKTargetMap;
+    return [{
+      id: record.id,
+      basePoseId: basePose.id,
+      name: record.name,
+      nameEn: record.nameEn,
+      category: basePose.category,
+      ikTargets,
+      semanticModifiers: record.semanticModifiers && typeof record.semanticModifiers === "object" ? { ...record.semanticModifiers } : {},
+      mirrored: Boolean(record.mirrored),
+      thumbnail: typeof record.thumbnail === "string" ? record.thumbnail : "",
+      updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : 1,
+    }];
+  }).slice(0, 48);
+}
+
+function capturePoseThumbnail(source: HTMLCanvasElement | undefined): string {
+  if (!source || !source.width || !source.height) return "";
+  const output = document.createElement("canvas");
+  output.width = 256;
+  output.height = 200;
+  const context = output.getContext("2d");
+  if (!context) return "";
+  context.fillStyle = "#e9ebef";
+  context.fillRect(0, 0, output.width, output.height);
+  const sourceRatio = source.width / source.height;
+  const targetRatio = output.width / output.height;
+  let sx = 0;
+  let sy = 0;
+  let sw = source.width;
+  let sh = source.height;
+  if (sourceRatio > targetRatio) {
+    sw = source.height * targetRatio;
+    sx = (source.width - sw) / 2;
+  } else {
+    sh = source.width / targetRatio;
+    sy = (source.height - sh) / 2;
+  }
+  context.drawImage(source, sx, sy, sw, sh, 0, 0, output.width, output.height);
+  return output.toDataURL("image/jpeg", 0.82);
 }
 
 type ModelEditState = Pick<EditorState, "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible" | "ikTargets" | "semanticModifiers">;
@@ -2453,6 +2546,7 @@ export default function Home() {
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
   const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
   const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const groundGridRef = useRef<THREE.Group | null>(null);
   const controlPointRefs = useRef<Partial<Record<IKControlId, HTMLButtonElement>>>({});
   const modelRootRef = useRef<THREE.Group | null>(null);
   const templateModelRef = useRef<THREE.Object3D | null>(null);
@@ -2491,6 +2585,7 @@ export default function Home() {
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [savedPoses, setSavedPoses] = useState<SavedPoseRecord[]>([]);
   const [selectedPoseId, setSelectedPoseId] = useState(defaultPose.id);
   const [persistenceReady, setPersistenceReady] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"library" | "inspector" | null>(null);
@@ -2551,17 +2646,40 @@ export default function Home() {
     setPromptToPoseResult(null);
   };
 
+  const savedPoseItems = useMemo(() => savedPoses.flatMap((saved) => {
+    const basePose = poseItems.find((pose) => pose.id === saved.basePoseId);
+    if (!basePose) return [];
+    return [{
+      ...basePose,
+      id: saved.id,
+      name: saved.name,
+      nameEn: saved.nameEn,
+      tags: ["已保存修改", ...basePose.tags],
+      aliases: ["saved", "custom", "已保存", "自定义", ...basePose.aliases],
+      featured: false,
+      thumbnail: saved.thumbnail || basePose.thumbnail,
+    } satisfies PoseItem];
+  }), [savedPoses]);
+  const savedPoseById = useMemo(() => new Map(savedPoses.map((saved) => [saved.id, saved])), [savedPoses]);
+  const allPoseItems = useMemo(() => [...savedPoseItems, ...poseItems], [savedPoseItems]);
+  const selectedPose = useMemo(() => allPoseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [allPoseItems, selectedPoseId]);
+  const selectedSavedPose = savedPoseById.get(selectedPoseId);
+  const hasJointEdits = Object.keys(editor.ikTargets).length > 0;
+  const hasUnsavedJointEdits = selectedSavedPose
+    ? JSON.stringify({ ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers, mirrored: editor.mirrored }) !== JSON.stringify({ ikTargets: selectedSavedPose.ikTargets, semanticModifiers: selectedSavedPose.semanticModifiers, mirrored: selectedSavedPose.mirrored })
+    : hasJointEdits;
+
   const filteredPoses = useMemo(() => {
     const keyword = debouncedQuery.trim().toLowerCase();
-    let candidates = poseItems;
+    let candidates = category === "saved" ? savedPoseItems : poseItems;
     if (quickView === "featured") candidates = candidates.filter((pose) => pose.featured);
     if (quickView === "recent") {
-      candidates = recentIds.map((id) => poseItems.find((pose) => pose.id === id)).filter((pose): pose is PoseItem => Boolean(pose));
+      candidates = recentIds.map((id) => allPoseItems.find((pose) => pose.id === id)).filter((pose): pose is PoseItem => Boolean(pose));
     }
-    if (category === "favorites") candidates = candidates.filter((pose) => favoriteIds.includes(pose.id));
+    if (category === "favorites") candidates = allPoseItems.filter((pose) => favoriteIds.includes(pose.id));
     return candidates.filter((pose) => {
       const searchable = [pose.name, pose.nameEn, ...pose.aliases, ...pose.tags, pose.category, getPoseCategoryLabel(pose.category)].filter(Boolean).join(" ").toLowerCase();
-      return (category === "all" || category === "favorites" || pose.category === category)
+      return (category === "all" || category === "favorites" || category === "saved" || pose.category === category)
         && (direction === "any" || pose.direction === direction)
         && (intensity === "any" || pose.intensity === intensity)
         && (hand === "any" || pose.hand.includes(hand))
@@ -2569,7 +2687,7 @@ export default function Home() {
         && (style === "any" || pose.style.includes(style))
         && (!keyword || searchable.includes(keyword));
     });
-  }, [body, category, debouncedQuery, direction, favoriteIds, hand, intensity, quickView, recentIds, style]);
+  }, [allPoseItems, body, category, debouncedQuery, direction, favoriteIds, hand, intensity, quickView, recentIds, savedPoseItems, style]);
 
   useEffect(() => {
     document.documentElement.lang = isZh ? "zh-CN" : "en";
@@ -2579,7 +2697,6 @@ export default function Home() {
     languageRef.current = language;
   }, [language]);
 
-  const selectedPose = useMemo(() => poseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [selectedPoseId]);
   const generatedPrompt = useMemo(() => {
     const cameraLabel = editor.cameraPreset === "custom" ? "自定义镜头" : cameraPresets[editor.cameraPreset].label;
     const lightingLabel = editor.lightingPreset === "custom" ? "自定义灯光" : lightingPresets[editor.lightingPreset].label;
@@ -2595,11 +2712,13 @@ export default function Home() {
     const tagsCn = selectedPose.tags.slice(0, 3).join("、");
     const tagsEn = [selectedPose.nameEn, selectedPose.category, ...selectedPose.style.slice(0, 2)].filter(Boolean).join(", ");
     const sourceContext = sourcePosePrompt ? `创作描述：${sourcePosePrompt}。` : "";
+    const gridModeCn: Record<PerspectiveGridMode, string> = { off: "自然透视", ground: "真实地面透视", "one-point": "一点透视", "two-point": "两点透视", "three-point": "三点透视" };
+    const gridModeEn: Record<PerspectiveGridMode, string> = { off: "natural perspective", ground: "ground-plane perspective", "one-point": "one-point perspective", "two-point": "two-point perspective", "three-point": "three-point perspective" };
     return {
-      chinese: `${sourceContext}${selectedPose.name}人体姿态，${directionLabel}，${intensityLabel}，${tagsCn}，${cameraLabel}，${shotLabels[editor.shotSize]}景别，${editor.focalLength}mm 镜头，${lightingLabel}，真实人体比例，骨骼与手脚自然，无穿模，8K 摄影质量，${platformSuffix[promptPlatform].cn}`,
-      english: `${selectedPose.nameEn || selectedPose.name}, ${tagsEn}, ${directionLabelsEn[selectedPose.direction]} view, ${intensityLabelsEn[selectedPose.intensity]} movement, ${cameraPresetLabelsEn[editor.cameraPreset]}, ${shotLabelsEn[editor.shotSize]} shot, ${editor.focalLength}mm lens, ${lightingPresetLabelsEn[editor.lightingPreset]}, realistic human proportions, natural anatomy and hands, no body intersection, 8k photography, ${platformSuffix[promptPlatform].en}`,
+      chinese: `${sourceContext}${selectedPose.name}人体姿态，${directionLabel}，${intensityLabel}，${tagsCn}，${cameraLabel}，${shotLabels[editor.shotSize]}景别，${editor.focalLength}mm 镜头，${gridModeCn[editor.perspectiveGrid.mode]}，${lightingLabel}，真实人体比例，骨骼与手脚自然，无穿模，8K 摄影质量，${platformSuffix[promptPlatform].cn}`,
+      english: `${selectedPose.nameEn || selectedPose.name}, ${tagsEn}, ${directionLabelsEn[selectedPose.direction]} view, ${intensityLabelsEn[selectedPose.intensity]} movement, ${cameraPresetLabelsEn[editor.cameraPreset]}, ${shotLabelsEn[editor.shotSize]} shot, ${editor.focalLength}mm lens, ${gridModeEn[editor.perspectiveGrid.mode]}, ${lightingPresetLabelsEn[editor.lightingPreset]}, realistic human proportions, natural anatomy and hands, no body intersection, 8k photography, ${platformSuffix[promptPlatform].en}`,
     };
-  }, [editor.cameraPreset, editor.focalLength, editor.lightingPreset, editor.ratio, editor.shotSize, promptPlatform, selectedPose, sourcePosePrompt]);
+  }, [editor.cameraPreset, editor.focalLength, editor.lightingPreset, editor.perspectiveGrid.mode, editor.ratio, editor.shotSize, promptPlatform, selectedPose, sourcePosePrompt]);
   const hasActiveFilters = category !== "all" || direction !== "any" || intensity !== "any" || hand !== "any" || body !== "any" || style !== "any" || query.length > 0 || quickView !== null;
 
   useEffect(() => {
@@ -2658,21 +2777,36 @@ export default function Home() {
     try {
       const favorites = JSON.parse(window.localStorage.getItem("poseboard.favoriteIds") ?? "[]");
       const recent = JSON.parse(window.localStorage.getItem("poseboard.recentIds") ?? "[]");
+      const storedSavedPoses = readSavedPoseRecords(JSON.parse(window.localStorage.getItem("poseboard.savedPoses.v1") ?? "[]"));
       const savedProject = JSON.parse(window.localStorage.getItem("poseboard.project.v2") ?? "null") as { editor?: Partial<EditorState>; selectedPoseId?: string } | null;
       const lastSelected = window.localStorage.getItem("poseboard.lastSelectedId");
       if (Array.isArray(favorites)) setFavoriteIds(favorites.filter((id): id is string => typeof id === "string"));
       if (Array.isArray(recent)) setRecentIds(recent.filter((id): id is string => typeof id === "string").slice(0, 20));
-      const restoredPose = poseItems.find((pose) => pose.id === (savedProject?.selectedPoseId ?? lastSelected) && pose.status === "ready");
+      setSavedPoses(storedSavedPoses);
+      const requestedPoseId = savedProject?.selectedPoseId ?? lastSelected;
+      const restoredSavedPose = storedSavedPoses.find((pose) => pose.id === requestedPoseId);
+      const restoredPose = poseItems.find((pose) => pose.id === (restoredSavedPose?.basePoseId ?? requestedPoseId) && pose.status === "ready");
       if (savedProject?.editor) {
         setEditor((current) => cloneState({
           ...current,
           ...savedProject.editor,
+          perspectiveGrid: normalizePerspectiveGrid(savedProject.editor?.perspectiveGrid),
           ikTargets: savedProject.editor?.ikTargets ?? {},
           semanticModifiers: savedProject.editor?.semanticModifiers ?? {},
           pose: restoredPose?.enginePoseIndex ?? savedProject.editor?.pose ?? current.pose,
         }));
+      } else if (restoredSavedPose && restoredPose) {
+        setEditor((current) => cloneState({
+          ...current,
+          pose: restoredPose.enginePoseIndex,
+          mirrored: restoredSavedPose.mirrored,
+          ikTargets: restoredSavedPose.ikTargets,
+          semanticModifiers: restoredSavedPose.semanticModifiers,
+        }));
       }
-      if (restoredPose) {
+      if (restoredSavedPose && restoredPose) {
+        setSelectedPoseId(restoredSavedPose.id);
+      } else if (restoredPose) {
         setSelectedPoseId(restoredPose.id);
         if (!savedProject?.editor) setEditor((current) => ({ ...current, pose: restoredPose.enginePoseIndex }));
       }
@@ -2685,12 +2819,13 @@ export default function Home() {
     if (!persistenceReady) return;
     window.localStorage.setItem("poseboard.favoriteIds", JSON.stringify(favoriteIds));
     window.localStorage.setItem("poseboard.recentIds", JSON.stringify(recentIds.slice(0, 20)));
+    window.localStorage.setItem("poseboard.savedPoses.v1", JSON.stringify(savedPoses));
     window.localStorage.setItem("poseboard.lastSelectedId", selectedPoseId);
-  }, [favoriteIds, persistenceReady, recentIds, selectedPoseId]);
+  }, [favoriteIds, persistenceReady, recentIds, savedPoses, selectedPoseId]);
 
   useEffect(() => {
     if (!persistenceReady) return;
-    window.localStorage.setItem("poseboard.project.v2", JSON.stringify({ version: "2.0", selectedPoseId, editor }));
+    window.localStorage.setItem("poseboard.project.v2", JSON.stringify({ version: "3.1", selectedPoseId, editor }));
   }, [editor, persistenceReady, selectedPoseId]);
 
   useEffect(() => {
@@ -2813,18 +2948,69 @@ export default function Home() {
       flash(text("Pose asset is missing. Please try again later", "Pose 资源缺失，请稍后重试"));
       return;
     }
+    const savedPose = savedPoseById.get(pose.id);
+    const basePose = savedPose ? poseItems.find((item) => item.id === savedPose.basePoseId) ?? defaultPose : pose;
     commit((current) => ({
       ...current,
-      pose: pose.enginePoseIndex,
-      mirrored: false,
-      ikTargets: {},
-      semanticModifiers: {},
+      pose: basePose.enginePoseIndex,
+      mirrored: savedPose?.mirrored ?? false,
+      ikTargets: savedPose ? cloneIKTargets(savedPose.ikTargets) : {},
+      semanticModifiers: savedPose ? { ...savedPose.semanticModifiers } : {},
     }));
     setSelectedPoseId(pose.id);
     setSourcePosePrompt("");
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
     setMobilePanel(null);
-    flash(text(`Applied “${pose.nameEn}”`, `已应用「${pose.name}」`));
+    flash(savedPose
+      ? text(`Loaded saved pose “${pose.nameEn}”`, `已载入保存动作「${pose.name}」`)
+      : text(`Applied “${pose.nameEn}”`, `已应用「${pose.name}」`));
+  };
+
+  const saveModifiedPose = () => {
+    if (!hasUnsavedJointEdits || !modelInfo.loaded) return;
+    const existing = savedPoseById.get(selectedPoseId);
+    const basePose = poseItems.find((pose) => pose.id === (existing?.basePoseId ?? selectedPose.id)) ?? defaultPose;
+    const nextSequence = savedPoses.filter((pose) => pose.basePoseId === basePose.id).length + 1;
+    const id = existing?.id ?? `saved-${basePose.id}-${nextSequence}`;
+    const record: SavedPoseRecord = {
+      id,
+      basePoseId: basePose.id,
+      name: existing?.name ?? `${basePose.name} · 自定义 ${nextSequence}`,
+      nameEn: existing?.nameEn ?? `${basePose.nameEn} · Custom ${nextSequence}`,
+      category: basePose.category,
+      ikTargets: cloneIKTargets(editorLatestRef.current.ikTargets),
+      semanticModifiers: { ...editorLatestRef.current.semanticModifiers },
+      mirrored: editorLatestRef.current.mirrored,
+      thumbnail: capturePoseThumbnail(rendererRef.current?.domElement) || existing?.thumbnail || "",
+      updatedAt: (existing?.updatedAt ?? 0) + 1,
+    };
+    setSavedPoses((poses) => existing ? poses.map((pose) => pose.id === existing.id ? record : pose) : [record, ...poses]);
+    setSelectedPoseId(id);
+    setRecentIds((ids) => [id, ...ids.filter((item) => item !== id)].slice(0, 20));
+    setQuickView(null);
+    setCategory("saved");
+    flash(existing
+      ? text(`Updated “${record.nameEn}” in Saved`, `已更新「${record.name}」`)
+      : text(`Saved “${record.nameEn}” to this browser`, `已将「${record.name}」保存到本机缓存`));
+  };
+
+  const deleteSavedPose = (savedPose: SavedPoseRecord) => {
+    const basePose = poseItems.find((pose) => pose.id === savedPose.basePoseId) ?? defaultPose;
+    setSavedPoses((poses) => poses.filter((pose) => pose.id !== savedPose.id));
+    setFavoriteIds((ids) => ids.filter((id) => id !== savedPose.id));
+    setRecentIds((ids) => ids.filter((id) => id !== savedPose.id));
+    if (selectedPoseId === savedPose.id) {
+      commit((current) => ({
+        ...current,
+        pose: basePose.enginePoseIndex,
+        mirrored: false,
+        ikTargets: {},
+        semanticModifiers: {},
+      }));
+      setSelectedPoseId(basePose.id);
+      setSourcePosePrompt("");
+    }
+    flash(text(`Deleted “${savedPose.nameEn}” from Saved`, `已删除保存动作「${savedPose.name}」`));
   };
 
   const clearPoseFilters = () => {
@@ -2942,13 +3128,20 @@ export default function Home() {
       controls.update();
       controls.saveState();
     }
-    commit((current) => ({
-      ...current,
-      cameraPreset: presetId,
-      focalLength: preset.focalLength,
-      cameraHeight: preset.target[1],
-      shotSize: preset.shotSize,
-    }));
+    commit((current) => {
+      const mode = current.perspectiveGrid.mode;
+      const linked = current.perspectiveGrid.coordinateMode === "camera-linked" && camera && controls && mode !== "off" && mode !== "ground"
+        ? cameraLinkedPerspective(camera, controls.target, mode)
+        : null;
+      return {
+        ...current,
+        cameraPreset: presetId,
+        focalLength: preset.focalLength,
+        cameraHeight: preset.target[1],
+        shotSize: preset.shotSize,
+        perspectiveGrid: linked ? { ...current.perspectiveGrid, ...linked, vanishingPoints: linked.vanishingPoints.map((point) => ({ ...point })) } : current.perspectiveGrid,
+      };
+    });
     flash(text(`${preset.labelEn} camera applied`, `已应用${preset.label}镜头`));
   };
 
@@ -2963,9 +3156,22 @@ export default function Home() {
       target.y = nextHeight;
       controls.target.copy(target);
       camera.position.copy(target.clone().addScaledVector(direction, shotDistance[nextShot]));
+      if (patch.focalLength) camera.setFocalLength(patch.focalLength);
+      camera.updateProjectionMatrix();
       controls.update();
     }
-    const updater = (current: EditorState) => ({ ...current, ...patch, cameraPreset: "custom" as const });
+    const updater = (current: EditorState) => {
+      const mode = current.perspectiveGrid.mode;
+      const linked = current.perspectiveGrid.coordinateMode === "camera-linked" && camera && controls && mode !== "off" && mode !== "ground"
+        ? cameraLinkedPerspective(camera, controls.target, mode)
+        : null;
+      return {
+        ...current,
+        ...patch,
+        cameraPreset: "custom" as const,
+        perspectiveGrid: linked ? { ...current.perspectiveGrid, ...linked, vanishingPoints: linked.vanishingPoints.map((point) => ({ ...point })) } : current.perspectiveGrid,
+      };
+    };
     if (continuous) updateContinuousEdit(updater);
     else commit(updater);
   };
@@ -3015,6 +3221,14 @@ export default function Home() {
       controls.update();
       controls.saveState();
     }
+    const normalizedPrompt = result.input.toLowerCase();
+    const suggestedGridMode: PerspectiveGridMode | null = /英雄|仰拍|低机位|高楼|hero|low angle|skyscraper/.test(normalizedPrompt)
+      ? "three-point"
+      : /街角|转角|建筑|商品空间|street corner|building corner|two.point/.test(normalizedPrompt)
+        ? "two-point"
+        : /走廊|道路中央|正面室内|corridor|hallway|road center|one.point/.test(normalizedPrompt)
+          ? "one-point"
+          : null;
     const toHex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
     commit((current) => ({
       ...current,
@@ -3035,6 +3249,7 @@ export default function Home() {
       fillColor: toHex(lightingPreset.fillColor),
       rimColor: toHex(lightingPreset.rimColor),
       background: lightingPreset.background,
+      perspectiveGrid: suggestedGridMode ? perspectiveDefaultsForMode(suggestedGridMode, current.perspectiveGrid) : current.perspectiveGrid,
     }));
     setSelectedPoseId(result.pose.id);
     setSourcePosePrompt(result.input);
@@ -3072,7 +3287,7 @@ export default function Home() {
 
   const exportProjectJson = () => {
     const project = {
-      version: "3.0",
+      version: "3.1",
       pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers },
       promptToPose: sourcePosePrompt && promptToPoseResult ? { input: sourcePosePrompt, ...promptToPoseJson(promptToPoseResult) } : null,
       camera: {
@@ -3089,6 +3304,7 @@ export default function Home() {
         rim: editor.rimLight,
         exposure: editor.exposure,
       },
+      perspectiveGrid: clonePerspectiveGrid(editor.perspectiveGrid),
       prompt: { platform: promptPlatform, ...generatedPrompt },
     };
     downloadTextFile(`poseboard-${selectedPose.id}.json`, JSON.stringify(project, null, 2), "application/json");
@@ -3115,6 +3331,131 @@ export default function Home() {
     });
     flash(text("Canvas orientation switched", "画幅方向已切换"));
   };
+
+  const setPerspectiveMode = (mode: PerspectiveGridMode) => {
+    commit((current) => ({
+      ...current,
+      perspectiveGrid: perspectiveDefaultsForMode(mode, current.perspectiveGrid),
+    }));
+    setInspectorTab("scene");
+    flash(mode === "off"
+      ? text("Perspective grid hidden", "透视网格已关闭")
+      : text(`${mode.replace("-", " ")} perspective enabled`, `已启用${mode === "ground" ? "地面网格" : mode === "one-point" ? "一点透视" : mode === "two-point" ? "两点透视" : "三点透视"}`));
+  };
+
+  const togglePerspectiveGrid = () => {
+    const nextMode: PerspectiveGridMode = editorLatestRef.current.perspectiveGrid.mode === "off" ? "ground" : "off";
+    setPerspectiveMode(nextMode);
+  };
+
+  const resetPerspectiveGrid = () => {
+    const mode = editorLatestRef.current.perspectiveGrid.mode;
+    commit((current) => ({
+      ...current,
+      perspectiveGrid: perspectiveDefaultsForMode(mode, {
+        ...clonePerspectiveGrid(initialPerspectiveGrid),
+        includeInExport: current.perspectiveGrid.includeInExport,
+      }),
+    }));
+    flash(text("Perspective grid reset", "透视网格已重置"));
+  };
+
+  const updatePerspectiveOrigin = (axis: number, value: number) => {
+    commit((current) => {
+      const origin = [...current.perspectiveGrid.origin] as [number, number, number];
+      origin[axis] = value;
+      return { ...current, perspectiveGrid: { ...current.perspectiveGrid, origin, snapToFeet: axis === 1 ? false : current.perspectiveGrid.snapToFeet } };
+    });
+  };
+
+  const updatePerspectiveRotation = (axis: number, value: number) => {
+    commit((current) => {
+      const rotation = [...current.perspectiveGrid.rotation] as [number, number, number];
+      rotation[axis] = value;
+      return { ...current, perspectiveGrid: { ...current.perspectiveGrid, rotation } };
+    });
+  };
+
+  const setPerspectiveCoordinateMode = (coordinateMode: "camera-linked" | "independent") => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    commit((current) => {
+      const mode = current.perspectiveGrid.mode;
+      const linked = coordinateMode === "camera-linked" && camera && controls && mode !== "off" && mode !== "ground"
+        ? cameraLinkedPerspective(camera, controls.target, mode)
+        : null;
+      return {
+        ...current,
+        perspectiveGrid: {
+          ...current.perspectiveGrid,
+          coordinateMode,
+          ...(linked ?? {}),
+          vanishingPoints: linked ? linked.vanishingPoints.map((point) => ({ ...point })) : current.perspectiveGrid.vanishingPoints,
+        },
+      };
+    });
+  };
+
+  const beginPerspectiveDrag = (handle: "horizon" | number, event: React.PointerEvent<HTMLButtonElement>) => {
+    const currentGrid = editorLatestRef.current.perspectiveGrid;
+    const overlay = event.currentTarget.closest<HTMLElement>(".perspective-grid-overlay");
+    if (!overlay || currentGrid.lock) return;
+    event.preventDefault();
+    event.stopPropagation();
+    beginContinuousEdit();
+    if (controlsRef.current) controlsRef.current.enabled = false;
+
+    const move = (pointerEvent: PointerEvent) => {
+      const rect = overlay.getBoundingClientRect();
+      const x = clamp((pointerEvent.clientX - rect.left) / Math.max(rect.width, 1), -0.75, 1.75);
+      const y = clamp((pointerEvent.clientY - rect.top) / Math.max(rect.height, 1), 0.04, 0.96);
+      updateContinuousEdit((current) => {
+        const perspectiveGrid = clonePerspectiveGrid(current.perspectiveGrid);
+        perspectiveGrid.coordinateMode = "independent";
+        if (handle === "horizon") {
+          perspectiveGrid.horizonY = y;
+          perspectiveGrid.vanishingPoints.slice(0, perspectiveGrid.mode === "one-point" ? 1 : 2).forEach((point) => { point.y = y; });
+        } else {
+          const point = perspectiveGrid.vanishingPoints[handle];
+          if (!point) return current;
+          point.x = x;
+          point.y = y;
+          if (handle < 2) {
+            perspectiveGrid.horizonY = y;
+            perspectiveGrid.vanishingPoints.slice(0, perspectiveGrid.mode === "one-point" ? 1 : 2).forEach((item) => { item.y = y; });
+          }
+        }
+        return { ...current, perspectiveGrid };
+      });
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (controlsRef.current) controlsRef.current.enabled = true;
+      endContinuousEdit();
+      flash(text("Perspective guide updated", "透视辅助线已更新"));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  useEffect(() => {
+    const handleGridShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== "g") return;
+      event.preventDefault();
+      const currentMode = editorLatestRef.current.perspectiveGrid.mode;
+      const nextMode: PerspectiveGridMode = currentMode === "off" ? "ground" : "off";
+      setEditor((current) => ({ ...current, perspectiveGrid: perspectiveDefaultsForMode(nextMode, current.perspectiveGrid) }));
+      setInspectorTab("scene");
+      flash(nextMode === "off" ? text("Perspective grid hidden", "透视网格已关闭") : text("Ground grid enabled", "地面网格已开启"));
+    };
+    document.addEventListener("keydown", handleGridShortcut);
+    return () => document.removeEventListener("keydown", handleGridShortcut);
+  });
 
   const selectModel = (id: string) => {
     const nextState = modelStatesRef.current[id];
@@ -3199,7 +3540,7 @@ export default function Home() {
     const camera = new THREE.PerspectiveCamera(initialState.fov, 16 / 9, 0.05, 100);
     camera.position.set(...presetCameraPosition);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -3280,6 +3621,12 @@ export default function Home() {
     fillLightRef.current = fill;
     rimLightRef.current = rim;
 
+    const groundGrid = new THREE.Group();
+    groundGrid.name = "poseboard-perspective-ground-grid";
+    groundGrid.visible = false;
+    scene.add(groundGrid);
+    groundGridRef.current = groundGrid;
+
     const root = new THREE.Group();
     scene.add(root);
 
@@ -3298,6 +3645,18 @@ export default function Home() {
       if (id) selectModel(id);
     };
     renderer.domElement.addEventListener("pointerdown", selectModelFromCanvas);
+
+    const syncLinkedGridToCamera = () => {
+      const current = editorLatestRef.current;
+      const mode = current.perspectiveGrid.mode;
+      if (current.perspectiveGrid.coordinateMode !== "camera-linked" || mode === "off" || mode === "ground") return;
+      const linked = cameraLinkedPerspective(camera, controls.target, mode);
+      setEditor((value) => ({
+        ...value,
+        perspectiveGrid: { ...value.perspectiveGrid, ...linked, vanishingPoints: linked.vanishingPoints.map((point) => ({ ...point })) },
+      }));
+    };
+    controls.addEventListener("end", syncLinkedGridToCamera);
 
     const loader = new GLTFLoader();
     loader.load(
@@ -3395,6 +3754,7 @@ export default function Home() {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", selectModelFromCanvas);
+      controls.removeEventListener("end", syncLinkedGridToCamera);
       transformControls.removeEventListener("mouseDown", handleTransformMouseDown);
       transformControls.removeEventListener("objectChange", handleTransformChange);
       transformControls.removeEventListener("dragging-changed", handleTransformDragging);
@@ -3405,6 +3765,7 @@ export default function Home() {
       controls.dispose();
       renderer.dispose();
       renderer.domElement.remove();
+      groundGridRef.current = null;
       keyLightRef.current = null;
       fillLightRef.current = null;
       rimLightRef.current = null;
@@ -3472,7 +3833,23 @@ export default function Home() {
     if (scene.fog instanceof THREE.Fog) scene.fog.color.set(editor.background);
   }, [editor, modelInfo.loaded, selectedModelId, toolMode]);
 
-  const exportPng = async () => {
+  useEffect(() => {
+    const group = groundGridRef.current;
+    if (!group) return;
+    const grid = editor.perspectiveGrid;
+    rebuildGroundGrid(group, grid);
+    let footY = 0;
+    if (grid.snapToFeet) {
+      const feet = Object.values(modelRootsRef.current)
+        .filter((root) => root.visible)
+        .map((root) => new THREE.Box3().setFromObject(root).min.y)
+        .filter(Number.isFinite);
+      if (feet.length) footY = Math.min(...feet);
+    }
+    group.position.set(grid.origin[0], (grid.snapToFeet ? footY : 0) + grid.origin[1] + 0.004, grid.origin[2]);
+  }, [editor.perspectiveGrid, editor.position, editor.pose, editor.rotation, editor.scale, modelInfo.loaded, selectedModelId]);
+
+  const exportPng = async (exportMode: "setting" | "clean" | "with-grid" | "overlay" = "setting") => {
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
     const camera = cameraRef.current;
@@ -3490,29 +3867,64 @@ export default function Home() {
     const transformControls = transformControlsRef.current;
     const transformHelper = transformControls?.getHelper();
     const oldTransformHelperVisible = transformHelper?.visible ?? false;
+    const groundGrid = groundGridRef.current;
+    const oldGroundGridVisible = groundGrid?.visible ?? false;
+    const oldBackground = scene.background;
+    const oldFog = scene.fog;
+    const oldClearColor = renderer.getClearColor(new THREE.Color()).clone();
+    const oldClearAlpha = renderer.getClearAlpha();
+    const modelVisibility = Object.entries(modelRootsRef.current).map(([id, root]) => [id, root.visible] as const);
 
     try {
       const [targetWidth, targetHeight] = ratioSize[editor.ratio];
+      const grid = editor.perspectiveGrid;
+      const overlayOnly = exportMode === "overlay";
+      const includeGrid = grid.enabled && grid.mode !== "off" && (exportMode === "with-grid" || overlayOnly || (exportMode === "setting" && grid.includeInExport));
       if (transformHelper) transformHelper.visible = false;
+      if (groundGrid) groundGrid.visible = includeGrid && grid.mode === "ground";
+      if (overlayOnly) {
+        modelVisibility.forEach(([id]) => { modelRootsRef.current[id].visible = false; });
+        scene.background = null;
+        scene.fog = null;
+        renderer.setClearColor(0x000000, 0);
+      }
       renderer.setPixelRatio(1);
       renderer.setSize(targetWidth, targetHeight, false);
       camera.aspect = targetWidth / targetHeight;
       camera.updateProjectionMatrix();
       renderer.render(scene, camera);
 
+      const output = document.createElement("canvas");
+      output.width = targetWidth;
+      output.height = targetHeight;
+      const context = output.getContext("2d");
+      if (!context) throw new Error("Canvas unavailable");
+      if (!overlayOnly || grid.mode === "ground") context.drawImage(renderer.domElement, 0, 0, targetWidth, targetHeight);
+      if (includeGrid && grid.mode !== "ground") drawPerspectiveOverlay(context, targetWidth, targetHeight, grid);
+
       const link = document.createElement("a");
-      link.href = renderer.domElement.toDataURL("image/png");
-      link.download = `poseboard-${selectedPose.name}-${targetWidth}x${targetHeight}.png`;
+      link.href = output.toDataURL("image/png");
+      const suffix = overlayOnly ? "grid-overlay" : includeGrid ? "with-grid" : "clean";
+      link.download = `poseboard-${selectedPose.name}-${suffix}-${targetWidth}x${targetHeight}.png`;
       link.click();
-      flash(text(`PNG exported at ${editor.ratio}`, `PNG 已按 ${editor.ratio} 画幅导出`));
+      flash(overlayOnly
+        ? text("Transparent grid overlay exported", "透明网格 Overlay 已导出")
+        : includeGrid
+          ? text(`PNG with perspective grid exported at ${editor.ratio}`, `含透视网格 PNG 已按 ${editor.ratio} 导出`)
+          : text(`Clean PNG exported at ${editor.ratio}`, `干净 PNG 已按 ${editor.ratio} 导出`));
     } catch {
       flash(text("PNG export failed. Please try again", "PNG 导出失败，请重试"));
     } finally {
+      modelVisibility.forEach(([id, visible]) => { modelRootsRef.current[id].visible = visible; });
+      scene.background = oldBackground;
+      scene.fog = oldFog;
+      renderer.setClearColor(oldClearColor, oldClearAlpha);
       renderer.setPixelRatio(oldPixelRatio);
       renderer.setSize(oldSize.x, oldSize.y, false);
       camera.aspect = host.clientWidth / Math.max(host.clientHeight, 1);
       camera.updateProjectionMatrix();
       if (transformHelper) transformHelper.visible = oldTransformHelperVisible;
+      if (groundGrid) groundGrid.visible = oldGroundGridVisible;
       renderer.render(scene, camera);
       setExporting(false);
     }
@@ -3563,6 +3975,7 @@ export default function Home() {
           </div>
           <button className="icon-button swap-button" onClick={toggleOrientation} title={text("Switch orientation", "切换横竖屏")} aria-label={text("Switch orientation", "切换横竖屏")}><ArrowsLeftRight size={18} /></button>
           <span className="toolbar-separator" />
+          <button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} title={text("Perspective Grid · G", "透视网格 · G")}><Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} /><span>{text("Perspective", "透视网格")}</span><kbd>G</kbd></button>
           <button className="reset-scene-button" onClick={resetAll} title={text("Reset entire scene", "重置整个场景")}><ArrowCounterClockwise size={17} /><span>{text("Reset Scene", "重置场景")}</span></button>
           <button className="icon-button mobile-only" aria-expanded={mobilePanel === "library"} onClick={() => setMobilePanel(mobilePanel === "library" ? null : "library")} title={text("Pose Library", "姿势库")} aria-label={text("Open Pose Library", "打开姿势库")}><SidebarSimple size={19} /></button>
           <button className="icon-button mobile-only" aria-expanded={mobilePanel === "inspector"} onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} title={text("Inspector", "检查器")} aria-label={text("Open Inspector", "打开检查器")}><SlidersHorizontal size={19} /></button>
@@ -3576,7 +3989,7 @@ export default function Home() {
           <span className="toolbar-separator" />
           <button className="pose-ai-button" onClick={() => setPromptToPoseOpen(true)} disabled={!modelInfo.loaded} title={text("Generate a 3D pose from text", "用文字生成 3D 姿态")}><Sparkle size={17} weight="fill" /> {text("Text to Pose", "文字姿态")}</button>
           <button className="icon-button prompt-output-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded} title={text("Generate image prompt", "生成绘图 Prompt")} aria-label={text("Generate image prompt", "生成绘图 Prompt")}><Copy size={17} /></button>
-          <button className={`export-button ${exporting ? "loading" : ""}`} onClick={exportPng} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? text("Exporting…", "导出中…") : text("Export PNG", "导出 PNG")}</button>
+          <button className={`export-button ${exporting ? "loading" : ""}`} onClick={() => exportPng()} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? text("Exporting…", "导出中…") : text("Export PNG", "导出 PNG")}</button>
         </div>
       </header>
 
@@ -3585,7 +3998,7 @@ export default function Home() {
           <div className="library-scroll-header">
             <div className="panel-title-row">
               <div><h2>{text("Pose Library", "姿势预设库")}</h2></div>
-              <span className="count">{poseItems.length} poses</span>
+              <span className="count">{poseItems.length + savedPoses.length} poses</span>
             </div>
 
             <div className="search-field" role="search">
@@ -3606,9 +4019,13 @@ export default function Home() {
             </div>
 
             <div className="category-list" role="listbox" aria-label={text("Primary pose categories", "姿势一级分类")}>
-              {poseCategoryTabs.map((item) => <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={tabDisplayName(item.value)} onClick={() => { setCategory(item.value); setQuickView(null); }}>
-                {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}{tabDisplayName(item.value)}{item.value === "favorites" ? ` ${favoriteIds.length}` : ""}
-              </button>)}
+              {poseCategoryTabs.map((item) => (
+                <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={tabDisplayName(item.value)} onClick={() => { setCategory(item.value); setQuickView(null); }}>
+                  {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}
+                  {item.value === "saved" && <FloppyDisk size={13} weight={category === "saved" ? "fill" : "regular"} />}
+                  {tabDisplayName(item.value)}{item.value === "favorites" ? ` ${favoriteIds.length}` : item.value === "saved" ? ` ${savedPoses.length}` : ""}
+                </button>
+              ))}
             </div>
 
             {filtersExpanded && <div className="pose-filters">
@@ -3629,13 +4046,16 @@ export default function Home() {
             {filteredPoses.map((pose) => {
               const selected = selectedPose.id === pose.id;
               const favorited = favoriteIds.includes(pose.id);
+              const savedRecord = savedPoseById.get(pose.id);
+              const thumbnail = savedRecord?.thumbnail || poseThumbnails[pose.enginePoseIndex];
               const unavailable = pose.status !== "ready";
-              return <article key={pose.id} data-pose-index={pose.enginePoseIndex} className={`pose-card ${selected ? "active" : ""} ${unavailable ? "disabled" : ""}`}>
+              return <article key={pose.id} data-pose-index={savedRecord ? undefined : pose.enginePoseIndex} className={`pose-card ${selected ? "active" : ""} ${savedRecord ? "saved" : ""} ${unavailable ? "disabled" : ""}`}>
                 <button className="pose-card-main" aria-pressed={selected} onClick={() => selectPose(pose)} disabled={unavailable} title={pose.status === "incompatible" ? text("Not compatible with this model", "当前模型不兼容此 Pose") : pose.status === "missing" ? text("Pose asset missing", "Pose 资源缺失") : text(`Apply ${pose.nameEn}`, `应用 ${pose.name}`)}>
                   <span className="pose-thumb">
-                    {poseThumbnails[pose.enginePoseIndex]
-                      ? <img src={poseThumbnails[pose.enginePoseIndex]} alt={text(`${pose.nameEn} mannequin preview`, `${pose.name} 白膜姿态预览`)} loading="lazy" />
+                    {thumbnail
+                      ? <img src={thumbnail} alt={text(`${pose.nameEn} mannequin preview`, `${pose.name} 白膜姿态预览`)} loading="lazy" />
                       : <i className="pose-thumb-loading" />}
+                    {savedRecord && <span className="saved-pose-badge"><FloppyDisk size={11} weight="fill" /> {text("Saved", "已保存")}</span>}
                     {unavailable && <em>{pose.status === "missing" ? text("Asset missing", "资源缺失") : text("Rig incompatible", "骨骼不兼容")}</em>}
                   </span>
                   <span className="pose-card-body"><strong>{poseDisplayName(pose)}</strong><small>{poseMeta(pose)}</small></span>
@@ -3643,15 +4063,20 @@ export default function Home() {
                 </button>
                 <div className="pose-card-actions">
                   <button className={favorited ? "favorite active" : "favorite"} onClick={() => toggleFavorite(pose)} aria-label={favorited ? text(`Remove ${pose.nameEn} from favorites`, `取消收藏 ${pose.name}`) : text(`Add ${pose.nameEn} to favorites`, `收藏 ${pose.name}`)} title={favorited ? text("Remove favorite", "取消收藏") : text("Favorite", "收藏")}><Star size={15} weight={favorited ? "fill" : "regular"} /></button>
-                  <button onClick={() => flash(`Pose ID · ${pose.id}`)} aria-label={text(`More options for ${pose.nameEn}`, `更多 ${pose.name}`)} title={`Pose ID · ${pose.id}`}><DotsThree size={17} weight="bold" /></button>
+                  <button
+                    className={savedRecord ? "delete-saved" : ""}
+                    onClick={() => savedRecord ? deleteSavedPose(savedRecord) : flash(`Pose ID · ${pose.id}`)}
+                    aria-label={savedRecord ? text(`Delete saved pose ${pose.nameEn}`, `删除保存动作 ${pose.name}`) : text(`More options for ${pose.nameEn}`, `更多 ${pose.name}`)}
+                    title={savedRecord ? text("Delete saved pose", "删除已保存动作") : `Pose ID · ${pose.id}`}
+                  >{savedRecord ? <Trash size={16} weight="bold" /> : <DotsThree size={17} weight="bold" />}</button>
                 </div>
               </article>;
             })}
 
             {!filteredPoses.length && <div className="pose-empty-state">
-              <span>{category === "favorites" ? <Star size={20} /> : <MagnifyingGlass size={20} />}</span>
-              <strong>{category === "favorites" ? text("No favorite poses yet", "还没有收藏姿势") : quickView === "recent" ? text("No recently used poses", "还没有最近使用") : text("No matching poses", "没有匹配的姿势")}</strong>
-              <p>{category === "favorites" ? text("Use the star on any card to save it here.", "点击卡片上的星标加入收藏。") : text("Clear filters or start with a featured pose below.", "清空筛选，或从下面的常用 Pose 开始。")}</p>
+              <span>{category === "favorites" ? <Star size={20} /> : category === "saved" ? <FloppyDisk size={20} /> : <MagnifyingGlass size={20} />}</span>
+              <strong>{category === "favorites" ? text("No favorite poses yet", "还没有收藏姿势") : category === "saved" ? text("No saved pose edits yet", "还没有保存的修改动作") : quickView === "recent" ? text("No recently used poses", "还没有最近使用") : text("No matching poses", "没有匹配的姿势")}</strong>
+              <p>{category === "favorites" ? text("Use the star on any card to save it here.", "点击卡片上的星标加入收藏。") : category === "saved" ? text("Edit a joint in Edit Pose mode, then save the modified pose.", "进入姿态编辑并调整关节，然后保存修改后的动作。") : text("Clear filters or start with a featured pose below.", "清空筛选，或从下面的常用 Pose 开始。")}</p>
               <button onClick={clearPoseFilters}>{text("Clear filters", "清空筛选")}</button>
               <div className="empty-recommendations">
                 {poseItems.filter((pose) => pose.featured).slice(0, 3).map((pose) => <button key={pose.id} onClick={() => selectPose(pose)}>{poseDisplayName(pose)}</button>)}
@@ -3676,11 +4101,6 @@ export default function Home() {
         <section className="canvas-area">
           <div className="canvas-header">
             <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{modelStatusLabel}</span></div>
-            <div className="tool-dock" role="toolbar" aria-label={text("Model editing mode", "模型编辑模式")}>
-              <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title={text("Select a model to move it", "点击模型后移动")}><ArrowsOutCardinal size={16} /> {text("Move", "选择并移动")}</button>
-              <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title={text("Rotate model", "旋转模型")}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button>
-              <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title={text("Drag joint and direction handles to edit the skeleton", "拖动关节与方向控制柄调整骨骼")}><Sparkle size={16} /> {text("Edit Pose", "姿态编辑")}</button>
-            </div>
             <div className="canvas-actions">
               <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
               <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
@@ -3689,9 +4109,21 @@ export default function Home() {
 
           <div className="canvas-stage">
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
+              <div className="tool-dock artboard-tool-dock" role="toolbar" aria-label={text("Model editing mode", "模型编辑模式")}>
+                <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title={text("Select a model to move it", "点击模型后移动")}><ArrowsOutCardinal size={16} /> {text("Move", "选择并移动")}</button>
+                <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title={text("Rotate model", "旋转模型")}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button>
+                <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title={text("Drag joint and direction handles to edit the skeleton", "拖动关节与方向控制柄调整骨骼")}><Sparkle size={16} /> {text("Edit Pose", "姿态编辑")}</button>
+              </div>
               <div className="artboard-label"><span /> ARTBOARD · {currentSize[0]} × {currentSize[1]}</div>
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
+                <PerspectiveGridOverlay
+                  state={editor.perspectiveGrid}
+                  label={text("Editable perspective grid", "可编辑透视网格")}
+                  horizonLabel={text("Drag horizon", "拖动地平线")}
+                  vanishingPointLabel={text("Drag vanishing point", "拖动消失点")}
+                  onDragStart={beginPerspectiveDrag}
+                />
                 <div className={`control-point-layer ${toolMode === "pose" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={toolMode !== "pose"}>
                   {ikControlDefinitions.map(({ id: control, label, labelEn, kind }) => (
                     <button
@@ -3706,11 +4138,6 @@ export default function Home() {
                 </div>
                 {!modelInfo.loaded && <div className="model-loader"><span /><p>{modelStatusLabel}</p></div>}
                 {editor.grid && <div className="composition-grid"><i /><i /><b /><b /></div>}
-                <div className="viewport-hint">
-                  {toolMode === "translate" && text("Move · select a character, then drag the colored arrows", "选择并移动 · 点击机器人选中，拖动彩色箭头移动")}
-                  {toolMode === "rotate" && text("Rotate · drag the colored rings around the current model", "旋转模式 · 拖动彩色圆环旋转当前模型")}
-                  {toolMode === "pose" && text("Pose · circles adjust joints; orange diamonds control hands and feet", "姿态编辑 · 圆点调整关节位置，橙色菱形控制手掌与脚尖方向")}
-                </div>
               </div>
             </div>
           </div>
@@ -3763,6 +4190,10 @@ export default function Home() {
                   <span><Sparkle size={17} weight="fill" /></span>
                   <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Blue points control position; orange diamonds control hand and foot direction; core points adjust the chest and pelvis; smaller points control shoulders, elbows, hips, and knees.", "蓝色圆点控制位置；橙色菱形控制手掌与脚尖方向；核心控制点调整胸腔和骨盆；小型圆点控制肩、肘、髋与膝。")}</small></div>
                 </div>
+                <button className={`save-custom-pose-button ${selectedSavedPose && !hasUnsavedJointEdits ? "saved" : ""}`} onClick={saveModifiedPose} disabled={!hasUnsavedJointEdits || !modelInfo.loaded}>
+                  {selectedSavedPose && !hasUnsavedJointEdits ? <Check size={17} weight="bold" /> : <FloppyDisk size={17} weight="fill" />}
+                  <span>{selectedSavedPose && !hasUnsavedJointEdits ? text("Saved to Library", "已保存到动作库") : hasJointEdits || selectedSavedPose ? text("Save Modified Pose", "保存修改后的动作") : text("Adjust joints to save", "调整关节后可保存")}</span>
+                </button>
               </InspectorSection>}
 
               <InspectorSection title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
@@ -3786,6 +4217,51 @@ export default function Home() {
             </InspectorSection>}
 
             {inspectorTab === "scene" && <>
+              <InspectorSection title={text("Perspective Grid", "透视网格")} resetLabel={text("Reset", "重置")} onReset={resetPerspectiveGrid}>
+                <div className="perspective-mode-grid" role="radiogroup" aria-label={text("Perspective grid mode", "透视网格模式")}>
+                  {([
+                    ["off", text("Off", "关闭")],
+                    ["ground", text("Ground", "地面")],
+                    ["one-point", text("1 Point", "一点")],
+                    ["two-point", text("2 Point", "两点")],
+                    ["three-point", text("3 Point", "三点")],
+                  ] as Array<[PerspectiveGridMode, string]>).map(([mode, label]) => <button key={mode} className={editor.perspectiveGrid.mode === mode ? "active" : ""} role="radio" aria-checked={editor.perspectiveGrid.mode === mode} onClick={() => setPerspectiveMode(mode)}>{label}</button>)}
+                </div>
+
+                {editor.perspectiveGrid.mode !== "off" && <>
+                  {editor.perspectiveGrid.mode !== "ground" && <>
+                    <ControlRow label={text("Link", "联动")}><select value={editor.perspectiveGrid.coordinateMode} onChange={(event) => setPerspectiveCoordinateMode(event.target.value as "camera-linked" | "independent")} aria-label={text("Perspective coordinate mode", "透视联动模式")}><option value="independent">{text("Independent Edit", "独立编辑")}</option><option value="camera-linked">{text("Follow Camera", "跟随相机")}</option></select></ControlRow>
+                    <ControlRow label={text("Horizon", "地平线")}><div className="range-with-value"><input type="range" min="0.05" max="0.95" step="0.01" value={editor.perspectiveGrid.horizonY} disabled={editor.perspectiveGrid.lock} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => {
+                      const horizonY = Number(event.target.value);
+                      const vanishingPoints = current.perspectiveGrid.vanishingPoints.map((point, index) => index < (current.perspectiveGrid.mode === "one-point" ? 1 : 2) ? { ...point, y: horizonY } : { ...point });
+                      return { ...current, perspectiveGrid: { ...current.perspectiveGrid, horizonY, vanishingPoints, coordinateMode: "independent" } };
+                    })} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Horizon height", "地平线高度")} /><output>{Math.round(editor.perspectiveGrid.horizonY * 100)}%</output></div></ControlRow>
+                  </>}
+
+                  {editor.perspectiveGrid.mode === "ground" && <ControlRow label={text("Plane", "平面")}><select value={editor.perspectiveGrid.plane} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, plane: event.target.value as "XZ" | "XY" | "YZ" } }))} aria-label={text("Grid plane", "网格平面")}><option value="XZ">XZ · {text("Ground", "地面")}</option><option value="XY">XY</option><option value="YZ">YZ</option></select></ControlRow>}
+                  <VectorField label={text("Origin", "原点")} values={editor.perspectiveGrid.origin} step={0.05} onChange={updatePerspectiveOrigin} />
+                  {editor.perspectiveGrid.mode === "ground" && <VectorField label={text("Rotation", "旋转")} values={editor.perspectiveGrid.rotation} step={1} onChange={updatePerspectiveRotation} />}
+                  <ControlRow label={text("Size", "尺寸")}><div className="range-with-value"><input type="range" min="6" max="40" step="1" value={editor.perspectiveGrid.size} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, size: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid size", "网格尺寸")} /><output>{editor.perspectiveGrid.size}m</output></div></ControlRow>
+                  <ControlRow label={text("Major", "主间距")}><div className="range-with-value"><input type="range" min="0.5" max="5" step="0.25" value={editor.perspectiveGrid.majorStep} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorStep: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Major grid spacing", "主网格间距")} /><output>{editor.perspectiveGrid.majorStep}m</output></div></ControlRow>
+                  <ControlRow label={text("Density", "细分")}><div className="range-with-value"><input type="range" min="1" max="10" step="1" value={editor.perspectiveGrid.subdivisions} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, subdivisions: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid subdivisions", "网格细分数量")} /><output>{editor.perspectiveGrid.subdivisions}×</output></div></ControlRow>
+                  <ControlRow label={text("Opacity", "透明度")}><div className="range-with-value"><input type="range" min="0.08" max="0.8" step="0.01" value={editor.perspectiveGrid.opacity} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, opacity: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid opacity", "网格透明度")} /><output>{Math.round(editor.perspectiveGrid.opacity * 100)}%</output></div></ControlRow>
+                  <ControlRow label={text("Width", "线宽")}><div className="range-with-value"><input type="range" min="0.5" max="3" step="0.25" value={editor.perspectiveGrid.lineWidth} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lineWidth: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid line width", "网格线宽")} /><output>{editor.perspectiveGrid.lineWidth}px</output></div></ControlRow>
+                  <div className="perspective-color-grid">
+                    <label><span>{text("Major", "主线")}</span><input type="color" value={editor.perspectiveGrid.majorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorColor: event.target.value } }))} aria-label={text("Major grid color", "主网格线颜色")} /></label>
+                    <label><span>{text("Minor", "副线")}</span><input type="color" value={editor.perspectiveGrid.minorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, minorColor: event.target.value } }))} aria-label={text("Minor grid color", "副网格线颜色")} /></label>
+                  </div>
+                  <ToggleRow label={editor.perspectiveGrid.lock ? text("Grid Locked", "已锁定网格") : text("Lock Editing", "锁定编辑")} toggleLabel={text("Lock perspective grid editing", "锁定透视网格编辑")} active={editor.perspectiveGrid.lock} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lock: !current.perspectiveGrid.lock } }))} />
+                  {editor.perspectiveGrid.mode === "ground" && <ToggleRow label={text("Snap to Feet", "吸附脚底")} toggleLabel={text("Snap grid to lowest foot", "网格吸附人物最低脚底")} active={editor.perspectiveGrid.snapToFeet} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, snapToFeet: !current.perspectiveGrid.snapToFeet } }))} />}
+                  <ToggleRow label={text("Include in Export", "导出包含网格")} toggleLabel={text("Include perspective grid in PNG export", "PNG 导出时包含透视网格")} active={editor.perspectiveGrid.includeInExport} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, includeInExport: !current.perspectiveGrid.includeInExport } }))} />
+                  <div className={`perspective-lock-note ${editor.perspectiveGrid.lock ? "active" : ""}`}>{editor.perspectiveGrid.lock ? <Lock size={15} weight="fill" /> : <LockOpen size={15} />}<span>{editor.perspectiveGrid.lock ? text("Handles are protected from accidental dragging.", "地平线和消失点已防止误拖。") : text("Drag the horizon and numbered vanishing points directly on the artboard.", "可直接在画板拖动地平线和带编号的消失点。")}</span></div>
+                  <div className="perspective-export-actions">
+                    <button onClick={() => exportPng("clean")} disabled={exporting}>{text("Clean PNG", "干净图")}</button>
+                    <button className="primary" onClick={() => exportPng("with-grid")} disabled={exporting}>{text("With Grid", "含网格图")}</button>
+                    <button onClick={() => exportPng("overlay")} disabled={exporting}>{text("Overlay", "透明网格")}</button>
+                  </div>
+                </>}
+              </InspectorSection>
+
               <InspectorSection title={text("Lighting System", "灯光系统")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
                 <div className="preset-grid lighting-presets">
                   {(Object.entries(lightingPresets) as Array<[Exclude<LightingPresetId, "custom">, (typeof lightingPresets)[Exclude<LightingPresetId, "custom">]]>).map(([id, preset]) => (

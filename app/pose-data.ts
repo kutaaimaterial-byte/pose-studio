@@ -11,7 +11,7 @@ export type PoseCategory =
   | "leaning"
   | "ground";
 
-export type PoseCategoryTab = "all" | "favorites" | PoseCategory;
+export type PoseCategoryTab = "all" | "favorites" | "saved" | PoseCategory;
 export type PoseDirection = "front" | "front-left" | "front-right" | "side" | "back" | "look-back";
 export type PoseIntensity = "static" | "light" | "medium" | "strong";
 export type PoseHand = "natural" | "hip" | "pocket" | "crossed" | "behind" | "support" | "face" | "chin" | "raise" | "open" | "fist" | "holding";
@@ -58,6 +58,7 @@ export const poseCategoryLabels: Record<PoseCategory, string> = {
 export const poseCategoryTabs: ReadonlyArray<{ value: PoseCategoryTab; label: string; english?: string }> = [
   { value: "all", label: "全部" },
   { value: "favorites", label: "收藏" },
+  { value: "saved", label: "已保存" },
   { value: "standing", label: "站", english: "Standing" },
   { value: "walking", label: "走", english: "Walking" },
   { value: "running", label: "跑", english: "Running" },
@@ -416,6 +417,7 @@ export function getPoseCategoryLabel(category: PoseCategory): string {
 export function getPoseTabLabel(tab: PoseCategoryTab): string {
   if (tab === "all") return "全部";
   if (tab === "favorites") return "收藏";
+  if (tab === "saved") return "已保存";
   return poseCategoryLabels[tab];
 }
 
@@ -426,5 +428,6 @@ export function getPoseCategoryLabelEn(category: PoseCategory): string {
 export function getPoseTabLabelEn(tab: PoseCategoryTab): string {
   if (tab === "all") return "All";
   if (tab === "favorites") return "Favorites";
+  if (tab === "saved") return "Saved";
   return poseCategoryLabelsEn[tab];
 }
