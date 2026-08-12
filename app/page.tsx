@@ -25,6 +25,7 @@ import {
   FloppyDisk,
   GridFour,
   HouseLine,
+  ImageSquare,
   Info,
   Lightbulb,
   Lock,
@@ -41,6 +42,7 @@ import {
   Sparkle,
   Star,
   Trash,
+  UploadSimple,
   X,
 } from "@phosphor-icons/react";
 import {
@@ -221,6 +223,17 @@ type SavedPoseRecord = {
   mirrored: boolean;
   thumbnail: string;
   updatedAt: number;
+};
+
+type CanvasImageLayer = {
+  id: string;
+  name: string;
+  src: string;
+  x: number;
+  y: number;
+  scale: number;
+  opacity: number;
+  locked: boolean;
 };
 
 const initialState: EditorState = {
@@ -2539,6 +2552,7 @@ function clamp(value: number, min: number, max: number) {
 
 export default function Home() {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const poseGridRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -2598,6 +2612,8 @@ export default function Home() {
   const [modelList, setModelList] = useState<ModelListItem[]>([{ id: "model-1", name: "机器人 01" }]);
   const [selectedModelId, setSelectedModelId] = useState("model-1");
   const [hasCopiedModel, setHasCopiedModel] = useState(false);
+  const [canvasImages, setCanvasImages] = useState<CanvasImageLayer[]>([]);
+  const [selectedCanvasImageId, setSelectedCanvasImageId] = useState<string | null>(null);
   const [toolMode, setToolMode] = useState<ToolMode>("translate");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
   const [activeIKControl, setActiveIKControl] = useState<IKControlId | null>(null);
@@ -2620,6 +2636,7 @@ export default function Home() {
     const sequence = model?.name.match(/\d+/)?.[0] ?? "01";
     return text(`Character ${sequence}`, `角色 ${sequence}`);
   };
+  const selectedCanvasImage = canvasImages.find((image) => image.id === selectedCanvasImageId) ?? null;
   const modelStatusLabel = modelInfo.loaded
     ? modelInfo.hasSkeleton
       ? text("Quaternius Humanoid · 65 bones · 19 mapped", "Quaternius Humanoid · 65 骨骼 · 19 核心映射")
@@ -3468,6 +3485,7 @@ export default function Home() {
     if (!nextState || !nextRoot || !nextMeshes) return;
 
     setSelectedModelId(id);
+    setSelectedCanvasImageId(null);
     modelRootRef.current = nextRoot;
     deformableMeshesRef.current = nextMeshes;
     setEditor((current) => ({ ...current, ...cloneModelEditState(nextState) }));
@@ -3616,6 +3634,104 @@ export default function Home() {
     flash(text("Character deleted · Delete", "角色已删除 · Delete"));
   };
 
+  const uploadCanvasImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const availableSlots = Math.max(0, 8 - canvasImages.length);
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/")).slice(0, availableSlots);
+    event.target.value = "";
+    if (!availableSlots) {
+      flash(text("You can add up to 8 image layers", "画板最多添加 8 个图片图层"));
+      return;
+    }
+    if (!files.length) return;
+
+    const uploaded = (await Promise.all(files.map((file, index) => new Promise<CanvasImageLayer | null>((resolve) => {
+      if (file.size > 12 * 1024 * 1024) {
+        resolve(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? {
+        id: `canvas-image-${Date.now()}-${index}`,
+        name: file.name,
+        src: reader.result,
+        x: 50 + index * 3,
+        y: 50 + index * 3,
+        scale: 42,
+        opacity: 1,
+        locked: false,
+      } : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    })))).filter((image): image is CanvasImageLayer => Boolean(image));
+
+    if (!uploaded.length) {
+      flash(text("Image upload failed or exceeds 12 MB", "图片上传失败或超过 12 MB"));
+      return;
+    }
+    setCanvasImages((current) => [...current, ...uploaded]);
+    setSelectedCanvasImageId(uploaded.at(-1)?.id ?? null);
+    setInspectorTab("scene");
+    flash(text(`${uploaded.length} image layer${uploaded.length > 1 ? "s" : ""} added`, `已添加 ${uploaded.length} 个图片图层`));
+  };
+
+  const updateCanvasImage = (id: string, updates: Partial<CanvasImageLayer>) => {
+    setCanvasImages((images) => images.map((image) => image.id === id ? { ...image, ...updates } : image));
+  };
+
+  const toggleCanvasImageLock = (id: string) => {
+    const image = canvasImages.find((item) => item.id === id);
+    if (!image) return;
+    updateCanvasImage(id, { locked: !image.locked });
+    flash(image.locked ? text("Image layer unlocked", "图片图层已解锁") : text("Image layer locked", "图片图层已锁定"));
+  };
+
+  const deleteCanvasImage = (id: string) => {
+    const image = canvasImages.find((item) => item.id === id);
+    if (!image) return;
+    if (image.locked) {
+      flash(text("Unlock the image layer before deleting", "请先解锁图片图层再删除"));
+      return;
+    }
+    setCanvasImages((images) => images.filter((item) => item.id !== id));
+    setSelectedCanvasImageId((current) => current === id ? null : current);
+    flash(text("Image layer deleted", "图片图层已删除"));
+  };
+
+  const beginCanvasImageDrag = (id: string, event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedCanvasImageId(id);
+    const image = canvasImages.find((item) => item.id === id);
+    const shell = event.currentTarget.closest<HTMLElement>(".artboard-shell");
+    if (!image || !shell) return;
+    if (image.locked) {
+      flash(text("This image layer is locked", "该图片图层已锁定"));
+      return;
+    }
+
+    const rect = shell.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = image.x;
+    const originY = image.y;
+    if (controlsRef.current) controlsRef.current.enabled = false;
+
+    const move = (pointerEvent: PointerEvent) => {
+      const x = clamp(originX + ((pointerEvent.clientX - startX) / Math.max(rect.width, 1)) * 100, -20, 120);
+      const y = clamp(originY + ((pointerEvent.clientY - startY) / Math.max(rect.height, 1)) * 100, -20, 120);
+      updateCanvasImage(id, { x, y });
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (controlsRef.current) controlsRef.current.enabled = true;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
   useEffect(() => {
     const handleModelShortcuts = (event: KeyboardEvent) => {
       const target = event.target;
@@ -3628,6 +3744,7 @@ export default function Home() {
       event.preventDefault();
       if (copy) copySelectedModel();
       else if (paste) pasteCopiedModel();
+      else if (selectedCanvasImageId) deleteCanvasImage(selectedCanvasImageId);
       else deleteSelectedModel();
     };
     document.addEventListener("keydown", handleModelShortcuts);
@@ -4010,6 +4127,24 @@ export default function Home() {
       const context = output.getContext("2d");
       if (!context) throw new Error("Canvas unavailable");
       if (!overlayOnly || grid.mode === "ground") context.drawImage(renderer.domElement, 0, 0, targetWidth, targetHeight);
+      if (!overlayOnly) {
+        for (const layer of canvasImages) {
+          const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const element = new Image();
+            element.onload = () => resolve(element);
+            element.onerror = reject;
+            element.src = layer.src;
+          });
+          const width = targetWidth * (layer.scale / 100);
+          const height = width * (image.naturalHeight / Math.max(image.naturalWidth, 1));
+          const left = targetWidth * (layer.x / 100) - width / 2;
+          const top = targetHeight * (layer.y / 100) - height / 2;
+          context.save();
+          context.globalAlpha = layer.opacity;
+          context.drawImage(image, left, top, width, height);
+          context.restore();
+        }
+      }
       if (includeGrid && grid.mode !== "ground") drawPerspectiveOverlay(context, targetWidth, targetHeight, grid);
 
       const link = document.createElement("a");
@@ -4047,6 +4182,8 @@ export default function Home() {
     setInspectorTab("model");
     setMobilePanel(null);
     setSelectedPoseId(defaultPose.id);
+    setCanvasImages([]);
+    setSelectedCanvasImageId(null);
     setSourcePosePrompt("");
     setPromptToPoseResult(null);
     if (cameraRef.current && controlsRef.current) {
@@ -4212,6 +4349,8 @@ export default function Home() {
           <div className="canvas-header">
             <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{modelStatusLabel}</span></div>
             <div className="canvas-actions">
+              <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
+              <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
               <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
               <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
             </div>
@@ -4227,6 +4366,22 @@ export default function Home() {
               <div className="artboard-label"><span /> ARTBOARD · {currentSize[0]} × {currentSize[1]}</div>
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
+                <div className="canvas-image-layer" aria-label={text("Uploaded image layers", "已上传图片图层")}>
+                  {canvasImages.map((image) => (
+                    <button
+                      key={image.id}
+                      className={`canvas-image-item ${selectedCanvasImageId === image.id ? "selected" : ""} ${image.locked ? "locked" : ""}`}
+                      style={{ left: `${image.x}%`, top: `${image.y}%`, width: `${image.scale}%`, opacity: image.opacity }}
+                      onPointerDown={(event) => beginCanvasImageDrag(image.id, event)}
+                      onClick={(event) => { event.stopPropagation(); setSelectedCanvasImageId(image.id); }}
+                      aria-pressed={selectedCanvasImageId === image.id}
+                      aria-label={text(`${image.name}${image.locked ? ", locked" : ""}`, `${image.name}${image.locked ? "，已锁定" : ""}`)}
+                    >
+                      <img src={image.src} alt="" draggable={false} />
+                      {image.locked && <span className="canvas-image-lock"><Lock size={12} weight="fill" /></span>}
+                    </button>
+                  ))}
+                </div>
                 <PerspectiveGridOverlay
                   state={editor.perspectiveGrid}
                   label={text("Editable perspective grid", "可编辑透视网格")}
@@ -4338,6 +4493,27 @@ export default function Home() {
             </InspectorSection>}
 
             {inspectorTab === "scene" && <>
+              <InspectorSection title={text("Image Layers", "图片图层")} resetLabel={text("Clear", "清除")} onReset={() => {
+                const lockedCount = canvasImages.filter((image) => image.locked).length;
+                setCanvasImages((images) => images.filter((image) => image.locked));
+                setSelectedCanvasImageId((current) => canvasImages.find((image) => image.id === current)?.locked ? current : null);
+                flash(lockedCount ? text("Unlocked image layers cleared; locked layers kept", "已清除未锁定图层，锁定图层已保留") : text("Image layers cleared", "图片图层已清除"));
+              }}>
+                <button className="canvas-image-upload" onClick={() => imageInputRef.current?.click()} disabled={canvasImages.length >= 8}><UploadSimple size={16} weight="bold" /><span>{text("Upload Image", "上传图片")}</span><small>{canvasImages.length} / 8</small></button>
+                {canvasImages.length ? <div className="canvas-image-list">
+                  {canvasImages.map((image) => <button key={image.id} className={selectedCanvasImageId === image.id ? "active" : ""} onClick={() => setSelectedCanvasImageId(image.id)}><ImageSquare size={16} /><span>{image.name}</span>{image.locked ? <Lock size={13} weight="fill" /> : <LockOpen size={13} />}</button>)}
+                </div> : <div className="canvas-image-empty"><ImageSquare size={20} /><span>{text("Upload a reference or background image to the artboard.", "上传参考图或背景图到画板。")}</span></div>}
+                {selectedCanvasImage && <div className="canvas-image-controls">
+                  <ControlRow label={text("Size", "尺寸")}><div className="range-with-value"><input type="range" min="10" max="120" step="1" value={selectedCanvasImage.scale} disabled={selectedCanvasImage.locked} onChange={(event) => updateCanvasImage(selectedCanvasImage.id, { scale: Number(event.target.value) })} aria-label={text("Image size", "图片尺寸")} /><output>{Math.round(selectedCanvasImage.scale)}%</output></div></ControlRow>
+                  <ControlRow label={text("Opacity", "透明度")}><div className="range-with-value"><input type="range" min="0.1" max="1" step="0.01" value={selectedCanvasImage.opacity} disabled={selectedCanvasImage.locked} onChange={(event) => updateCanvasImage(selectedCanvasImage.id, { opacity: Number(event.target.value) })} aria-label={text("Image opacity", "图片透明度")} /><output>{Math.round(selectedCanvasImage.opacity * 100)}%</output></div></ControlRow>
+                  <div className="canvas-image-actions">
+                    <button className={selectedCanvasImage.locked ? "active" : ""} onClick={() => toggleCanvasImageLock(selectedCanvasImage.id)}>{selectedCanvasImage.locked ? <Lock size={15} weight="fill" /> : <LockOpen size={15} />}<span>{selectedCanvasImage.locked ? text("Unlock", "解锁") : text("Lock", "锁定")}</span></button>
+                    <button className="delete" onClick={() => deleteCanvasImage(selectedCanvasImage.id)} disabled={selectedCanvasImage.locked}><Trash size={15} /><span>{text("Delete", "删除")}</span></button>
+                  </div>
+                  <div className={`canvas-image-lock-note ${selectedCanvasImage.locked ? "active" : ""}`}>{selectedCanvasImage.locked ? <Lock size={15} weight="fill" /> : <ArrowsOutCardinal size={15} />}<span>{selectedCanvasImage.locked ? text("Locked against moving, resizing, opacity changes, and deletion.", "已防止移动、缩放、透明度修改和删除。") : text("Drag the image directly on the artboard to position it.", "可直接在画板上拖动图片定位。")}</span></div>
+                </div>}
+              </InspectorSection>
+
               <InspectorSection title={text("Perspective Grid", "透视网格")} resetLabel={text("Reset", "重置")} onReset={resetPerspectiveGrid}>
                 <div className="perspective-mode-grid" role="radiogroup" aria-label={text("Perspective grid mode", "透视网格模式")}>
                   {([
