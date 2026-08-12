@@ -3470,18 +3470,12 @@ export default function Home() {
     setEditor((current) => ({ ...current, ...cloneModelEditState(nextState) }));
   };
 
-  const addModel = () => {
+  const createModelInstance = (state: ModelEditState, sequence: number) => {
     const scene = sceneRef.current;
     const template = templateModelRef.current;
-    if (!scene || !template || !modelInfo.loaded) return;
-    if (modelList.length >= 8) {
-      flash(text("You can add up to 8 characters", "当前画板最多添加 8 个模型"));
-      return;
-    }
+    if (!scene || !template || !modelInfo.loaded) return null;
 
-    const sequence = modelCounterRef.current;
     const id = `model-${sequence}`;
-    modelCounterRef.current += 1;
     const root = new THREE.Group();
     const clone = cloneSkeleton(template);
     const rig = createRigBinding(clone);
@@ -3497,8 +3491,32 @@ export default function Home() {
       meshes.push(child);
     });
     root.add(clone);
+    root.position.set(...state.position);
+    root.rotation.set(...state.rotation.map(THREE.MathUtils.degToRad) as [number, number, number]);
+    root.scale.setScalar(state.scale / 100);
+    root.visible = state.visible;
+    if (rig) {
+      applyRigPose(rig, state.pose, state.mirrored);
+      applySemanticPoseModifiers(rig, state.semanticModifiers);
+      applyEditorIKTargets(rig, state.ikTargets);
+    } else meshes.forEach((mesh) => applyRigidPose(mesh, state.pose, state.mirrored));
     scene.add(root);
 
+    modelRootsRef.current[id] = root;
+    modelMeshesRef.current[id] = meshes;
+    modelRigsRef.current[id] = rig;
+    modelStatesRef.current[id] = cloneModelEditState(state);
+    return { id, root, meshes, item: { id, name: `机器人 ${String(sequence).padStart(2, "0")}` } satisfies ModelListItem };
+  };
+
+  const addModel = () => {
+    if (modelList.length >= 8) {
+      flash(text("You can add up to 8 characters", "当前画板最多添加 8 个模型"));
+      return;
+    }
+
+    const sequence = modelCounterRef.current;
+    modelCounterRef.current += 1;
     const slot = modelList.length;
     const column = Math.ceil(slot / 2);
     const side = slot % 2 === 1 ? 1 : -1;
@@ -3512,18 +3530,92 @@ export default function Home() {
       ikTargets: {},
       semanticModifiers: {},
     };
-
-    modelRootsRef.current[id] = root;
-    modelMeshesRef.current[id] = meshes;
-    modelRigsRef.current[id] = rig;
-    modelStatesRef.current[id] = cloneModelEditState(state);
-    modelRootRef.current = root;
-    deformableMeshesRef.current = meshes;
-    setModelList((items) => [...items, { id, name: `机器人 ${String(sequence).padStart(2, "0")}` }]);
-    setSelectedModelId(id);
+    const created = createModelInstance(state, sequence);
+    if (!created) return;
+    modelRootRef.current = created.root;
+    deformableMeshesRef.current = created.meshes;
+    setModelList((items) => [...items, created.item]);
+    setSelectedModelId(created.id);
     setEditor((current) => ({ ...current, ...cloneModelEditState(state) }));
     flash(text(`Character ${String(sequence).padStart(2, "0")} added`, `角色 ${String(sequence).padStart(2, "0")} 已添加`));
   };
+
+  const duplicateSelectedModel = () => {
+    if (modelList.length >= 8) {
+      flash(text("You can add up to 8 characters", "当前画板最多添加 8 个角色"));
+      return;
+    }
+    const sequence = modelCounterRef.current;
+    modelCounterRef.current += 1;
+    const source = cloneModelEditState(getModelEditState(editorLatestRef.current));
+    source.position = [source.position[0] + 0.48, source.position[1], source.position[2] + 0.28];
+    const created = createModelInstance(source, sequence);
+    if (!created) return;
+    modelRootRef.current = created.root;
+    deformableMeshesRef.current = created.meshes;
+    setModelList((items) => [...items, created.item]);
+    setSelectedModelId(created.id);
+    setEditor((current) => ({ ...current, ...cloneModelEditState(source) }));
+    setActiveIKControl(null);
+    flash(text(`Character duplicated · ⌘/Ctrl D`, `角色已复制 · ⌘/Ctrl D`));
+  };
+
+  const deleteSelectedModel = () => {
+    if (modelList.length <= 1) {
+      flash(text("Keep at least one character on the artboard", "画板中至少保留一个角色"));
+      return;
+    }
+    const currentIndex = modelList.findIndex((model) => model.id === selectedModelId);
+    const fallback = modelList[currentIndex > 0 ? currentIndex - 1 : 1];
+    const fallbackState = modelStatesRef.current[fallback.id];
+    const fallbackRoot = modelRootsRef.current[fallback.id];
+    const fallbackMeshes = modelMeshesRef.current[fallback.id];
+    const removedRoot = modelRootsRef.current[selectedModelId];
+    if (!fallbackState || !fallbackRoot || !fallbackMeshes || !removedRoot) return;
+
+    transformControlsRef.current?.detach();
+    sceneRef.current?.remove(removedRoot);
+    const disposedSkeletons = new Set<THREE.Skeleton>();
+    removedRoot.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) child.material.forEach((material) => material.dispose());
+      else child.material.dispose();
+      if (child instanceof THREE.SkinnedMesh && !disposedSkeletons.has(child.skeleton)) {
+        child.skeleton.dispose();
+        disposedSkeletons.add(child.skeleton);
+      }
+    });
+    delete modelRootsRef.current[selectedModelId];
+    delete modelMeshesRef.current[selectedModelId];
+    delete modelRigsRef.current[selectedModelId];
+    delete modelStatesRef.current[selectedModelId];
+
+    modelRootRef.current = fallbackRoot;
+    deformableMeshesRef.current = fallbackMeshes;
+    selectedModelIdRef.current = fallback.id;
+    setModelList((items) => items.filter((model) => model.id !== selectedModelId));
+    setSelectedModelId(fallback.id);
+    setEditor((current) => ({ ...current, ...cloneModelEditState(fallbackState) }));
+    setActiveIKControl(null);
+    flash(text("Character deleted · Delete", "角色已删除 · Delete"));
+  };
+
+  useEffect(() => {
+    const handleModelShortcuts = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+      if (promptOpen || promptToPoseOpen || event.repeat) return;
+      const duplicate = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "d";
+      const remove = !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Delete" || event.key === "Backspace");
+      if (!duplicate && !remove) return;
+      event.preventDefault();
+      if (duplicate) duplicateSelectedModel();
+      else deleteSelectedModel();
+    };
+    document.addEventListener("keydown", handleModelShortcuts);
+    return () => document.removeEventListener("keydown", handleModelShortcuts);
+  });
 
   useEffect(() => {
     const host = viewportRef.current;
@@ -4178,6 +4270,10 @@ export default function Home() {
                       {selectedModelId === model.id && <Check size={14} weight="bold" />}
                     </button>
                   ))}
+                </div>
+                <div className="model-stack-actions" aria-label={text("Selected character actions", "所选角色操作")}>
+                  <button onClick={duplicateSelectedModel} disabled={!modelInfo.loaded || modelList.length >= 8} title={text("Duplicate selected character · ⌘/Ctrl D", "复制所选角色 · ⌘/Ctrl D")}><Copy size={15} /><span>{text("Duplicate", "复制角色")}</span><kbd>⌘D</kbd></button>
+                  <button className="delete" onClick={deleteSelectedModel} disabled={modelList.length <= 1} title={text("Delete selected character · Delete/Backspace", "删除所选角色 · Delete/Backspace")}><Trash size={15} /><span>{text("Delete", "删除角色")}</span><kbd>⌫</kbd></button>
                 </div>
               </div>
 
