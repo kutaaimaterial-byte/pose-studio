@@ -210,6 +210,9 @@ button:disabled:active { transform: none; }
 .control-point-layer.visible { opacity: 1; }
 .control-point-layer:not(.visible) .control-point { pointer-events: none !important; }
 .control-point {
+  --point-color: #246bfd;
+  --point-ring: rgba(36,107,253,.82);
+  --point-shadow: rgba(36,107,253,.34);
   width: 36px;
   height: 36px;
   min-height: 36px;
@@ -226,14 +229,18 @@ button:disabled:active { transform: none; }
   pointer-events: auto;
   transition: opacity .14s ease;
 }
+.control-point.left-arm-group { --point-color: #1689f5; --point-ring: rgba(22,137,245,.86); --point-shadow: rgba(22,137,245,.36); }
+.control-point.right-arm-group { --point-color: #ef6a4c; --point-ring: rgba(239,106,76,.88); --point-shadow: rgba(239,106,76,.34); }
+.control-point.left-leg-group { --point-color: #20a873; --point-ring: rgba(32,168,115,.88); --point-shadow: rgba(32,168,115,.34); }
+.control-point.right-leg-group { --point-color: #8b5cf6; --point-ring: rgba(139,92,246,.88); --point-shadow: rgba(139,92,246,.34); }
 .control-point:active { cursor: grabbing; }
-.control-point > span { width: 14px; height: 14px; display: block; border: 3px solid white; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1px rgba(8,102,190,.75), 0 3px 10px rgba(22,137,245,.38); transition: width .14s, height .14s, background .14s, box-shadow .14s; }
-.control-point.joint > span { width: 10px; height: 10px; border-width: 2px; background: white; box-shadow: 0 0 0 2px rgba(22,137,245,.86), 0 2px 7px rgba(22,137,245,.24); }
-.control-point.core > span { width: 16px; height: 16px; background: var(--accent); box-shadow: 0 0 0 1px rgba(25,76,181,.75), 0 3px 11px rgba(36,107,253,.3); }
-.control-point.direction > span { width: 12px; height: 12px; border-width: 2px; border-radius: 3px; background: #fff7df; box-shadow: 0 0 0 2px rgba(232,157,24,.9), 0 3px 9px rgba(203,126,0,.3); transform: rotate(45deg); }
-.control-point:hover > span, .control-point.selected > span { width: 20px; height: 20px; background: var(--accent); box-shadow: 0 0 0 2px white, 0 0 0 4px rgba(36,107,253,.32), 0 5px 14px rgba(25,76,181,.22); }
+.control-point > span { width: 14px; height: 14px; display: block; border: 3px solid white; border-radius: 50%; background: var(--point-color); box-shadow: 0 0 0 2px var(--point-ring), 0 3px 10px var(--point-shadow); transition: width .14s, height .14s, background .14s, box-shadow .14s; }
+.control-point.joint > span { width: 10px; height: 10px; border-width: 2px; background: var(--point-color); box-shadow: 0 0 0 2px var(--point-ring), 0 2px 7px var(--point-shadow); }
+.control-point.core > span { width: 16px; height: 16px; background: var(--point-color); box-shadow: 0 0 0 1px var(--point-ring), 0 3px 11px var(--point-shadow); }
+.control-point.direction > span { width: 12px; height: 12px; border-width: 2px; border-radius: 3px; background: var(--point-color); box-shadow: 0 0 0 2px var(--point-ring), 0 3px 9px var(--point-shadow); transform: rotate(45deg); }
+.control-point:hover > span, .control-point.selected > span { width: 20px; height: 20px; background: var(--point-color); box-shadow: 0 0 0 2px white, 0 0 0 4px var(--point-ring), 0 5px 14px var(--point-shadow); }
 .control-point.joint:hover > span, .control-point.joint.selected > span { width: 16px; height: 16px; }
-.control-point.direction:hover > span, .control-point.direction.selected > span { width: 18px; height: 18px; background: #f3a51c; box-shadow: 0 0 0 2px white, 0 0 0 4px rgba(232,157,24,.48), 0 5px 14px rgba(181,105,0,.26); transform: rotate(45deg); }
+.control-point.direction:hover > span, .control-point.direction.selected > span { width: 18px; height: 18px; background: var(--point-color); box-shadow: 0 0 0 2px white, 0 0 0 4px var(--point-ring), 0 5px 14px var(--point-shadow); transform: rotate(45deg); }
 .control-point small { position: absolute; left: 50%; top: 34px; transform: translateX(-50%) translateY(-2px); opacity: 0; pointer-events: none; white-space: nowrap; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,.96); color: var(--text); font-size: 12px; font-weight: 650; box-shadow: 0 5px 15px rgba(35,46,64,.13); transition: .14s ease; }
 .control-point:hover small, .control-point.selected small { opacity: 1; transform: translateX(-50%) translateY(0); }
 .model-loader { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: #656975; background: #eef0f4; }
@@ -307,6 +314,13 @@ button:disabled:active { transform: none; }
 .control-point-info strong, .control-point-info small { display: block; }
 .control-point-info strong { font-size: 13px; font-weight: 700; }
 .control-point-info small { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.limb-group-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 7px 0 4px; }
+.limb-group-legend span { min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: #f8f9fa; color: var(--muted); font-size: 10px; font-weight: 680; }
+.limb-group-legend i { width: 9px; height: 9px; flex: none; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px currentColor; background: currentColor; }
+.limb-group-legend .left-arm { color: #1689f5; }
+.limb-group-legend .right-arm { color: #ef6a4c; }
+.limb-group-legend .left-leg { color: #20a873; }
+.limb-group-legend .right-leg { color: #8b5cf6; }
 .save-custom-pose-button { width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 8px; border: 1px solid #b9dcff; border-radius: 9px; background: #eaf4ff; color: #0878df; cursor: pointer; font-size: 12px; font-weight: 720; box-shadow: 0 4px 12px rgba(22,137,245,.08); }
 .save-custom-pose-button:hover:not(:disabled) { border-color: #8fc7ff; background: #dff0ff; }
 .save-custom-pose-button.saved { border-color: #bfe6cf; background: #eefaf3; color: #278354; }

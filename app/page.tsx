@@ -119,27 +119,28 @@ type IKControlId =
   | "leftFootDirection"
   | "rightFootDirection";
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
+type IKControlGroup = "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
 
-const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction" }> = [
-  { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector" },
-  { id: "chest", label: "胸腔", labelEn: "Chest", kind: "core" },
-  { id: "hips", label: "骨盆", labelEn: "Pelvis", kind: "core" },
-  { id: "leftShoulder", label: "左肩", labelEn: "Left Shoulder", kind: "joint" },
-  { id: "rightShoulder", label: "右肩", labelEn: "Right Shoulder", kind: "joint" },
-  { id: "leftElbow", label: "左肘", labelEn: "Left Elbow", kind: "joint" },
-  { id: "rightElbow", label: "右肘", labelEn: "Right Elbow", kind: "joint" },
-  { id: "leftHand", label: "左手", labelEn: "Left Hand", kind: "effector" },
-  { id: "rightHand", label: "右手", labelEn: "Right Hand", kind: "effector" },
-  { id: "leftHandDirection", label: "左手方向", labelEn: "Left Hand Direction", kind: "direction" },
-  { id: "rightHandDirection", label: "右手方向", labelEn: "Right Hand Direction", kind: "direction" },
-  { id: "leftHip", label: "左髋", labelEn: "Left Hip", kind: "joint" },
-  { id: "rightHip", label: "右髋", labelEn: "Right Hip", kind: "joint" },
-  { id: "leftKnee", label: "左膝", labelEn: "Left Knee", kind: "joint" },
-  { id: "rightKnee", label: "右膝", labelEn: "Right Knee", kind: "joint" },
-  { id: "leftFoot", label: "左脚", labelEn: "Left Foot", kind: "effector" },
-  { id: "rightFoot", label: "右脚", labelEn: "Right Foot", kind: "effector" },
-  { id: "leftFootDirection", label: "左脚方向", labelEn: "Left Foot Direction", kind: "direction" },
-  { id: "rightFootDirection", label: "右脚方向", labelEn: "Right Foot Direction", kind: "direction" },
+const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction"; group: IKControlGroup }> = [
+  { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector", group: "core-group" },
+  { id: "chest", label: "胸腔", labelEn: "Chest", kind: "core", group: "core-group" },
+  { id: "hips", label: "骨盆", labelEn: "Pelvis", kind: "core", group: "core-group" },
+  { id: "leftShoulder", label: "左肩", labelEn: "Left Shoulder", kind: "joint", group: "left-arm-group" },
+  { id: "rightShoulder", label: "右肩", labelEn: "Right Shoulder", kind: "joint", group: "right-arm-group" },
+  { id: "leftElbow", label: "左肘", labelEn: "Left Elbow", kind: "joint", group: "left-arm-group" },
+  { id: "rightElbow", label: "右肘", labelEn: "Right Elbow", kind: "joint", group: "right-arm-group" },
+  { id: "leftHand", label: "左手", labelEn: "Left Hand", kind: "effector", group: "left-arm-group" },
+  { id: "rightHand", label: "右手", labelEn: "Right Hand", kind: "effector", group: "right-arm-group" },
+  { id: "leftHandDirection", label: "左手方向", labelEn: "Left Hand Direction", kind: "direction", group: "left-arm-group" },
+  { id: "rightHandDirection", label: "右手方向", labelEn: "Right Hand Direction", kind: "direction", group: "right-arm-group" },
+  { id: "leftHip", label: "左髋", labelEn: "Left Hip", kind: "joint", group: "left-leg-group" },
+  { id: "rightHip", label: "右髋", labelEn: "Right Hip", kind: "joint", group: "right-leg-group" },
+  { id: "leftKnee", label: "左膝", labelEn: "Left Knee", kind: "joint", group: "left-leg-group" },
+  { id: "rightKnee", label: "右膝", labelEn: "Right Knee", kind: "joint", group: "right-leg-group" },
+  { id: "leftFoot", label: "左脚", labelEn: "Left Foot", kind: "effector", group: "left-leg-group" },
+  { id: "rightFoot", label: "右脚", labelEn: "Right Foot", kind: "effector", group: "right-leg-group" },
+  { id: "leftFootDirection", label: "左脚方向", labelEn: "Left Foot Direction", kind: "direction", group: "left-leg-group" },
+  { id: "rightFootDirection", label: "右脚方向", labelEn: "Right Foot Direction", kind: "direction", group: "right-leg-group" },
 ];
 
 const directionOptionsEn = [
@@ -4125,11 +4126,11 @@ export default function Home() {
                   onDragStart={beginPerspectiveDrag}
                 />
                 <div className={`control-point-layer ${toolMode === "pose" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={toolMode !== "pose"}>
-                  {ikControlDefinitions.map(({ id: control, label, labelEn, kind }) => (
+                  {ikControlDefinitions.map(({ id: control, label, labelEn, kind, group }) => (
                     <button
                       key={control}
                       ref={(element) => { if (element) controlPointRefs.current[control] = element; else delete controlPointRefs.current[control]; }}
-                      className={`control-point ${kind} ${activeIKControl === control ? "selected" : ""}`}
+                      className={`control-point ${kind} ${group} ${activeIKControl === control ? "selected" : ""}`}
                       onPointerDown={(event) => beginIKDrag(control, event)}
                       aria-label={text(`Drag ${labelEn} control point`, `拖动${label}控制点`)}
                       tabIndex={toolMode === "pose" ? 0 : -1}
@@ -4188,7 +4189,13 @@ export default function Home() {
               {toolMode === "pose" && <InspectorSection title={text("IK Pose Editing", "IK 姿态编辑")} resetLabel={text("Reset", "重置")} onReset={resetIKEdits}>
                 <div className={`control-point-info ${activeIKControl ? "selected" : ""}`}>
                   <span><Sparkle size={17} weight="fill" /></span>
-                  <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Blue points control position; orange diamonds control hand and foot direction; core points adjust the chest and pelvis; smaller points control shoulders, elbows, hips, and knees.", "蓝色圆点控制位置；橙色菱形控制手掌与脚尖方向；核心控制点调整胸腔和骨盆；小型圆点控制肩、肘、髋与膝。")}</small></div>
+                  <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Each limb uses one color across its four controls. Circles adjust joints and endpoints; diamonds adjust hand or foot direction. Core controls remain blue.", "每条四肢的四个控制点使用同一颜色；圆点调整关节与末端，菱形调整手掌或脚尖方向；核心控制点保持蓝色。")}</small></div>
+                </div>
+                <div className="limb-group-legend" aria-label={text("Limb control color groups", "四肢控制点颜色分组")}>
+                  <span className="left-arm"><i />{text("Left Arm", "左臂")}</span>
+                  <span className="right-arm"><i />{text("Right Arm", "右臂")}</span>
+                  <span className="left-leg"><i />{text("Left Leg", "左腿")}</span>
+                  <span className="right-leg"><i />{text("Right Leg", "右腿")}</span>
                 </div>
                 <button className={`save-custom-pose-button ${selectedSavedPose && !hasUnsavedJointEdits ? "saved" : ""}`} onClick={saveModifiedPose} disabled={!hasUnsavedJointEdits || !modelInfo.loaded}>
                   {selectedSavedPose && !hasUnsavedJointEdits ? <Check size={17} weight="bold" /> : <FloppyDisk size={17} weight="fill" />}
