@@ -192,6 +192,7 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 - Exactly one 332–380px task panel on the desktop right edge. Use a 56px title row, hairline section dividers, 12–16px padding, and vertical scrolling within the panel rather than the page.
 - Pose cards are two-column, flat at hover, and use outline—not lift—to show selection. Advanced controls stay secondary and may be disclosed on demand.
+- Pose category controls wrap onto additional rows when the panel cannot fit them; labels must remain complete and must not be clipped or require horizontal scrolling.
 
 ### Canvas and Artboard
 

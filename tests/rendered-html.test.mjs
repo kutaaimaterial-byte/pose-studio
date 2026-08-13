@@ -61,6 +61,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.panel-collapsed \.workspace\s*\{[^}]*"rail canvas"/s);
   assert.match(css, /\.context-panel\s*\{[^}]*border-left:\s*1px solid/s);
   assert.match(css, /\.context-panel, \.panel-collapsed \.context-panel\s*\{[^}]*right:\s*8px;[^}]*left:\s*auto;[^}]*translateX\(calc\(100% \+ 20px\)\)/s);
+  assert.match(css, /\.category-list\s*\{[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible/s);
   assert.match(css, /\.tool-rail\s*\{/);
   assert.match(css, /\.context-action-bar\s*\{/);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
