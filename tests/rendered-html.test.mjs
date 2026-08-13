@@ -32,35 +32,45 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /<title>AI Character Studio \| PoseBoard 3D Studio<\/title>/i);
   assert.match(html, /class="editor-app/);
   assert.match(html, />PoseBoard<\/span>/);
-  assert.match(html, />3D STUDIO<\/span>/);
+  assert.match(html, />V1\.0\.3<\/span>/);
   assert.match(html, />Pose Library<\/h2>/);
   assert.match(html, /152<!-- --> poses/);
   assert.match(html, /aria-label="Pose Library"/);
-  assert.match(html, /aria-label="Inspector"/);
-  assert.match(html, /aria-label="Model editing mode"/);
+  assert.match(html, /aria-label="Workspace tools"/);
+  assert.match(html, /class="tool-rail"/);
+  assert.match(html, /class="context-action-bar"/);
+  assert.match(html, /aria-label="Project name"/);
+  assert.match(html, />Export<\/button>/);
   assert.match(html, /class="language-switch" role="group" aria-label="Language"/);
   assert.match(html, /aria-pressed="true">EN<\/button>/);
   assert.match(html, /aria-pressed="false">中文<\/button>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("keeps the premium white-first design system responsive and restrained", async () => {
+test("keeps the V4 single-panel workstation responsive and restrained", async () => {
   const [css, page, layout] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(css, /--surface:\s*#ffffff/);
-  assert.match(css, /--accent:\s*#246bfd/);
-  assert.match(css, /\.workspace\s*\{[^}]*grid-template-columns:/s);
-  assert.match(css, /\.canvas-area\s*\{[^}]*border-radius:\s*18px/s);
-  assert.match(css, /@media \(max-width:\s*1080px\)/);
-  assert.match(css, /@media \(max-width:\s*620px\)/);
+  assert.match(css, /--surface-primary:\s*#ffffff/);
+  assert.match(css, /--primary:\s*#2684ff/);
+  assert.match(css, /--context-panel:\s*380px/);
+  assert.match(css, /\.workspace\s*\{[^}]*grid-template-areas:\s*"rail panel canvas"/s);
+  assert.match(css, /\.panel-collapsed \.workspace\s*\{[^}]*"rail canvas"/s);
+  assert.match(css, /\.tool-rail\s*\{/);
+  assert.match(css, /\.context-action-bar\s*\{/);
+  assert.match(css, /@media \(max-width:\s*1023px\)/);
+  assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
-  assert.match(page, /className="brand-edition">3D STUDIO/);
+  assert.match(page, /className="brand-edition">V1\.0\.3/);
+  assert.match(page, /useState<ActiveTool>\("pose"\)/);
+  assert.match(page, /useState<InteractionMode>\("camera-browse"\)/);
+  assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
+  assert.doesNotMatch(page, /controlsRef\.current\.enabled = true/);
   assert.match(page, /useState<Language>\("en"\)/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
 });
