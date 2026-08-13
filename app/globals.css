@@ -238,6 +238,7 @@ button:disabled:active { transform: none; }
   transition: opacity .14s ease;
 }
 .control-point.left-arm-group { --point-color: #1689f5; --point-ring: rgba(22,137,245,.86); --point-shadow: rgba(22,137,245,.36); }
+.control-point.head-group { --point-color: #d98b16; --point-ring: rgba(217,139,22,.88); --point-shadow: rgba(217,139,22,.34); }
 .control-point.right-arm-group { --point-color: #ef6a4c; --point-ring: rgba(239,106,76,.88); --point-shadow: rgba(239,106,76,.34); }
 .control-point.left-leg-group { --point-color: #20a873; --point-ring: rgba(32,168,115,.88); --point-shadow: rgba(32,168,115,.34); }
 .control-point.right-leg-group { --point-color: #8b5cf6; --point-ring: rgba(139,92,246,.88); --point-shadow: rgba(139,92,246,.34); }
@@ -352,6 +353,8 @@ button:disabled:active { transform: none; }
 .limb-group-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 7px 0 4px; }
 .limb-group-legend span { min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px; background: #f8f9fa; color: var(--muted); font-size: 10px; font-weight: 680; }
 .limb-group-legend i { width: 9px; height: 9px; flex: none; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px currentColor; background: currentColor; }
+.limb-group-legend .head { color: #d98b16; }
+.limb-group-legend .core { color: #246bfd; }
 .limb-group-legend .left-arm { color: #1689f5; }
 .limb-group-legend .right-arm { color: #ef6a4c; }
 .limb-group-legend .left-leg { color: #20a873; }

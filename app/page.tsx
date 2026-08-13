@@ -122,10 +122,10 @@ type IKControlId =
   | "leftFootDirection"
   | "rightFootDirection";
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
-type IKControlGroup = "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
+type IKControlGroup = "head-group" | "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
 
 const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction"; group: IKControlGroup }> = [
-  { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector", group: "core-group" },
+  { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector", group: "head-group" },
   { id: "chest", label: "胸腔", labelEn: "Chest", kind: "core", group: "core-group" },
   { id: "hips", label: "骨盆", labelEn: "Pelvis", kind: "core", group: "core-group" },
   { id: "leftShoulder", label: "左肩", labelEn: "Left Shoulder", kind: "joint", group: "left-arm-group" },
@@ -4458,9 +4458,11 @@ export default function Home() {
               {toolMode === "pose" && <InspectorSection title={text("IK Pose Editing", "IK 姿态编辑")} resetLabel={text("Reset", "重置")} onReset={resetIKEdits}>
                 <div className={`control-point-info ${activeIKControl ? "selected" : ""}`}>
                   <span><Sparkle size={17} weight="fill" /></span>
-                  <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Each limb uses one color across its four controls. Circles adjust joints and endpoints; diamonds adjust hand or foot direction. Core controls remain blue.", "每条四肢的四个控制点使用同一颜色；圆点调整关节与末端，菱形调整手掌或脚尖方向；核心控制点保持蓝色。")}</small></div>
+                  <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Each limb uses one color across its four controls. The head is amber, while chest and pelvis core controls remain blue.", "每条四肢的四个控制点使用同一颜色；头部控制点为琥珀色，胸腔与骨盆核心点保持蓝色。")}</small></div>
                 </div>
-                <div className="limb-group-legend" aria-label={text("Limb control color groups", "四肢控制点颜色分组")}>
+                <div className="limb-group-legend" aria-label={text("Control point color groups", "控制点颜色分组")}>
+                  <span className="head"><i />{text("Head", "头部")}</span>
+                  <span className="core"><i />{text("Core", "核心")}</span>
                   <span className="left-arm"><i />{text("Left Arm", "左臂")}</span>
                   <span className="right-arm"><i />{text("Right Arm", "右臂")}</span>
                   <span className="left-leg"><i />{text("Left Leg", "左腿")}</span>
