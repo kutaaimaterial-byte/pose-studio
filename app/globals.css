@@ -755,8 +755,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .workspace {
   min-width: 0;
-  grid-template-columns: var(--tool-rail) var(--context-panel) minmax(0, 1fr);
-  grid-template-areas: "rail panel canvas";
+  grid-template-columns: var(--tool-rail) minmax(0, 1fr) var(--context-panel);
+  grid-template-areas: "rail canvas panel";
   gap: 0;
   padding: 0;
   background: var(--border-default);
@@ -781,7 +781,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tool-rail button.active { border-color: #bddcff; background: var(--primary-soft); color: var(--primary); }
 .tool-rail-collapse { min-height: 42px !important; }
 
-.context-panel { grid-area: panel; width: auto; min-width: 0; position: relative; inset: auto; transform: none; border-right: 1px solid var(--border-default); background: var(--surface-primary); box-shadow: none; animation: none !important; }
+.context-panel { grid-area: panel; width: auto; min-width: 0; position: relative; inset: auto; transform: none; border-left: 1px solid var(--border-default); background: var(--surface-primary); box-shadow: none; animation: none !important; }
 .panel-collapsed .context-panel { display: none !important; }
 .tool-pose .library-panel { display: grid; }
 .tool-pose .inspector-panel { display: none; }
@@ -915,7 +915,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .artboard-ratio-control { padding-inline: 6px; }
   .mobile-only { display: grid; }
   .workspace, .panel-collapsed .workspace { grid-template-columns: var(--tool-rail) minmax(0, 1fr); grid-template-areas: "rail canvas"; }
-  .context-panel, .panel-collapsed .context-panel { width: min(350px, calc(100vw - var(--tool-rail) - 16px)); display: flex !important; position: absolute; z-index: 30; left: calc(var(--tool-rail) + 8px); top: 8px; bottom: 8px; border: 1px solid var(--border-default); border-radius: 10px; transform: translateX(calc(-100% - var(--tool-rail) - 20px)); transition: transform .18s ease; }
+  .context-panel, .panel-collapsed .context-panel { width: min(350px, calc(100vw - var(--tool-rail) - 16px)); display: flex !important; position: absolute; z-index: 30; right: 8px; left: auto; top: 8px; bottom: 8px; border: 1px solid var(--border-default); border-radius: 10px; transform: translateX(calc(100% + 20px)); transition: transform .18s ease; }
   .library-panel.context-panel { display: grid !important; }
   .tool-pose .inspector-panel { display: none !important; }
   .editor-app:not(.tool-pose) .library-panel { display: none !important; }

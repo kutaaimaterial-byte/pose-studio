@@ -96,7 +96,7 @@ components:
 
 PoseBoard is a professional, lightweight instrument around a dominant 3D canvas. The interface should feel quiet and immediately legible: cool whites and pale grays establish structure, while blue appears only where the user can act or where a state is selected. Controls explain the current task without competing with the figure.
 
-The 1.0.3 shell is canvas-first and mode-aware. It consists of a 56px Top Bar, a narrow Tool Rail, exactly one Context Panel, the Canvas, and a bottom Context Action Bar. The panel may collapse or become an overlay; the canvas must always reclaim the released space.
+The 1.0.3 shell is canvas-first and mode-aware. It consists of a 56px Top Bar, a narrow left Tool Rail, the Canvas, exactly one right Context Panel, and a bottom Context Action Bar. The panel may collapse or become a right-side overlay; the canvas must always reclaim the released space.
 
 **Key Characteristics:**
 
@@ -148,7 +148,7 @@ The main stack is neutral, compact, and friendly enough for a creative tool. The
 
 ## Layout
 
-The desktop shell is a fixed frame around a fluid canvas: Top Bar (56px), Tool Rail (64px at wide desktop), Context Panel (380px at wide desktop), then `minmax(0, 1fr)` Canvas. The Context Action Bar is 52px tall and pinned to the canvas bottom. It holds current-result context on the left, quick actions in the middle, and the next primary step on the right.
+The desktop shell is a fixed frame around a fluid canvas: Top Bar (56px), left Tool Rail (64px at wide desktop), `minmax(0, 1fr)` Canvas, then a right Context Panel (380px at wide desktop). The Context Action Bar is 52px tall and pinned to the canvas bottom. It holds current-result context on the left, quick actions in the middle, and the next primary step on the right.
 
 Use the implemented 4px rhythm and its 8/12/16/20/24px multiples. Panel content normally uses 12–16px horizontal padding; gaps are typically 4–12px. Controls are usually 34–42px high. Preserve whitespace around the artboard so it reads as the work product, not another panel.
 
@@ -156,7 +156,7 @@ Responsive behavior is structural:
 
 - **Below 1440px:** Tool Rail becomes 60px and Context Panel 360px.
 - **Below 1280px:** Tool Rail becomes 56px and Context Panel 332px; secondary Top Bar status/version content hides before core actions.
-- **Below 1024px:** Context Panel becomes an overlay (up to 350px wide) opened from the rail; canvas remains full-width behind it and a scrim protects mode focus.
+- **Below 1024px:** Context Panel becomes a right-side overlay (up to 350px wide) opened from the rail; canvas remains full-width behind it and a scrim protects mode focus.
 - **Below 720px:** Reduce Top Bar metadata, hide nonessential quick actions, and stack dialog grids. Do not miniaturize the canvas to preserve every desktop control.
 - **Collapsed panel:** Remove the panel column entirely; expand the canvas immediately while keeping Tool Rail, Top Bar, and Context Action Bar stable.
 
@@ -190,7 +190,7 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 ### Context Panel
 
-- Exactly one 332–380px task panel on desktop. Use a 56px title row, hairline section dividers, 12–16px padding, and vertical scrolling within the panel rather than the page.
+- Exactly one 332–380px task panel on the desktop right edge. Use a 56px title row, hairline section dividers, 12–16px padding, and vertical scrolling within the panel rather than the page.
 - Pose cards are two-column, flat at hover, and use outline—not lift—to show selection. Advanced controls stay secondary and may be disclosed on demand.
 
 ### Canvas and Artboard
