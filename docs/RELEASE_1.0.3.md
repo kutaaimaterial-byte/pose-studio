@@ -24,7 +24,7 @@ This release implements the V4 UI/UX redesign described in `PoseBoard_UIUX_Redes
 - Perspective edit handles disappear after leaving edit mode while view-only grid lines remain.
 - Export choices and context-panel collapse verified in-browser.
 
-Reference screenshots are stored in `.impeccable/review/`.
+Release screenshots were used during visual QA and removed from the source tree after approval; Git history retains the reviewed evidence when needed.
 
 ## Known follow-ups
 
