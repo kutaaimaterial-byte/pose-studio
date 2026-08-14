@@ -1,22 +1,26 @@
 ---
 name: PoseBoard 3D Studio 1.0.3
-description: Canvas-first 3D pose workspace with a restrained cool-white, light-gray, and blue interface.
+description: Fluent 2 based, canvas-first 3D pose workspace with precise cool-neutral surfaces and one cobalt action color.
 colors:
-  app-background: "#f4f6f8"
-  canvas-background: "#e9edf2"
+  app-background: "#f3f6fa"
+  canvas-background: "#e8edf4"
   surface-primary: "#ffffff"
-  surface-secondary: "#f8fafc"
-  border-default: "#dde3ea"
-  border-strong: "#c8d1dc"
-  text-primary: "#182230"
-  text-secondary: "#667085"
-  text-tertiary: "#98a2b3"
-  primary: "#2684ff"
-  primary-hover: "#1672e8"
+  surface-secondary: "#f7f9fc"
+  surface-tertiary: "#eef2f7"
+  surface-hover: "#edf3fb"
+  border-muted: "#e7ebf1"
+  border-default: "#d9e0ea"
+  border-strong: "#bcc7d6"
+  text-primary: "#172033"
+  text-secondary: "#536176"
+  text-tertiary: "#77849a"
+  primary: "#1769d1"
+  primary-hover: "#0f5dbc"
+  primary-pressed: "#0b4f9f"
   primary-soft: "#eaf3ff"
-  success: "#169b62"
+  success: "#15805d"
   warning: "#e28a16"
-  danger: "#e5484d"
+  danger: "#c4314b"
 typography:
   headline:
     fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
@@ -25,12 +29,12 @@ typography:
     lineHeight: 1.25
   title:
     fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "14px"
+    fontSize: "16px"
     fontWeight: 650
     lineHeight: 1.4
   body:
     fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "14px"
+    fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.55
   label:
@@ -43,12 +47,19 @@ typography:
     fontSize: "11px"
     fontWeight: 400
     lineHeight: 1.2
+  caption:
+    fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
+    fontSize: "10px"
+    fontWeight: 500
+    lineHeight: 1.2
 rounded:
-  xs: "6px"
-  sm: "8px"
-  md: "9px"
-  lg: "10px"
-  xl: "14px"
+  xxs: "4px"
+  xs: "5px"
+  sm: "6px"
+  control: "8px"
+  compact-card: "9px"
+  card: "12px"
+  panel: "14px"
   pill: "999px"
 spacing:
   xs: "4px"
@@ -62,28 +73,28 @@ components:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.surface-primary}"
     typography: "{typography.label}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.control}"
     padding: "0 13px"
     height: "36px"
   button-secondary:
     backgroundColor: "{colors.surface-primary}"
     textColor: "{colors.text-secondary}"
     typography: "{typography.label}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.control}"
     padding: "0 8px"
     height: "34px"
   input:
     backgroundColor: "{colors.surface-secondary}"
     textColor: "{colors.text-primary}"
     typography: "{typography.body}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.control}"
     padding: "0 11px"
     height: "42px"
   tool-active:
     backgroundColor: "{colors.primary-soft}"
     textColor: "{colors.primary}"
     typography: "{typography.label}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.compact-card}"
     padding: "5px 2px"
     height: "52px"
 ---
@@ -96,7 +107,7 @@ components:
 
 PoseBoard is a professional, lightweight instrument around a dominant 3D canvas. The interface should feel quiet and immediately legible: cool whites and pale grays establish structure, while blue appears only where the user can act or where a state is selected. Controls explain the current task without competing with the figure.
 
-The 1.0.3 shell is canvas-first and mode-aware. It consists of a 56px Top Bar, a narrow left Tool Rail, the Canvas, exactly one right Context Panel, and a bottom Context Action Bar. The panel may collapse or become a right-side overlay; the canvas must always reclaim the released space.
+The 1.0.3 shell is canvas-first and mode-aware. It uses Fluent 2 React foundations for provider-level tokens, buttons, toolbars, and tooltips, then applies PoseBoard's own compact studio geometry. It consists of a 56px Top Bar, a narrow left Tool Rail, the Canvas, exactly one right Context Panel, and a bottom Context Action Bar. The panel may collapse or become a right-side overlay; the canvas must always reclaim the released space.
 
 **Key Characteristics:**
 
@@ -148,15 +159,15 @@ The main stack is neutral, compact, and friendly enough for a creative tool. The
 
 ## Layout
 
-The desktop shell is a fixed frame around a fluid canvas: Top Bar (56px), left Tool Rail (64px at wide desktop), `minmax(0, 1fr)` Canvas, then a right Context Panel (380px at wide desktop). The Context Action Bar is 52px tall and pinned to the canvas bottom. It holds current-result context on the left, quick actions in the middle, and the next primary step on the right.
+The desktop shell is a fixed frame around a fluid canvas: Top Bar (56px), left Tool Rail (68px at wide desktop), `minmax(0, 1fr)` Canvas, then a right Context Panel (380px at wide desktop). The Context Action Bar is 52px tall and pinned to the canvas bottom. It holds current-result context on the left, quick actions in the middle, and the next primary step on the right.
 
 Use the implemented 4px rhythm and its 8/12/16/20/24px multiples. Panel content normally uses 12–16px horizontal padding; gaps are typically 4–12px. Controls are usually 34–42px high. Preserve whitespace around the artboard so it reads as the work product, not another panel.
 
 Responsive behavior is structural:
 
-- **Below 1440px:** Tool Rail becomes 60px and Context Panel 360px.
-- **Below 1280px:** Tool Rail becomes 56px and Context Panel 332px; secondary Top Bar status/version content hides before core actions.
-- **Below 1024px:** Context Panel becomes a right-side overlay (up to 350px wide) opened from the rail; canvas remains full-width behind it and a scrim protects mode focus.
+- **Below 1440px:** Tool Rail becomes 62px and Context Panel 356px.
+- **Below 1280px:** Tool Rail becomes 58px and Context Panel 332px; secondary Top Bar status/version content hides before core actions.
+- **Below 1024px:** Context Panel becomes a right-side overlay (up to 356px wide) opened from the rail; canvas remains full-width behind it and a scrim protects mode focus.
 - **Below 720px:** Reduce Top Bar metadata, hide nonessential quick actions, and stack dialog grids. Do not miniaturize the canvas to preserve every desktop control.
 - **Collapsed panel:** Remove the panel column entirely; expand the canvas immediately while keeping Tool Rail, Top Bar, and Context Action Bar stable.
 
@@ -166,13 +177,13 @@ Responsive behavior is structural:
 
 ## Elevation & Depth
 
-The default system is flat. Top Bar, Tool Rail, Context Panel, canvas edge, cards, fields, and action bar are separated by 1px borders or tonal steps—not shadows. The artboard may use one low ambient shadow (`0 14px 38px rgba(24, 34, 48, .08)`) so the work surface separates from the stage. Modal dialogs may use stronger elevation (`0 24px 64px rgba(24, 34, 48, .18)`).
+The default system is flat. Top Bar, Tool Rail, Context Panel, canvas edge, cards, fields, and action bar are separated by 1px borders or tonal steps—not shadows. The artboard may use one low ambient shadow (`0 18px 42px rgba(21, 34, 54, .09)`) so the work surface separates from the stage. Modal dialogs may use stronger elevation (`0 26px 72px rgba(21, 34, 54, .20)`).
 
 **The Flat-by-Default Rule.** Shadows are reserved for an artboard, modal, temporary overlay, or direct manipulation feedback. Do not shadow every card, button, panel, or toolbar.
 
 ## Shapes
 
-The form language uses thin, square-edged architecture with gently rounded controls. Most controls use 8–9px radii; compact metadata uses 6px; cards and overlay panels use 10–11px; dialogs may use 14px. Pills are limited to toggles and circular status/handle geometry. Panel-to-canvas boundaries remain straight and unrounded on desktop.
+The form language uses thin, square-edged architecture with gently rounded controls. Most controls use 8px radii; compact metadata uses 4–6px; cards use 12px; overlay panels and dialogs use 14px. Pills are limited to toggles and circular status/handle geometry. Panel-to-canvas boundaries remain straight and unrounded on desktop.
 
 Borders are usually 1px. Selected cards use a clear blue inner outline; focus uses a 2px translucent blue outline with 2px offset. Avoid decorative clipping, blobs, and excessive nested rounded containers.
 
@@ -185,7 +196,7 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 ### Tool Rail
 
-- Six task tools—Pose, Models, Camera, Perspective, Lighting, Prompt—use icon plus a short label. Default is transparent/slate; hover adds white and a neutral border; active uses soft blue, blue text/icon, and a blue-tinted border.
+- Six task tools—Pose, Models, Camera, Perspective, Lighting, Prompt—use Fluent buttons with Phosphor icons plus a short label. Default is transparent/slate; hover adds white and a neutral border; active uses soft blue, blue text/icon, and a blue-tinted border. Every rail action also exposes a Fluent tooltip and accessible name.
 - The bottom collapse control affects only the Context Panel. `activeTool` identifies content; it must not silently activate a 3D controller.
 
 ### Context Panel

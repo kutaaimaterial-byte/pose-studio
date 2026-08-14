@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Button, Toolbar, Tooltip } from "@fluentui/react-components";
 import {
   Camera,
   Copy,
@@ -41,27 +42,29 @@ export function ToolRail({
       {(Object.keys(toolIcons) as ActiveTool[]).map((tool) => {
         const Icon = toolIcons[tool];
         const selected = activeTool === tool;
-        return <button
-          key={tool}
-          className={selected ? "active" : ""}
-          aria-current={selected ? "page" : undefined}
-          aria-label={labels[tool]}
-          title={labels[tool]}
-          onClick={() => onChange(tool)}
-        >
-          <Icon size={20} weight={selected ? "fill" : "regular"} />
-          <span>{labels[tool]}</span>
-        </button>;
+        return <Tooltip key={tool} content={labels[tool]} relationship="label" positioning="after">
+          <Button
+            appearance="subtle"
+            className={selected ? "active" : ""}
+            aria-current={selected ? "page" : undefined}
+            aria-label={labels[tool]}
+            icon={<Icon size={20} weight={selected ? "fill" : "regular"} />}
+            onClick={() => onChange(tool)}
+          >
+            <span>{labels[tool]}</span>
+          </Button>
+        </Tooltip>;
       })}
     </div>
-    <button
-      className="tool-rail-collapse"
-      aria-label={panelOpen ? "Collapse context panel" : "Open context panel"}
-      title={panelOpen ? "Collapse context panel" : "Open context panel"}
-      onClick={onTogglePanel}
-    >
-      <SidebarSimple size={19} weight={panelOpen ? "fill" : "regular"} />
-    </button>
+    <Tooltip content={panelOpen ? "Collapse context panel" : "Open context panel"} relationship="label" positioning="after">
+      <Button
+        appearance="subtle"
+        className="tool-rail-collapse"
+        aria-label={panelOpen ? "Collapse context panel" : "Open context panel"}
+        icon={<SidebarSimple size={19} weight={panelOpen ? "fill" : "regular"} />}
+        onClick={onTogglePanel}
+      />
+    </Tooltip>
   </nav>;
 }
 
@@ -83,7 +86,7 @@ export function ContextActionBar({
       <span>{label}</span>
       <strong>{title}</strong>
     </div>
-    <div className="context-quick-actions">{actions}</div>
-    <button className="next-action" onClick={onNext}>{nextLabel}</button>
+    <Toolbar className="context-quick-actions" aria-label="Context actions">{actions}</Toolbar>
+    <Button appearance="primary" className="next-action" onClick={onNext}>{nextLabel}</Button>
   </div>;
 }

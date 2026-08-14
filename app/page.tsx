@@ -2,6 +2,15 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Button,
+  FluentProvider,
+  Toolbar,
+  ToolbarButton,
+  Tooltip,
+  webLightTheme,
+  type Theme,
+} from "@fluentui/react-components";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -125,6 +134,28 @@ type IKControlId =
   | "rightFootDirection";
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 type IKControlGroup = "head-group" | "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
+
+const poseBoardTheme: Theme = {
+  ...webLightTheme,
+  colorBrandForeground1: "#155fc2",
+  colorBrandForeground2: "#0f6cbd",
+  colorBrandBackground: "#1769d1",
+  colorBrandBackgroundHover: "#0f5dbc",
+  colorBrandBackgroundPressed: "#0b4f9f",
+  colorBrandBackgroundSelected: "#155fc2",
+  colorNeutralForeground1: "#172033",
+  colorNeutralForeground2: "#536176",
+  colorNeutralForeground3: "#77849a",
+  colorNeutralBackground1: "#ffffff",
+  colorNeutralBackground2: "#f7f9fc",
+  colorNeutralBackground3: "#eef2f7",
+  colorNeutralStroke1: "#d9e0ea",
+  colorNeutralStroke2: "#e7ebf1",
+  borderRadiusMedium: "8px",
+  borderRadiusLarge: "12px",
+  fontFamilyBase: '"Avenir Next", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif',
+  fontFamilyMonospace: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+};
 
 const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction"; group: IKControlGroup }> = [
   { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector", group: "head-group" },
@@ -4315,6 +4346,7 @@ export default function Home() {
   const goToNextTool = () => changeActiveTool(nextTool[activeTool]);
 
   return (
+    <FluentProvider theme={poseBoardTheme} className="fluent-root">
     <main className={`editor-app tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${mobilePanel ? "show-context" : ""}`}>
       <header className="topbar">
         <div className="brand-block">
@@ -4331,20 +4363,20 @@ export default function Home() {
           <span className="file-state" aria-live="polite">{saveState === "saving" ? text("Saving…", "正在保存…") : text("Saved · just now", "已保存 · 刚刚")}</span>
         </div>
 
-        <div className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
+        <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
           <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => commit((current) => ({ ...current, ratio: event.target.value as Ratio }))} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "2:3", "3:4", "4:3", "9:16", "16:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
-          <button className="icon-button swap-button" onClick={toggleOrientation} title={text("Switch orientation", "切换横竖屏")} aria-label={text("Switch orientation", "切换横竖屏")}><ArrowsLeftRight size={18} /></button>
-          <button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} title={text("Perspective Grid · G", "透视网格 · G")}><Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} /><span>{text("Perspective", "透视网格")}</span><kbd>G</kbd></button>
-          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "context"} onClick={() => setMobilePanel(mobilePanel === "context" ? null : "context")} title={text("Tool panel", "工具面板")} aria-label={text("Open tool panel", "打开工具面板")}><SidebarSimple size={19} /></button>
-        </div>
+          <Tooltip content={text("Switch orientation", "切换横竖屏")} relationship="label"><ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} /></Tooltip>
+          <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span>{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
+          <Tooltip content={text("Tool panel", "工具面板")} relationship="label"><ToolbarButton className="icon-button mobile-only" appearance="subtle" icon={<SidebarSimple size={19} />} aria-expanded={mobilePanel === "context"} onClick={() => setMobilePanel(mobilePanel === "context" ? null : "context")} aria-label={text("Open tool panel", "打开工具面板")} /></Tooltip>
+        </Toolbar>
 
-        <div className="toolbar-right">
-          <button className="icon-button" onClick={undo} disabled={!canUndo} title={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} aria-label={text("Undo", "撤销")}><ArrowCounterClockwise size={18} /></button>
-          <button className="icon-button" onClick={redo} disabled={!canRedo} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} aria-label={text("Redo", "重做")}><ArrowClockwise size={18} /></button>
+        <Toolbar className="toolbar-right" aria-label={text("Project actions", "项目操作")}>
+          <Tooltip content={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<ArrowCounterClockwise size={18} />} onClick={undo} disabled={!canUndo} aria-label={text("Undo", "撤销")} /></Tooltip>
+          <Tooltip content={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<ArrowClockwise size={18} />} onClick={redo} disabled={!canRedo} aria-label={text("Redo", "重做")} /></Tooltip>
           <span className="toolbar-separator" />
-          <button className="icon-button" onClick={() => setHelpOpen(true)} title={text("Shortcuts · ?", "快捷键 · ?")} aria-label={text("Open shortcuts", "打开快捷键")}><Info size={18} /></button>
-          <button className={`export-button ${exporting ? "loading" : ""}`} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {text("Export", "导出")}</button>
-        </div>
+          <Tooltip content={text("Shortcuts · ?", "快捷键 · ?")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<Info size={18} />} onClick={() => setHelpOpen(true)} aria-label={text("Open shortcuts", "打开快捷键")} /></Tooltip>
+          <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}>{text("Export", "导出")}</Button>
+        </Toolbar>
       </header>
 
       <section className="workspace">
@@ -4821,6 +4853,7 @@ export default function Home() {
       <div className={`toast ${toast ? "show" : ""}`} role="status" aria-live="polite">{toast}</div>
       {mobilePanel && <button className="mobile-scrim" onClick={() => setMobilePanel(null)} aria-label={text("Close panel", "关闭面板")} />}
     </main>
+    </FluentProvider>
   );
 }
 
