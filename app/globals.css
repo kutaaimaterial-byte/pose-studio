@@ -15,6 +15,7 @@
   --ai: #246bfd;
   --success: #28a86b;
   --warning: #bc7a19;
+  --danger: #e5484d;
   --panel-left: 356px;
   --panel-right: 304px;
   --header: 56px;
@@ -300,17 +301,14 @@ button:disabled:active { transform: none; }
 .model-stack-title span { color: var(--text); font-size: 12px; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
 .model-stack-title small { font-family: var(--mono); font-size: 11px; }
 .model-stack-list { max-height: 142px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-.model-stack-list button { min-width: 0; height: 40px; display: grid; grid-template-columns: 18px minmax(0,1fr) 14px; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--muted); cursor: pointer; text-align: left; }
-.model-stack-list button:hover { color: var(--text); border-color: #b9c9dc; background: var(--surface-raised); }
-.model-stack-list button.active { color: #0878df; border-color: #9dccfb; background: #eaf4ff; }
-.model-stack-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
-.model-stack-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 9px; }
-.model-stack-actions button { min-width: 0; height: 38px; display: grid; grid-template-columns: 17px minmax(0,1fr) auto; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #cfe0f6; border-radius: 8px; background: #f3f8ff; color: #0878df; cursor: pointer; text-align: left; }
-.model-stack-actions button:hover:not(:disabled) { border-color: #9dccfb; background: #eaf4ff; }
-.model-stack-actions button.delete { grid-column: 1 / -1; border-color: #ecd6d6; background: #fff7f7; color: #c84646; }
-.model-stack-actions button.delete:hover:not(:disabled) { border-color: #eab7b7; background: #fff0f0; }
-.model-stack-actions button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 720; }
-.model-stack-actions kbd { min-width: 25px; height: 20px; display: grid; place-items: center; padding: 0 4px; border: 1px solid currentColor; border-radius: 5px; opacity: .62; font-family: var(--mono); font-size: 8px; }
+.model-stack-item { min-width: 0; height: 40px; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--muted); }
+.model-stack-item:hover { color: var(--text); border-color: #b9c9dc; background: var(--surface-raised); }
+.model-stack-item.active { grid-template-columns: minmax(0, 1fr) 34px; color: #0878df; border-color: #9dccfb; background: #eaf4ff; }
+.model-stack-select { min-width: 0; height: 100%; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 6px; padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.model-stack-select span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
+.model-stack-delete { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--danger); cursor: pointer; }
+.model-stack-delete:hover:not(:disabled) { background: var(--surface); color: color-mix(in srgb, var(--danger) 86%, var(--text)); }
+.model-stack-delete:disabled { opacity: .34; cursor: not-allowed; }
 .canvas-image-upload { width: 100%; height: 40px; display: grid; grid-template-columns: 18px minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #b9dcff; border-radius: 9px; background: #eaf4ff; color: #0878df; cursor: pointer; text-align: left; }
 .canvas-image-upload:hover:not(:disabled) { border-color: #8fc7ff; background: #dff0ff; }
 .canvas-image-upload span { font-size: 12px; font-weight: 720; }
@@ -478,8 +476,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .filter-row button, .result-line button, .pose-card, .pose-card-actions button, .selected-dot,
 .saved-pose-badge, .current-pose-actions button, .canvas-header button, .tool-dock,
 .tool-dock button, .zoom-control, .zoom-control button, .selection-header button,
-.cube-icon, .inspector-tabs button, .model-stack-list button, .model-stack-actions button,
-.model-stack-actions kbd, .canvas-image-upload, .canvas-image-list button, .canvas-image-empty,
+.cube-icon, .inspector-tabs button, .model-stack-item, .model-stack-select, .model-stack-delete,
+.canvas-image-upload, .canvas-image-list button, .canvas-image-empty,
 .canvas-image-actions button, .canvas-image-lock-note, .active-tool-card, .active-tool-card > span,
 .control-point-info, .limb-group-legend span, .save-custom-pose-button, .vector-field label,
 .range-with-value output, .control-row select, .perspective-mode-grid, .perspective-mode-grid button,
@@ -552,7 +550,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .inspector-tabs button { font-weight: 560; }
 .inspector-tabs button.active { border: 1px solid #cbdcf9; background: #eef4ff; }
 .model-stack { padding: 12px; }
-.model-stack-list button, .model-stack-actions button { height: 36px; }
+.model-stack-item { height: 36px; }
 .active-tool-card { min-height: 56px; margin: 10px 12px 0; padding: 8px; border-color: var(--border); background: #f7f8f9; }
 .active-tool-card > span { width: 30px; height: 30px; border-radius: 3px; }
 .inspector-section { padding: 0 12px 12px; }

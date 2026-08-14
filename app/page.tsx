@@ -15,7 +15,6 @@ import {
   ArrowsOutCardinal,
   Check,
   Camera,
-  Clipboard,
   Copy,
   Cube,
   DownloadSimple,
@@ -2616,7 +2615,6 @@ export default function Home() {
   const [exporting, setExporting] = useState(false);
   const [modelList, setModelList] = useState<ModelListItem[]>([{ id: "model-1", name: "机器人 01" }]);
   const [selectedModelId, setSelectedModelId] = useState("model-1");
-  const [hasCopiedModel, setHasCopiedModel] = useState(false);
   const [canvasImages, setCanvasImages] = useState<CanvasImageLayer[]>([]);
   const [selectedCanvasImageId, setSelectedCanvasImageId] = useState<string | null>(null);
   const [toolMode, setToolMode] = useState<ToolMode>("translate");
@@ -3601,7 +3599,6 @@ export default function Home() {
   const copySelectedModel = () => {
     if (!modelInfo.loaded) return;
     modelClipboardRef.current = cloneModelEditState(getModelEditState(editorLatestRef.current));
-    setHasCopiedModel(true);
     flash(text("Character copied · ⌘/Ctrl C", "角色已复制 · ⌘/Ctrl C"));
   };
 
@@ -4554,18 +4551,28 @@ export default function Home() {
               <div className="model-stack" aria-label={text("Canvas models", "画板模型列表")}>
                 <div className="model-stack-title"><span>{text("Canvas Models", "画板模型")}</span><small>{modelList.length} / 8</small></div>
                 <div className="model-stack-list">
-                  {modelList.map((model) => (
-                    <button key={model.id} className={selectedModelId === model.id ? "active" : ""} onClick={() => selectModel(model.id)}>
-                      <Cube size={16} weight={selectedModelId === model.id ? "fill" : "regular"} />
-                      <span>{modelDisplayName(model)}</span>
-                      {selectedModelId === model.id && <Check size={14} weight="bold" />}
-                    </button>
-                  ))}
-                </div>
-                <div className="model-stack-actions" aria-label={text("Selected character actions", "所选角色操作")}>
-                  <button onClick={copySelectedModel} disabled={!modelInfo.loaded} title={text("Copy selected character · ⌘/Ctrl C", "复制所选角色 · ⌘/Ctrl C")}><Copy size={15} /><span>{text("Copy", "复制")}</span><kbd>⌘C</kbd></button>
-                  <button onClick={pasteCopiedModel} disabled={!hasCopiedModel || modelList.length >= 8} title={text("Paste copied character · ⌘/Ctrl V", "粘贴已复制角色 · ⌘/Ctrl V")}><Clipboard size={15} /><span>{text("Paste", "粘贴")}</span><kbd>⌘V</kbd></button>
-                  <button className="delete" onClick={deleteSelectedModel} disabled={modelList.length <= 1} title={text("Delete selected character · Delete/Backspace", "删除所选角色 · Delete/Backspace")}><Trash size={15} /><span>{text("Delete", "删除角色")}</span><kbd>⌫</kbd></button>
+                  {modelList.map((model) => {
+                    const selected = selectedModelId === model.id;
+                    return (
+                      <div key={model.id} className={`model-stack-item${selected ? " active" : ""}`}>
+                        <button className="model-stack-select" onClick={() => selectModel(model.id)} aria-pressed={selected}>
+                          <Cube size={16} weight={selected ? "fill" : "regular"} />
+                          <span>{modelDisplayName(model)}</span>
+                        </button>
+                        {selected && (
+                          <button
+                            className="model-stack-delete"
+                            onClick={deleteSelectedModel}
+                            disabled={modelList.length <= 1}
+                            aria-label={text(`Delete ${modelDisplayName(model)}`, `删除${modelDisplayName(model)}`)}
+                            title={text("Delete selected character · Delete/Backspace", "删除所选角色 · Delete/Backspace")}
+                          >
+                            <Trash size={15} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
