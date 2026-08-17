@@ -87,6 +87,6 @@ export function ContextActionBar({
       <strong>{title}</strong>
     </div>
     <Toolbar className="context-quick-actions" aria-label="Context actions">{actions}</Toolbar>
-    <Button appearance="primary" className="next-action" onClick={onNext}>{nextLabel}</Button>
+    <Button appearance="subtle" className="next-action" onClick={onNext}>{nextLabel}<span aria-hidden="true">→</span></Button>
   </div>;
 }

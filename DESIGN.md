@@ -1,46 +1,46 @@
 ---
 name: PoseBoard 3D Studio 1.0.3
-description: Fluent 2 based, canvas-first 3D pose workspace with precise cool-neutral surfaces and one cobalt action color.
+description: Professional Compact PoseBoard workspace governed by the V1.1 component specification and a strict 4px grid.
 colors:
-  app-background: "#f3f6fa"
-  canvas-background: "#e8edf4"
+  app-background: "#f4f6f8"
+  canvas-background: "#e9edf2"
   surface-primary: "#ffffff"
-  surface-secondary: "#f7f9fc"
-  surface-tertiary: "#eef2f7"
-  surface-hover: "#edf3fb"
-  border-muted: "#e7ebf1"
-  border-default: "#d9e0ea"
-  border-strong: "#bcc7d6"
-  text-primary: "#172033"
-  text-secondary: "#536176"
-  text-tertiary: "#77849a"
-  primary: "#1769d1"
-  primary-hover: "#0f5dbc"
-  primary-pressed: "#0b4f9f"
+  surface-secondary: "#f8fafc"
+  surface-tertiary: "#eef1f5"
+  surface-hover: "#f4f6f8"
+  border-muted: "#e9edf2"
+  border-default: "#dde3ea"
+  border-strong: "#c8d1dc"
+  text-primary: "#182230"
+  text-secondary: "#667085"
+  text-tertiary: "#98a2b3"
+  primary: "#2684ff"
+  primary-hover: "#1672e8"
+  primary-pressed: "#125fca"
   primary-soft: "#eaf3ff"
-  success: "#15805d"
+  success: "#169b62"
   warning: "#e28a16"
-  danger: "#c4314b"
+  danger: "#e5484d"
 typography:
   headline:
-    fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
+    fontFamily: "Inter, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif"
     fontSize: "18px"
-    fontWeight: 700
+    fontWeight: 600
     lineHeight: 1.25
   title:
-    fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "16px"
-    fontWeight: 650
+    fontFamily: "Inter, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "14px"
+    fontWeight: 600
     lineHeight: 1.4
   body:
-    fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "13px"
+    fontFamily: "Inter, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.55
   label:
-    fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "12px"
-    fontWeight: 600
+    fontFamily: "Inter, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "13px"
+    fontWeight: 500
     lineHeight: 1.2
   data:
     fontFamily: "SFMono-Regular, Roboto Mono, IBM Plex Mono, Menlo, Consolas, monospace"
@@ -48,18 +48,19 @@ typography:
     fontWeight: 400
     lineHeight: 1.2
   caption:
-    fontFamily: "Avenir Next, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, -apple-system, BlinkMacSystemFont, sans-serif"
-    fontSize: "10px"
-    fontWeight: 500
+    fontFamily: "Inter, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "11px"
+    fontWeight: 400
     lineHeight: 1.2
 rounded:
   xxs: "4px"
-  xs: "5px"
+  xs: "4px"
   sm: "6px"
   control: "8px"
   compact-card: "9px"
-  card: "12px"
-  panel: "14px"
+  card: "10px"
+  panel: "12px"
+  modal: "16px"
   pill: "999px"
 spacing:
   xs: "4px"
@@ -74,29 +75,29 @@ components:
     textColor: "{colors.surface-primary}"
     typography: "{typography.label}"
     rounded: "{rounded.control}"
-    padding: "0 13px"
-    height: "36px"
+    padding: "0 16px"
+    height: "40px"
   button-secondary:
     backgroundColor: "{colors.surface-primary}"
     textColor: "{colors.text-secondary}"
     typography: "{typography.label}"
     rounded: "{rounded.control}"
-    padding: "0 8px"
-    height: "34px"
+    padding: "0 12px"
+    height: "40px"
   input:
     backgroundColor: "{colors.surface-secondary}"
     textColor: "{colors.text-primary}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
-    padding: "0 11px"
-    height: "42px"
+    padding: "0 12px"
+    height: "40px"
   tool-active:
     backgroundColor: "{colors.primary-soft}"
     textColor: "{colors.primary}"
     typography: "{typography.label}"
     rounded: "{rounded.compact-card}"
-    padding: "5px 2px"
-    height: "52px"
+    padding: "4px"
+    height: "56px"
 ---
 
 # Design System: PoseBoard 3D Studio 1.0.3
@@ -107,7 +108,7 @@ components:
 
 PoseBoard is a professional, lightweight instrument around a dominant 3D canvas. The interface should feel quiet and immediately legible: cool whites and pale grays establish structure, while blue appears only where the user can act or where a state is selected. Controls explain the current task without competing with the figure.
 
-The 1.0.3 shell is canvas-first and mode-aware. It uses Fluent 2 React foundations for provider-level tokens, buttons, toolbars, and tooltips, then applies PoseBoard's own compact studio geometry. It consists of a 56px Top Bar, a narrow left Tool Rail, the Canvas, exactly one right Context Panel, and a bottom Context Action Bar. The panel may collapse or become a right-side overlay; the canvas must always reclaim the released space.
+The 1.0.3 shell is canvas-first and mode-aware. It uses Fluent 2 React foundations for provider-level buttons, toolbars, and tooltips, then applies PoseBoard's Professional Compact geometry. It consists of a 56px Top Bar, a 64px Tool Rail, one 380px Context Panel, the dominant Canvas, and a 48px full-width Context Action Bar. The panel may collapse or become a left-side overlay; the canvas must always reclaim the released space.
 
 **Key Characteristics:**
 
@@ -143,7 +144,7 @@ The palette is cool and functional. White surfaces sit on pale blue-gray workspa
 
 ## Typography
 
-**Display and Body Font:** Avenir Next with Noto Sans CJK SC, PingFang SC, Microsoft YaHei, and native sans-serif fallbacks.
+**Display and Body Font:** Inter with Noto Sans CJK SC, PingFang SC, Microsoft YaHei, and native sans-serif fallbacks.
 **Data Font:** SFMono-Regular with Roboto Mono, IBM Plex Mono, Menlo, and Consolas fallbacks.
 
 The main stack is neutral, compact, and friendly enough for a creative tool. The monospace stack is limited to dimensions, ratios, counts, shortcuts, versions, and other machine-like metadata.
@@ -159,15 +160,15 @@ The main stack is neutral, compact, and friendly enough for a creative tool. The
 
 ## Layout
 
-The desktop shell is a fixed frame around a fluid canvas: Top Bar (56px), left Tool Rail (68px at wide desktop), `minmax(0, 1fr)` Canvas, then a right Context Panel (380px at wide desktop). The Context Action Bar is 52px tall and pinned to the canvas bottom. It holds current-result context on the left, quick actions in the middle, and the next primary step on the right.
+The desktop shell is a fixed frame around a fluid canvas: Top Bar (56px), left Tool Rail (64px), one Context Panel (380px), then a `minmax(0, 1fr)` Canvas. The Context Action Bar is 48px tall and spans the complete workspace bottom. It holds current-result context on the left, quick actions in the middle, and the next primary step on the right.
 
 Use the implemented 4px rhythm and its 8/12/16/20/24px multiples. Panel content normally uses 12–16px horizontal padding; gaps are typically 4–12px. Controls are usually 34–42px high. Preserve whitespace around the artboard so it reads as the work product, not another panel.
 
 Responsive behavior is structural:
 
-- **Below 1440px:** Tool Rail becomes 62px and Context Panel 356px.
-- **Below 1280px:** Tool Rail becomes 58px and Context Panel 332px; secondary Top Bar status/version content hides before core actions.
-- **Below 1024px:** Context Panel becomes a right-side overlay (up to 356px wide) opened from the rail; canvas remains full-width behind it and a scrim protects mode focus.
+- **Below 1440px:** Tool Rail becomes 60px and Context Panel 360px.
+- **Below 1280px:** Tool Rail becomes 56px and Context Panel 332px; secondary Top Bar status/version content hides before core actions.
+- **Below 1024px:** Context Panel becomes a left-side overlay (up to 340px wide) opened from the rail; canvas remains full-width behind it and a scrim protects mode focus.
 - **Below 720px:** Reduce Top Bar metadata, hide nonessential quick actions, and stack dialog grids. Do not miniaturize the canvas to preserve every desktop control.
 - **Collapsed panel:** Remove the panel column entirely; expand the canvas immediately while keeping Tool Rail, Top Bar, and Context Action Bar stable.
 
@@ -201,9 +202,9 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 ### Context Panel
 
-- Exactly one 332–380px task panel on the desktop right edge. Use a 56px title row, hairline section dividers, 12–16px padding, and vertical scrolling within the panel rather than the page.
+- Exactly one 332–380px task panel between the Tool Rail and Canvas. Use a 56px title row, hairline section dividers, 16px horizontal padding, and vertical scrolling within the panel rather than the page.
 - Pose cards are two-column, flat at hover, and use outline—not lift—to show selection. Advanced controls stay secondary and may be disclosed on demand.
-- Pose category controls wrap onto additional rows when the panel cannot fit them; labels must remain complete and must not be clipped or require horizontal scrolling.
+- Pose category controls remain on one horizontal row and scroll without visible scrollbars; they never wrap into a second navigation row.
 
 ### Canvas and Artboard
 
@@ -212,7 +213,7 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 ### Context Action Bar
 
-- Fixed 52px bar at the canvas bottom. Always state the current result/mode in text. Secondary actions are bordered white buttons; the next-step action is solid blue.
+- Fixed 48px bar across the workspace bottom. Always state the current result/mode in text. Secondary actions are ghost buttons; the next-step action uses blue text on a soft-blue background so Export remains the only solid primary CTA.
 - Follow the workflow direction—Pose → Camera → Export—without turning the bar into a second toolbar full of unrelated commands.
 
 ### Buttons, Fields, and States
