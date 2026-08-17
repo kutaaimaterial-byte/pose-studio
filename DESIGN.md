@@ -204,7 +204,8 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 - Exactly one 332–380px task panel between the Tool Rail and Canvas. Use a 56px title row, hairline section dividers, 16px horizontal padding, and vertical scrolling within the panel rather than the page.
 - Pose cards are two-column, flat at hover, and use outline—not lift—to show selection. Advanced controls stay secondary and may be disclosed on demand.
-- Pose category controls remain on one horizontal row and scroll without visible scrollbars at the full 380px panel width. In the compact 332px panel they may wrap into multiple rows so no label is clipped or hidden.
+- Pose quick views use a two-column compact grid and pose categories wrap into additional rows as needed; every label must remain fully visible at supported panel widths.
+- Camera and lighting presets use compact single-column selection rows rather than oversized card grids. Perspective exposes only task-critical controls by default and keeps technical grid details behind disclosure.
 
 ### Canvas and Artboard
 

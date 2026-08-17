@@ -3643,6 +3643,27 @@ export default function Home() {
     flash(text("Character copied · ⌘/Ctrl C", "角色已复制 · ⌘/Ctrl C"));
   };
 
+  const findOpenModelPosition = (source: ModelEditState): [number, number, number] => {
+    const spacingX = Math.max(1.6, (source.scale / 100) * 1.7);
+    const spacingZ = Math.max(1.1, (source.scale / 100) * 1.25);
+    const occupied = Object.values(modelRootsRef.current)
+      .filter((root) => root.visible)
+      .map((root) => root.position);
+    const offsets: Array<[number, number]> = [
+      [spacingX, 0], [-spacingX, 0],
+      [spacingX * 2, 0], [-spacingX * 2, 0],
+      [0, spacingZ], [0, -spacingZ],
+      [spacingX, spacingZ], [-spacingX, spacingZ],
+    ];
+    const [sourceX, sourceY, sourceZ] = source.position;
+    const candidate = offsets.find(([offsetX, offsetZ]) => occupied.every((position) => {
+      const normalizedX = (sourceX + offsetX - position.x) / spacingX;
+      const normalizedZ = (sourceZ + offsetZ - position.z) / spacingZ;
+      return Math.hypot(normalizedX, normalizedZ) >= 0.92;
+    })) ?? [spacingX * (occupied.length + 1), 0];
+    return [sourceX + candidate[0], sourceY, sourceZ + candidate[1]];
+  };
+
   const pasteCopiedModel = () => {
     if (modelList.length >= 8) {
       flash(text("You can add up to 8 characters", "当前画板最多添加 8 个角色"));
@@ -3655,7 +3676,7 @@ export default function Home() {
     const sequence = modelCounterRef.current;
     modelCounterRef.current += 1;
     const source = cloneModelEditState(modelClipboardRef.current);
-    source.position = [source.position[0] + 0.48, source.position[1], source.position[2] + 0.28];
+    source.position = findOpenModelPosition(source);
     const created = createModelInstance(source, sequence);
     if (!created) return;
     modelClipboardRef.current = cloneModelEditState(source);
@@ -3844,7 +3865,10 @@ export default function Home() {
     const distance = Math.max(3.2, sphere.radius / Math.max(Math.sin(limitingFov / 2), 0.1) * 1.14);
     controls.target.copy(sphere.center);
     camera.position.copy(sphere.center).addScaledVector(direction, distance);
-    camera.near = Math.max(0.03, distance - sphere.radius * 2.2);
+    // Keep the near plane in front of every visible character. Deriving it
+    // only from the selected character can slice foreground duplicates after
+    // Fit Character is used.
+    camera.near = 0.02;
     camera.far = Math.max(100, distance + sphere.radius * 4);
     camera.updateProjectionMatrix();
     controls.update();
@@ -4404,7 +4428,7 @@ export default function Home() {
 
             <div className="search-field" role="search">
               <span><MagnifyingGlass size={18} /></span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text("Describe or search: kneel / look back / sprint", "描述姿势或搜索预设，例如：单膝跪地 / 回眸 / 疾跑冲刺")} aria-label={text("Describe or search poses", "描述或搜索姿势")} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text("Search or describe a pose", "搜索或描述姿势")} aria-label={text("Describe or search poses", "描述或搜索姿势")} />
               {query ? <button className="clear-search" onClick={() => setQuery("")} aria-label={text("Clear search", "清除搜索")} title={text("Clear search", "清除搜索")}><X size={15} /></button> : <button className="clear-search prompt-search-action" onClick={() => { setPoseText(query || promptToPoseExamplesEn[0]); setPromptToPoseOpen(true); }} aria-label={text("Generate pose from text", "用文字生成姿势")} title={text("Generate pose from text", "用文字生成姿势")}><Sparkle size={15} weight="fill" /></button>}
             </div>
 
@@ -4630,7 +4654,11 @@ export default function Home() {
             {activeTool === "camera" && <InspectorSection title={text("Camera Presets", "镜头预设")} resetLabel={text("Reset", "重置")} onReset={() => applyCameraPreset("commercial")}>
               <div className="preset-grid camera-presets">
                 {(Object.entries(cameraPresets) as Array<[Exclude<CameraPresetId, "custom">, (typeof cameraPresets)[Exclude<CameraPresetId, "custom">]]>).map(([id, preset]) => (
-                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}><Camera size={16} /><span>{isZh ? preset.label : preset.labelEn}</span><small>{preset.focalLength}mm</small></button>
+                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}>
+                    <span className="camera-preset-icon"><Camera size={16} /></span>
+                    <span className="camera-preset-label">{isZh ? preset.label : preset.labelEn}</span>
+                    <small>{preset.focalLength}mm</small>
+                  </button>
                 ))}
               </div>
               <ToggleRow label={cameraLocked ? text("Camera locked", "镜头已锁定") : text("Camera unlocked", "镜头可浏览")} toggleLabel={text("Lock camera orbit, pan and zoom", "锁定镜头旋转、平移与缩放")} active={cameraLocked} onClick={() => setCameraLocked((locked) => !locked)} />
@@ -4687,21 +4715,24 @@ export default function Home() {
                   </>}
 
                   {editor.perspectiveGrid.mode === "ground" && <ControlRow label={text("Plane", "平面")}><select value={editor.perspectiveGrid.plane} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, plane: event.target.value as "XZ" | "XY" | "YZ" } }))} aria-label={text("Grid plane", "网格平面")}><option value="XZ">XZ · {text("Ground", "地面")}</option><option value="XY">XY</option><option value="YZ">YZ</option></select></ControlRow>}
-                  <VectorField label={text("Origin", "原点")} values={editor.perspectiveGrid.origin} step={0.05} onChange={updatePerspectiveOrigin} />
-                  {editor.perspectiveGrid.mode === "ground" && <VectorField label={text("Rotation", "旋转")} values={editor.perspectiveGrid.rotation} step={1} onChange={updatePerspectiveRotation} />}
                   <ControlRow label={text("Size", "尺寸")}><div className="range-with-value"><input type="range" min="6" max="40" step="1" value={editor.perspectiveGrid.size} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, size: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid size", "网格尺寸")} /><output>{editor.perspectiveGrid.size}m</output></div></ControlRow>
-                  <ControlRow label={text("Major", "主间距")}><div className="range-with-value"><input type="range" min="0.5" max="5" step="0.25" value={editor.perspectiveGrid.majorStep} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorStep: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Major grid spacing", "主网格间距")} /><output>{editor.perspectiveGrid.majorStep}m</output></div></ControlRow>
-                  <ControlRow label={text("Density", "细分")}><div className="range-with-value"><input type="range" min="1" max="10" step="1" value={editor.perspectiveGrid.subdivisions} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, subdivisions: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid subdivisions", "网格细分数量")} /><output>{editor.perspectiveGrid.subdivisions}×</output></div></ControlRow>
-                  <ControlRow label={text("Opacity", "透明度")}><div className="range-with-value"><input type="range" min="0.08" max="0.8" step="0.01" value={editor.perspectiveGrid.opacity} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, opacity: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid opacity", "网格透明度")} /><output>{Math.round(editor.perspectiveGrid.opacity * 100)}%</output></div></ControlRow>
-                  <ControlRow label={text("Width", "线宽")}><div className="range-with-value"><input type="range" min="0.5" max="3" step="0.25" value={editor.perspectiveGrid.lineWidth} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lineWidth: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid line width", "网格线宽")} /><output>{editor.perspectiveGrid.lineWidth}px</output></div></ControlRow>
-                  <div className="perspective-color-grid">
-                    <label><span>{text("Major", "主线")}</span><input type="color" value={editor.perspectiveGrid.majorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorColor: event.target.value } }))} aria-label={text("Major grid color", "主网格线颜色")} /></label>
-                    <label><span>{text("Minor", "副线")}</span><input type="color" value={editor.perspectiveGrid.minorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, minorColor: event.target.value } }))} aria-label={text("Minor grid color", "副网格线颜色")} /></label>
-                  </div>
                   <ToggleRow label={editor.perspectiveGrid.lock ? text("Grid Locked", "已锁定网格") : text("Lock Editing", "锁定编辑")} toggleLabel={text("Lock perspective grid editing", "锁定透视网格编辑")} active={editor.perspectiveGrid.lock} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lock: !current.perspectiveGrid.lock } }))} />
-                  {editor.perspectiveGrid.mode === "ground" && <ToggleRow label={text("Snap to Feet", "吸附脚底")} toggleLabel={text("Snap grid to lowest foot", "网格吸附人物最低脚底")} active={editor.perspectiveGrid.snapToFeet} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, snapToFeet: !current.perspectiveGrid.snapToFeet } }))} />}
                   <ToggleRow label={text("Include in Export", "导出包含网格")} toggleLabel={text("Include perspective grid in PNG export", "PNG 导出时包含透视网格")} active={editor.perspectiveGrid.includeInExport} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, includeInExport: !current.perspectiveGrid.includeInExport } }))} />
-                  <div className={`perspective-lock-note ${editor.perspectiveGrid.lock ? "active" : ""}`}>{editor.perspectiveGrid.lock ? <Lock size={15} weight="fill" /> : <LockOpen size={15} />}<span>{editor.perspectiveGrid.lock ? text("Handles are protected from accidental dragging.", "地平线和消失点已防止误拖。") : text("Drag the horizon and numbered vanishing points directly on the artboard.", "可直接在画板拖动地平线和带编号的消失点。")}</span></div>
+                  <button className="advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? text("Hide grid details", "收起网格细节") : text("Grid details", "网格细节")}</button>
+                  {advancedOpen && <div className="perspective-advanced-controls">
+                    <VectorField label={text("Origin", "原点")} values={editor.perspectiveGrid.origin} step={0.05} onChange={updatePerspectiveOrigin} />
+                    {editor.perspectiveGrid.mode === "ground" && <VectorField label={text("Rotation", "旋转")} values={editor.perspectiveGrid.rotation} step={1} onChange={updatePerspectiveRotation} />}
+                    <ControlRow label={text("Major", "主间距")}><div className="range-with-value"><input type="range" min="0.5" max="5" step="0.25" value={editor.perspectiveGrid.majorStep} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorStep: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Major grid spacing", "主网格间距")} /><output>{editor.perspectiveGrid.majorStep}m</output></div></ControlRow>
+                    <ControlRow label={text("Density", "细分")}><div className="range-with-value"><input type="range" min="1" max="10" step="1" value={editor.perspectiveGrid.subdivisions} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, subdivisions: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid subdivisions", "网格细分数量")} /><output>{editor.perspectiveGrid.subdivisions}×</output></div></ControlRow>
+                    <ControlRow label={text("Opacity", "透明度")}><div className="range-with-value"><input type="range" min="0.08" max="0.8" step="0.01" value={editor.perspectiveGrid.opacity} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, opacity: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid opacity", "网格透明度")} /><output>{Math.round(editor.perspectiveGrid.opacity * 100)}%</output></div></ControlRow>
+                    <ControlRow label={text("Width", "线宽")}><div className="range-with-value"><input type="range" min="0.5" max="3" step="0.25" value={editor.perspectiveGrid.lineWidth} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lineWidth: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid line width", "网格线宽")} /><output>{editor.perspectiveGrid.lineWidth}px</output></div></ControlRow>
+                    <div className="perspective-color-grid">
+                      <label><span>{text("Major", "主线")}</span><input type="color" value={editor.perspectiveGrid.majorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorColor: event.target.value } }))} aria-label={text("Major grid color", "主网格线颜色")} /></label>
+                      <label><span>{text("Minor", "副线")}</span><input type="color" value={editor.perspectiveGrid.minorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, minorColor: event.target.value } }))} aria-label={text("Minor grid color", "副网格线颜色")} /></label>
+                    </div>
+                    {editor.perspectiveGrid.mode === "ground" && <ToggleRow label={text("Snap to Feet", "吸附脚底")} toggleLabel={text("Snap grid to lowest foot", "网格吸附人物最低脚底")} active={editor.perspectiveGrid.snapToFeet} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, snapToFeet: !current.perspectiveGrid.snapToFeet } }))} />}
+                  </div>}
+                  {editor.perspectiveGrid.lock && <div className="perspective-lock-note active"><Lock size={15} weight="fill" /><span>{text("Handles are protected from accidental dragging.", "地平线和消失点已防止误拖。")}</span></div>}
                 </>}
               </InspectorSection>}
 
@@ -4709,7 +4740,10 @@ export default function Home() {
               <InspectorSection title={text("Lighting Presets", "灯光预设")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
                 <div className="preset-grid lighting-presets">
                   {(Object.entries(lightingPresets) as Array<[Exclude<LightingPresetId, "custom">, (typeof lightingPresets)[Exclude<LightingPresetId, "custom">]]>).map(([id, preset]) => (
-                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}><Lightbulb size={16} /><span>{isZh ? preset.label : preset.labelEn}</span></button>
+                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}>
+                      <span className="lighting-preset-icon"><Lightbulb size={16} /></span>
+                      <span className="lighting-preset-label">{isZh ? preset.label : preset.labelEn}</span>
+                    </button>
                   ))}
                 </div>
                 <button className="advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? text("Hide advanced parameters", "收起高级参数") : text("Advanced parameters", "高级参数")}</button>
@@ -4738,7 +4772,7 @@ export default function Home() {
               </div>
               <label><span>{text("Chinese Prompt", "中文提示词")}</span><textarea readOnly value={generatedPrompt.chinese} /><button onClick={() => copyPrompt(generatedPrompt.chinese)}><Copy size={15} />{text("Copy Chinese", "复制中文")}</button></label>
               <label><span>English Prompt</span><textarea readOnly value={generatedPrompt.english} /><button onClick={() => copyPrompt(generatedPrompt.english)}><Copy size={15} />Copy English</button></label>
-              <div className="prompt-context-actions"><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button><button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={15} />{text("Copy all", "复制全部")}</button></div>
+              <div className="prompt-context-actions"><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button><button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}>{text("Copy all", "复制全部")}</button></div>
             </div>}
           </div>
         </aside>
@@ -4861,7 +4895,7 @@ export default function Home() {
           <div className="prompt-footer">
             <button onClick={exportProjectJson}>{text("Export Project JSON", "导出项目 JSON")}</button>
             <button onClick={() => { downloadTextFile(`poseboard-${selectedPose.id}-prompt.md`, `# ${selectedPose.nameEn}\n\n## Chinese Prompt\n\n${generatedPrompt.chinese}\n\n## English Prompt\n\n${generatedPrompt.english}\n`, "text/markdown"); flash(text("Prompt Markdown exported", "Prompt Markdown 已导出")); }}>{text("Export Markdown", "导出 Markdown")}</button>
-            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} />{text("Copy All", "复制全部")}</button>
+            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}>{text("Copy All", "复制全部")}</button>
           </div>
         </section>
       </div>}

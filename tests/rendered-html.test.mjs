@@ -62,6 +62,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.context-panel\s*\{[^}]*border-left:\s*1px solid/s);
   assert.match(css, /\.context-panel, \.panel-collapsed \.context-panel\s*\{[^}]*right:\s*8px;[^}]*left:\s*auto;[^}]*translateX\(calc\(100% \+ 20px\)\)/s);
   assert.match(css, /\.category-list\s*\{[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible/s);
+  assert.match(css, /\.quick-entry\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.prompt-context-content \.platform-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.lighting-presets\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.tool-rail\s*\{/);
   assert.match(css, /\.context-action-bar\s*\{/);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
@@ -73,6 +76,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
   assert.match(page, /useState<InteractionMode>\("camera-browse"\)/);
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
+  assert.match(page, /camera\.near = 0\.02/);
+  assert.match(page, /findOpenModelPosition/);
   assert.doesNotMatch(page, /controlsRef\.current\.enabled = true/);
   assert.match(page, /useState<Language>\("en"\)/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
