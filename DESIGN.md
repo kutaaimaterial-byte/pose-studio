@@ -204,7 +204,7 @@ Borders are usually 1px. Selected cards use a clear blue inner outline; focus us
 
 - Exactly one 332–380px task panel between the Tool Rail and Canvas. Use a 56px title row, hairline section dividers, 16px horizontal padding, and vertical scrolling within the panel rather than the page.
 - Pose cards are two-column, flat at hover, and use outline—not lift—to show selection. Advanced controls stay secondary and may be disclosed on demand.
-- Pose category controls remain on one horizontal row and scroll without visible scrollbars; they never wrap into a second navigation row.
+- Pose category controls remain on one horizontal row and scroll without visible scrollbars at the full 380px panel width. In the compact 332px panel they may wrap into multiple rows so no label is clipped or hidden.
 
 ### Canvas and Artboard
 

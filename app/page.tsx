@@ -4381,8 +4381,8 @@ export default function Home() {
         </Toolbar>
 
         <Toolbar className="toolbar-right" aria-label={text("Project actions", "项目操作")}>
-          <Tooltip content={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<ArrowCounterClockwise size={18} />} onClick={undo} disabled={!canUndo} aria-label={text("Undo", "撤销")} /></Tooltip>
-          <Tooltip content={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<ArrowClockwise size={18} />} onClick={redo} disabled={!canRedo} aria-label={text("Redo", "重做")} /></Tooltip>
+          <Tooltip content={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} relationship="label"><ToolbarButton className="icon-button history-button" appearance="subtle" icon={<ArrowCounterClockwise size={18} />} onClick={undo} disabled={!canUndo} aria-label={text("Undo", "撤销")} /></Tooltip>
+          <Tooltip content={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} relationship="label"><ToolbarButton className="icon-button history-button" appearance="subtle" icon={<ArrowClockwise size={18} />} onClick={redo} disabled={!canRedo} aria-label={text("Redo", "重做")} /></Tooltip>
           <span className="toolbar-separator" />
           <Tooltip content={text("Shortcuts · ?", "快捷键 · ?")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<Info size={18} />} onClick={() => setHelpOpen(true)} aria-label={text("Open shortcuts", "打开快捷键")} /></Tooltip>
           <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}>{text("Export", "导出")}</Button>
