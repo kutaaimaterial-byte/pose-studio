@@ -2626,7 +2626,7 @@ export default function Home() {
   const randomCursorRef = useRef(73);
   const poseThumbnailsRef = useRef<Record<number, string>>({});
   const languageRef = useRef<Language>("en");
-  const interactionModeRef = useRef<InteractionMode>("camera-browse");
+  const interactionModeRef = useRef<InteractionMode>("ik-edit");
   const cameraLockedRef = useRef(false);
 
   const [language, setLanguage] = useState<Language>("en");
@@ -2657,9 +2657,9 @@ export default function Home() {
   const [selectedModelId, setSelectedModelId] = useState("model-1");
   const [canvasImages, setCanvasImages] = useState<CanvasImageLayer[]>([]);
   const [selectedCanvasImageId, setSelectedCanvasImageId] = useState<string | null>(null);
-  const [toolMode, setToolMode] = useState<ToolMode>("translate");
+  const [toolMode, setToolMode] = useState<ToolMode>("pose");
   const [activeTool, setActiveTool] = useState<ActiveTool>("pose");
-  const [interactionMode, setInteractionMode] = useState<InteractionMode>("camera-browse");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("ik-edit");
   const [contextPanelOpen, setContextPanelOpen] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -3049,6 +3049,14 @@ export default function Home() {
       semanticModifiers: savedPose ? { ...savedPose.semanticModifiers } : {},
     }));
     setSelectedPoseId(pose.id);
+    setToolMode("pose");
+    setActiveTool("pose");
+    setInteractionMode("ik-edit");
+    if (controlsRef.current) controlsRef.current.enabled = false;
+    if (transformControlsRef.current) {
+      transformControlsRef.current.enabled = false;
+      transformControlsRef.current.getHelper().visible = false;
+    }
     setSourcePosePrompt("");
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
     setMobilePanel(null);
@@ -3177,6 +3185,8 @@ export default function Home() {
   const changeActiveTool = (tool: ActiveTool) => {
     if (tool === "model") {
       activateTool(toolMode === "rotate" ? "rotate" : "translate");
+    } else if (tool === "pose") {
+      activateTool("pose");
     } else {
       exitInteractionMode();
       setActiveTool(tool);
@@ -3382,7 +3392,7 @@ export default function Home() {
     setCategory(result.category);
     setToolMode("pose");
     setActiveTool("pose");
-    setInteractionMode("camera-browse");
+    setInteractionMode("ik-edit");
     setMobilePanel(null);
     setPromptToPoseOpen(false);
     flash(text(`Text pose applied: ${result.pose.nameEn}`, `文字姿态已应用：${result.pose.name}`));
@@ -4375,9 +4385,9 @@ export default function Home() {
   const resetAll = () => {
     commit(() => cloneState(initialState));
     setZoom(76);
-    setToolMode("translate");
+    setToolMode("pose");
     setActiveTool("pose");
-    setInteractionMode("camera-browse");
+    setInteractionMode("ik-edit");
     setMobilePanel(null);
     setSelectedPoseId(defaultPose.id);
     setCanvasImages([]);
@@ -4601,7 +4611,7 @@ export default function Home() {
                   onDragStart={beginPerspectiveDrag}
                 />
                 <div className={`control-point-layer ${interactionMode === "ik-edit" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={interactionMode !== "ik-edit"}>
-                  {ikControlDefinitions.filter(({ id }) => ["head", "hips", "leftHand", "rightHand", "leftFoot", "rightFoot"].includes(id)).map(({ id: control, label, labelEn, kind, group }) => (
+                  {ikControlDefinitions.map(({ id: control, label, labelEn, kind, group }) => (
                     <button
                       key={control}
                       ref={(element) => { if (element) controlPointRefs.current[control] = element; else delete controlPointRefs.current[control]; }}

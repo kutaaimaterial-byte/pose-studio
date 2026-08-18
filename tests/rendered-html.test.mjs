@@ -58,6 +58,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /--primary:\s*#2684ff/);
   assert.match(css, /--context-panel:\s*380px/);
   assert.match(css, /\.workspace\s*\{[^}]*grid-template-areas:\s*"rail canvas panel"/s);
+  assert.match(css, /\.workspace\s*\{[^}]*grid-template-columns:\s*var\(--toolrail-w\)[^}]*transition:\s*none/s);
   assert.match(css, /\.panel-collapsed \.workspace\s*\{[^}]*"rail canvas"/s);
   assert.match(css, /\.context-panel\s*\{[^}]*border-left:\s*1px solid/s);
   assert.match(css, /\.context-panel, \.panel-collapsed \.context-panel\s*\{[^}]*right:\s*8px;[^}]*left:\s*auto;[^}]*translateX\(calc\(100% \+ 20px\)\)/s);
@@ -67,6 +68,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.lighting-presets\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.tool-rail\s*\{/);
   assert.match(css, /\.context-action-bar\s*\{/);
+  assert.match(css, /\.artboard-shell\s*\{[^}]*overflow:\s*visible/s);
+  assert.match(css, /\.three-viewport\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*layout paint/s);
+  assert.match(css, /\.control-point-layer\s*\{[^}]*overflow:\s*visible;[^}]*transition:\s*none/s);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
@@ -74,12 +78,17 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
   assert.match(page, /className="brand-edition">V1\.0\.3/);
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
-  assert.match(page, /useState<InteractionMode>\("camera-browse"\)/);
+  assert.match(page, /useState<ToolMode>\("pose"\)/);
+  assert.match(page, /useState<InteractionMode>\("ik-edit"\)/);
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
   assert.match(page, /const syncTransformController = \(mode: "translate" \| "rotate"/);
   assert.match(page, /transformControls\.attach\(root\)/);
   assert.match(page, /if \(tool === "model"\) \{\s*activateTool\(toolMode === "rotate" \? "rotate" : "translate"\)/s);
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
+  assert.match(page, /else if \(tool === "pose"\) \{\s*activateTool\("pose"\)/s);
+  assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
+  assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
+  assert.match(page, /setSelectedPoseId\(pose\.id\);\s*setToolMode\("pose"\);\s*setActiveTool\("pose"\);\s*setInteractionMode\("ik-edit"\)/s);
   assert.match(page, /camera\.near = 0\.02/);
   assert.match(page, /findOpenModelPosition/);
   assert.doesNotMatch(page, /controlsRef\.current\.enabled = true/);
