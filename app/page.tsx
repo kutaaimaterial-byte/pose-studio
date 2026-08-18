@@ -3139,15 +3139,22 @@ export default function Home() {
   const exitInteractionMode = () => {
     setActiveIKControl(null);
     setInteractionMode("camera-browse");
+    if (transformControlsRef.current) {
+      transformControlsRef.current.enabled = false;
+      transformControlsRef.current.getHelper().visible = false;
+    }
     if (controlsRef.current) controlsRef.current.enabled = !cameraLocked;
   };
 
-  const changeActiveTool = (tool: ActiveTool) => {
-    exitInteractionMode();
-    setActiveTool(tool);
-    setAdvancedOpen(false);
-    setContextPanelOpen(true);
-    setMobilePanel(window.innerWidth < 1024 ? "context" : null);
+  const syncTransformController = (mode: "translate" | "rotate", root = modelRootsRef.current[selectedModelIdRef.current]) => {
+    const transformControls = transformControlsRef.current;
+    if (!transformControls || !root) return;
+
+    transformControls.attach(root);
+    transformControls.setMode(mode);
+    transformControls.setSpace(mode === "rotate" ? "local" : "world");
+    transformControls.enabled = root.visible;
+    transformControls.getHelper().visible = root.visible;
   };
 
   const activateTool = (mode: ToolMode) => {
@@ -3157,6 +3164,26 @@ export default function Home() {
     setContextPanelOpen(true);
     setActiveIKControl(null);
     if (controlsRef.current) controlsRef.current.enabled = false;
+    if (mode === "pose") {
+      if (transformControlsRef.current) {
+        transformControlsRef.current.enabled = false;
+        transformControlsRef.current.getHelper().visible = false;
+      }
+    } else {
+      syncTransformController(mode);
+    }
+  };
+
+  const changeActiveTool = (tool: ActiveTool) => {
+    if (tool === "model") {
+      activateTool(toolMode === "rotate" ? "rotate" : "translate");
+    } else {
+      exitInteractionMode();
+      setActiveTool(tool);
+    }
+    setAdvancedOpen(false);
+    setContextPanelOpen(true);
+    setMobilePanel(window.innerWidth < 1024 ? "context" : null);
   };
 
   const beginIKDrag = (control: IKControlId, event: React.PointerEvent<HTMLButtonElement>) => {
@@ -3565,6 +3592,13 @@ export default function Home() {
     modelRootRef.current = nextRoot;
     deformableMeshesRef.current = nextMeshes;
     setEditor((current) => ({ ...current, ...cloneModelEditState(nextState) }));
+    if (activeTool === "model") {
+      const nextMode = toolMode === "rotate" ? "rotate" : "translate";
+      setToolMode(nextMode);
+      setInteractionMode("model-transform");
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      syncTransformController(nextMode, nextRoot);
+    }
   };
 
   const createModelInstance = (state: ModelEditState, sequence: number) => {
@@ -4640,8 +4674,8 @@ export default function Home() {
               </div>
 
               <div className="active-tool-card">
-                <span>{toolMode === "translate" ? <ArrowsOutCardinal size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <Sparkle size={18} />}</span>
-                <div><small>{text("Current Mode", "当前模式")}</small><strong>{toolMode === "translate" ? text("Move Model", "选择并移动") : toolMode === "rotate" ? text("Rotate Model", "旋转模型") : text("IK Pose Editing", "IK 姿态编辑")}</strong></div>
+                <span>{interactionMode !== "model-transform" ? <Camera size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <ArrowsOutCardinal size={18} />}</span>
+                <div><small>{text("Current Mode", "当前模式")}</small><strong>{interactionMode !== "model-transform" ? text("Browse Camera", "浏览镜头") : toolMode === "rotate" ? text("Rotate Model", "旋转模型") : text("Move Model", "选择并移动")}</strong></div>
               </div>
 
               <InspectorSection title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>

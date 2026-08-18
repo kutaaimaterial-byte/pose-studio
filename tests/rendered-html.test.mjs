@@ -76,6 +76,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
   assert.match(page, /useState<InteractionMode>\("camera-browse"\)/);
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
+  assert.match(page, /const syncTransformController = \(mode: "translate" \| "rotate"/);
+  assert.match(page, /transformControls\.attach\(root\)/);
+  assert.match(page, /if \(tool === "model"\) \{\s*activateTool\(toolMode === "rotate" \? "rotate" : "translate"\)/s);
+  assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
   assert.match(page, /camera\.near = 0\.02/);
   assert.match(page, /findOpenModelPosition/);
   assert.doesNotMatch(page, /controlsRef\.current\.enabled = true/);
