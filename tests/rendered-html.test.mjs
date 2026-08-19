@@ -64,7 +64,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.context-panel\s*\{[^}]*border-left:\s*1px solid/s);
   assert.match(css, /\.context-panel, \.panel-collapsed \.context-panel\s*\{[^}]*right:\s*8px;[^}]*left:\s*auto;[^}]*translateX\(calc\(100% \+ 20px\)\)/s);
   assert.match(css, /\.category-list\s*\{[^}]*flex-wrap:\s*wrap;[^}]*overflow:\s*visible/s);
-  assert.match(css, /\.quick-entry\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(css, /\.quick-entry\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(css, /\.prompt-context-content \.platform-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(css, /\.lighting-presets\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.tool-rail\s*\{/);
@@ -114,9 +114,11 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(workspaceUi, /<button\s+type="button"\s+key=\{tool\}/s);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
-  assert.match(page, /const IK_DRAG_SENSITIVITY = 0\.35/);
-  assert.match(page, /const IK_DRAG_FINE_SENSITIVITY = 0\.14/);
+  assert.match(page, /const IK_DRAG_SENSITIVITY = 0\.12/);
+  assert.match(page, /const IK_DRAG_FINE_SENSITIVITY = 0\.035/);
   assert.match(page, /currentPointerWorld\.clone\(\)\.sub\(startPointerWorld\)\.multiplyScalar\(sensitivity\)/);
+  assert.match(page, /if \(stored\) return new THREE\.Vector3\(\.\.\.stored\)/);
+  assert.match(page, /const handleDelta = new THREE\.Vector3\(\.\.\.target\)\.sub\(handlePosition\)/);
   assert.match(page, /id: "headPitch", label: "抬头\/低头"/);
   assert.match(page, /if \(targets\.headPitch\) applyHeadPitchTarget\(rig, targets\.headPitch\)/);
   assert.match(page, /setSelectedPoseId\(pose\.id\);\s*setToolMode\("pose"\);\s*setActiveTool\("pose"\);\s*setInteractionMode\("ik-edit"\)/s);

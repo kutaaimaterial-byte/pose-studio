@@ -136,8 +136,8 @@ type IKControlId =
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 type IKControlGroup = "head-group" | "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
 
-const IK_DRAG_SENSITIVITY = 0.35;
-const IK_DRAG_FINE_SENSITIVITY = 0.14;
+const IK_DRAG_SENSITIVITY = 0.12;
+const IK_DRAG_FINE_SENSITIVITY = 0.035;
 const HEAD_PITCH_HANDLE_OFFSET = [0, 0.24, 0.56] as const;
 
 const poseBoardTheme: Theme = {
@@ -2030,23 +2030,23 @@ const ikDirectionControlConfig: Partial<Record<IKControlId, { bone: HumanoidBone
 
 function getIKControlPosition(rig: RigBinding, control: IKControlId, targets: IKTargetMap) {
   const stored = targets[control];
+  if (stored) return new THREE.Vector3(...stored);
   if (control === "headPitch") {
-    if (stored) return new THREE.Vector3(...stored);
     const headPosition = getRigBonePosition(rig, "Head");
     return headPosition?.add(new THREE.Vector3(...HEAD_PITCH_HANDLE_OFFSET)) ?? null;
   }
+  if (control === "head") {
+    const headPosition = getRigBonePosition(rig, "Head");
+    return headPosition?.add(new THREE.Vector3(0, 0, 0.56)) ?? null;
+  }
   const directionConfig = ikDirectionControlConfig[control];
   if (directionConfig) {
-    if (stored) return new THREE.Vector3(...stored);
     const origin = getRigBonePosition(rig, directionConfig.bone);
     const child = rig.bonesByName.get(directionConfig.child);
     const childPosition = child ? getRigBonePosition(rig, child) : null;
     if (!origin) return null;
     const direction = childPosition?.clone().sub(origin).normalize() ?? new THREE.Vector3(0, 0, 1);
     return origin.clone().addScaledVector(direction, directionConfig.distance);
-  }
-  if ((control === "leftHand" || control === "rightHand" || control === "leftFoot" || control === "rightFoot" || control === "head") && stored) {
-    return new THREE.Vector3(...stored);
   }
   return getRigBonePosition(rig, ikControlBoneMap[control]);
 }
@@ -2070,13 +2070,19 @@ function aimEditorJoint(
   boneName: HumanoidBoneName,
   childName: HumanoidBoneName,
   target: [number, number, number] | undefined,
+  handleBoneName: HumanoidBoneName = childName,
 ) {
   if (!target) return;
   const bone = rig.humanoidBones[boneName];
   const child = rig.humanoidBones[childName];
   const rest = bone ? rig.restQuaternions.get(bone) : undefined;
   if (!bone || !child || !rest) return;
-  aimRigBoneAt(bone, child, rig.root.localToWorld(new THREE.Vector3(...target)), rest);
+  const handlePosition = getRigBonePosition(rig, handleBoneName);
+  const childPosition = getRigBonePosition(rig, childName);
+  if (!handlePosition || !childPosition) return;
+  const handleDelta = new THREE.Vector3(...target).sub(handlePosition);
+  const childTarget = childPosition.add(handleDelta);
+  aimRigBoneAt(bone, child, rig.root.localToWorld(childTarget), rest);
 }
 
 function aimEditorEndDirection(
@@ -2117,10 +2123,10 @@ function solveEditorPole(
 function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
   moveRigBoneToTarget(rig, "Hips", targets.hips);
   aimEditorJoint(rig, "Spine", "Chest", targets.chest);
-  aimEditorJoint(rig, "LeftUpperArm", "LeftLowerArm", targets.leftShoulder);
-  aimEditorJoint(rig, "RightUpperArm", "RightLowerArm", targets.rightShoulder);
-  aimEditorJoint(rig, "LeftUpperLeg", "LeftLowerLeg", targets.leftHip);
-  aimEditorJoint(rig, "RightUpperLeg", "RightLowerLeg", targets.rightHip);
+  aimEditorJoint(rig, "LeftUpperArm", "LeftLowerArm", targets.leftShoulder, "LeftUpperArm");
+  aimEditorJoint(rig, "RightUpperArm", "RightLowerArm", targets.rightShoulder, "RightUpperArm");
+  aimEditorJoint(rig, "LeftUpperLeg", "LeftLowerLeg", targets.leftHip, "LeftUpperLeg");
+  aimEditorJoint(rig, "RightUpperLeg", "RightLowerLeg", targets.rightHip, "RightUpperLeg");
 
   solveEditorPole(rig, "LeftHand", targets.leftElbow, targets.leftHand);
   solveEditorPole(rig, "RightHand", targets.rightElbow, targets.rightHand);
@@ -4606,10 +4612,10 @@ export default function Home() {
             </div>
 
             <div className="quick-entry" aria-label={text("Quick views", "快捷入口")}>
-              <button className={quickView === "featured" ? "active" : ""} aria-pressed={quickView === "featured"} onClick={() => { setQuickView(quickView === "featured" ? null : "featured"); setCategory("all"); }}>{text("Recommended", "推荐")}</button>
-              <button className={category === "favorites" ? "active" : ""} aria-pressed={category === "favorites"} onClick={() => { setCategory("favorites"); setQuickView(null); }}>{text("Favorites", "收藏")} {favoriteIds.length}</button>
-              <button className={quickView === "recent" ? "active" : ""} aria-pressed={quickView === "recent"} onClick={() => { setQuickView(quickView === "recent" ? null : "recent"); setCategory("all"); }}>{text("Recent", "最近")} {recentIds.length}</button>
-              <button className={category === "saved" ? "active" : ""} aria-pressed={category === "saved"} onClick={() => { setCategory("saved"); setQuickView(null); }}>{text("Saved", "已保存")} {savedPoses.length}</button>
+              <button className={quickView === "featured" ? "active" : ""} aria-pressed={quickView === "featured"} onClick={() => { setQuickView(quickView === "featured" ? null : "featured"); setCategory("all"); }}><span>{text("Recommended", "推荐")}</span></button>
+              <button className={category === "favorites" ? "active" : ""} aria-pressed={category === "favorites"} onClick={() => { setCategory("favorites"); setQuickView(null); }}><span>{text("Favorites", "收藏")}</span><small>{favoriteIds.length}</small></button>
+              <button className={quickView === "recent" ? "active" : ""} aria-pressed={quickView === "recent"} onClick={() => { setQuickView(quickView === "recent" ? null : "recent"); setCategory("all"); }}><span>{text("Recent", "最近")}</span><small>{recentIds.length}</small></button>
+              <button className={category === "saved" ? "active" : ""} aria-pressed={category === "saved"} onClick={() => { setCategory("saved"); setQuickView(null); }}><span>{text("Saved", "已保存")}</span><small>{savedPoses.length}</small></button>
             </div>
 
             <div className="category-list" role="listbox" aria-label={text("Primary pose categories", "姿势一级分类")}>
