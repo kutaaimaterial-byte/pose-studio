@@ -4168,12 +4168,18 @@ export default function Home() {
       () => setModelInfo({ loaded: false, hasSkeleton: false, label: "GLB 加载失败" }),
     );
 
+    let renderedWidth = 0;
+    let renderedHeight = 0;
     const resize = () => {
-      const width = Math.max(host.clientWidth, 1);
-      const height = Math.max(host.clientHeight, 1);
+      const width = Math.max(Math.round(host.clientWidth), 1);
+      const height = Math.max(Math.round(host.clientHeight), 1);
+      if (width === renderedWidth && height === renderedHeight) return;
+      renderedWidth = width;
+      renderedHeight = height;
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);

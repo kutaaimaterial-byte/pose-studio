@@ -75,6 +75,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.three-viewport\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*layout paint/s);
   assert.match(css, /\.control-point-layer\s*\{[^}]*overflow:\s*visible;[^}]*transition:\s*none/s);
   assert.match(css, /\.offcanvas-transform-proxy\s*\{[^}]*display:\s*none;[^}]*position:\s*absolute;[^}]*z-index:\s*14/s);
+  assert.match(css, /\.tool-pose \.inspector-panel\s*\{[^}]*display:\s*flex;[^}]*visibility:\s*hidden;[^}]*pointer-events:\s*none/s);
+  assert.match(css, /\.editor-app:not\(\.tool-pose\) \.library-panel\s*\{[^}]*display:\s*grid;[^}]*visibility:\s*hidden;[^}]*pointer-events:\s*none/s);
   assert.match(css, /\.artboard-command-bar\s*\{[^}]*position:\s*absolute;[^}]*left:\s*50%;[^}]*top:\s*-92px;[^}]*translateX\(-50%\)/s);
   assert.match(css, /\.command-bar-divider\s*\{[^}]*width:\s*1px;[^}]*height:\s*22px/s);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
@@ -92,6 +94,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /const syncTransformController = \(mode: "translate" \| "rotate"/);
   assert.match(page, /transformControls\.attach\(root\)/);
   assert.match(page, /const activateCanvasMode = \(mode: ToolMode\)/);
+  assert.match(page, /if \(width === renderedWidth && height === renderedHeight\) return;/);
+  assert.match(page, /camera\.updateProjectionMatrix\(\);\s*renderer\.render\(scene, camera\);/s);
   assert.match(page, /const changeActiveTool = \(tool: ActiveTool\) => \{\s*setActiveTool\(tool\)/s);
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
   assert.match(page, /const beginOffCanvasModelDrag = \(event: React\.PointerEvent<HTMLButtonElement>\)/);

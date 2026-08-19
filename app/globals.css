@@ -781,10 +781,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .context-panel { grid-area: panel; width: auto; min-width: 0; position: relative; inset: auto; transform: none; border-left: 1px solid var(--border-default); background: var(--surface-primary); box-shadow: none; animation: none !important; }
 .panel-collapsed .context-panel { display: none !important; }
-.tool-pose .library-panel { display: grid; }
-.tool-pose .inspector-panel { display: none; }
-.editor-app:not(.tool-pose) .library-panel { display: none; }
-.editor-app:not(.tool-pose) .inspector-panel { display: flex; }
+.tool-pose .library-panel { display: grid; visibility: visible; pointer-events: auto; }
+.tool-pose .inspector-panel { display: flex; visibility: hidden; pointer-events: none; }
+.editor-app:not(.tool-pose) .library-panel { display: grid; visibility: hidden; pointer-events: none; }
+.editor-app:not(.tool-pose) .inspector-panel { display: flex; visibility: visible; pointer-events: auto; }
 .library-panel { grid-template-rows: auto minmax(0, 1fr) auto; }
 .inspector-panel { overflow: hidden; }
 
@@ -915,8 +915,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .workspace, .panel-collapsed .workspace { grid-template-columns: var(--tool-rail) minmax(0, 1fr); grid-template-areas: "rail canvas"; }
   .context-panel, .panel-collapsed .context-panel { width: min(350px, calc(100vw - var(--tool-rail) - 16px)); display: flex !important; position: absolute; z-index: 30; right: 8px; left: auto; top: 8px; bottom: 8px; border: 1px solid var(--border-default); border-radius: 10px; transform: translateX(calc(100% + 20px)); transition: transform .18s ease; }
   .library-panel.context-panel { display: grid !important; }
-  .tool-pose .inspector-panel { display: none !important; }
-  .editor-app:not(.tool-pose) .library-panel { display: none !important; }
+  .inspector-panel.context-panel { display: flex !important; }
+  .tool-pose .library-panel { visibility: visible; pointer-events: auto; }
+  .tool-pose .inspector-panel { visibility: hidden; pointer-events: none; }
+  .editor-app:not(.tool-pose) .library-panel { visibility: hidden; pointer-events: none; }
+  .editor-app:not(.tool-pose) .inspector-panel { visibility: visible; pointer-events: auto; }
   .show-context .context-panel { transform: translateX(0); }
   .mobile-scrim { display: block; position: fixed; z-index: 24; inset: var(--header) 0 0 var(--tool-rail); border: 0; background: rgba(24, 34, 48, .28); }
   .canvas-stage { inset: 64px 12px 106px; }
