@@ -40,7 +40,7 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /class="tool-rail"/);
   assert.match(html, /class="context-action-bar"/);
   assert.match(html, /aria-label="Project name"/);
-  assert.match(html, />Export<\/button>/);
+  assert.match(html, /class="export-button-label">Export<\/span>/);
   assert.match(html, /class="language-switch" role="group" aria-label="Language"/);
   assert.match(html, /aria-pressed="true">EN<\/button>/);
   assert.match(html, /aria-pressed="false">中文<\/button>/);
@@ -68,6 +68,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.lighting-presets\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.tool-rail\s*\{/);
   assert.match(css, /\.context-action-bar\s*\{/);
+  assert.match(css, /\.toolbar-center \.perspective-grid-button\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*max-content/s);
+  assert.match(css, /\.toolbar-right \.export-button\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*92px/s);
+  assert.match(css, /\.perspective-grid-label, \.export-button-label\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(css, /\.artboard-shell\s*\{[^}]*overflow:\s*visible/s);
   assert.match(css, /\.three-viewport\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*layout paint/s);
   assert.match(css, /\.control-point-layer\s*\{[^}]*overflow:\s*visible;[^}]*transition:\s*none/s);
@@ -77,6 +80,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
   assert.match(page, /className="brand-edition">V1\.0\.3/);
+  assert.match(page, /className="perspective-grid-label"/);
+  assert.match(page, /className="export-button-label"/);
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
   assert.match(page, /useState<ToolMode>\("pose"\)/);
   assert.match(page, /useState<InteractionMode>\("ik-edit"\)/);

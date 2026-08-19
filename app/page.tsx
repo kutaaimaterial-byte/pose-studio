@@ -4444,7 +4444,7 @@ export default function Home() {
         <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
           <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => commit((current) => ({ ...current, ratio: event.target.value as Ratio }))} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "2:3", "3:4", "4:3", "9:16", "16:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
           <Tooltip content={text("Switch orientation", "切换横竖屏")} relationship="label"><ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} /></Tooltip>
-          <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span>{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
+          <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span className="perspective-grid-label">{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
           <Tooltip content={text("Tool panel", "工具面板")} relationship="label"><ToolbarButton className="icon-button mobile-only" appearance="subtle" icon={<SidebarSimple size={19} />} aria-expanded={mobilePanel === "context"} onClick={() => setMobilePanel(mobilePanel === "context" ? null : "context")} aria-label={text("Open tool panel", "打开工具面板")} /></Tooltip>
         </Toolbar>
 
@@ -4453,7 +4453,7 @@ export default function Home() {
           <Tooltip content={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} relationship="label"><ToolbarButton className="icon-button history-button" appearance="subtle" icon={<ArrowClockwise size={18} />} onClick={redo} disabled={!canRedo} aria-label={text("Redo", "重做")} /></Tooltip>
           <span className="toolbar-separator" />
           <Tooltip content={text("Shortcuts · ?", "快捷键 · ?")} relationship="label"><ToolbarButton className="icon-button" appearance="subtle" icon={<Info size={18} />} onClick={() => setHelpOpen(true)} aria-label={text("Open shortcuts", "打开快捷键")} /></Tooltip>
-          <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}>{text("Export", "导出")}</Button>
+          <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><span className="export-button-label">{text("Export", "导出")}</span></Button>
         </Toolbar>
       </header>
 

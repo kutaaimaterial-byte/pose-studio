@@ -1272,12 +1272,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .project-identity input { height: var(--control-sm); max-width: 220px; padding: 0 var(--space-2); border-radius: var(--radius-md); font-size: var(--font-body); font-weight: 500; }
 .file-state { height: 24px; font-size: var(--font-meta); }
 .toolbar-center, .toolbar-right { gap: var(--space-1); }
+.toolbar-center { min-width: max-content; }
+.toolbar-right { min-width: max-content; overflow: visible; }
 .toolbar-center .fui-Button, .toolbar-right .fui-Button, .icon-button { width: var(--control-md); min-width: var(--control-md); height: var(--control-md); border-radius: var(--radius-md); }
 .artboard-ratio-control { min-width: 76px; height: var(--control-md); padding: 0 10px; border-radius: var(--radius-md); }
 .artboard-ratio-control span { display: none; }
 .artboard-ratio-control select { width: 100%; height: var(--control-md); font-size: var(--font-label); }
-.perspective-grid-button { height: var(--control-md); border-radius: var(--radius-md); }
-.export-button { min-width: 92px; height: var(--control-lg); padding: 0 var(--space-4); border-radius: var(--radius-md); font-size: var(--font-body); font-weight: 600; }
+.toolbar-center .perspective-grid-button { width: auto; min-width: max-content; padding-inline: var(--space-3); }
+.perspective-grid-button { height: var(--control-md); overflow: visible; border-radius: var(--radius-md); }
+.perspective-grid-label, .export-button-label { display: inline-block; white-space: nowrap; }
+.toolbar-right .export-button { width: auto; min-width: 92px; overflow: visible; }
+.export-button { height: var(--control-lg); padding: 0 var(--space-4); border-radius: var(--radius-md); font-size: var(--font-body); font-weight: 600; }
 
 .workspace {
   display: grid;
@@ -1561,8 +1566,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .brand-edition, .file-state { display: none; }
   .project-identity { grid-template-columns: auto minmax(100px, 160px); gap: var(--space-2); }
   .toolbar-right .history-button, .toolbar-right .toolbar-separator { display: none; }
-  .perspective-grid-button { width: var(--control-md); min-width: var(--control-md); padding: 0; justify-content: center; }
-  .perspective-grid-button span, .perspective-grid-button kbd { display: none; }
+  .toolbar-center .perspective-grid-button { width: var(--control-md); min-width: var(--control-md); padding: 0; justify-content: center; }
+  .perspective-grid-button .perspective-grid-label, .perspective-grid-button kbd { display: none; }
   .tool-rail .fui-Button > span { font-size: 11px; }
   .pose-grid { gap: var(--space-2); padding: var(--space-3); }
 }
@@ -1579,7 +1584,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .toolbar-center { justify-self: end; }
   .toolbar-right { padding-inline: var(--space-2); }
   .toolbar-right .history-button, .toolbar-right .toolbar-separator { display: none; }
-  .export-button { min-width: 84px; }
+  .toolbar-right .export-button { min-width: 84px; }
   .workspace, .panel-collapsed .workspace {
     grid-template-columns: var(--toolrail-w) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) var(--actionbar-h);
@@ -1603,7 +1608,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .project-identity input { display: none; }
   .toolbar-center .swap-button, .toolbar-center .perspective-grid-button { display: none; }
   .toolbar-right .icon-button { display: none; }
-  .export-button { min-width: 76px; padding-inline: var(--space-2); }
+  .toolbar-right .export-button { min-width: 76px; padding-inline: var(--space-2); }
   .context-result span { display: none; }
   .context-action-bar { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); padding: 0 var(--space-2); }
   .context-quick-actions { display: none; }
