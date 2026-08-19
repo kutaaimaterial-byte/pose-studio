@@ -2626,11 +2626,11 @@ export default function Home() {
   const saveTimerRef = useRef<number | null>(null);
   const randomCursorRef = useRef(73);
   const poseThumbnailsRef = useRef<Record<number, string>>({});
-  const languageRef = useRef<Language>("en");
+  const languageRef = useRef<Language>("zh");
   const interactionModeRef = useRef<InteractionMode>("ik-edit");
   const cameraLockedRef = useRef(false);
 
-  const [language, setLanguage] = useState<Language>("en");
+  const [language, setLanguage] = useState<Language>("zh");
   const [editor, setEditor] = useState<EditorState>(cloneState(initialState));
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);

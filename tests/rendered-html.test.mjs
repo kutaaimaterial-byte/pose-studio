@@ -33,17 +33,17 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /class="editor-app/);
   assert.match(html, />PoseBoard<\/span>/);
   assert.match(html, />V1\.0\.3<\/span>/);
-  assert.match(html, />Pose Library<\/h2>/);
+  assert.match(html, />姿势预设库<\/h2>/);
   assert.match(html, /152<!-- --> poses/);
   assert.match(html, /aria-label="Pose Library"/);
   assert.match(html, /aria-label="Workspace tools"/);
   assert.match(html, /class="tool-rail"/);
   assert.match(html, /class="context-action-bar"/);
-  assert.match(html, /aria-label="Project name"/);
-  assert.match(html, /class="export-button-label">Export<\/span>/);
-  assert.match(html, /class="language-switch" role="group" aria-label="Language"/);
-  assert.match(html, /aria-pressed="true">EN<\/button>/);
-  assert.match(html, /aria-pressed="false">中文<\/button>/);
+  assert.match(html, /aria-label="项目名称"/);
+  assert.match(html, /class="export-button-label">导出<\/span>/);
+  assert.match(html, /class="language-switch" role="group" aria-label="语言"/);
+  assert.match(html, /aria-pressed="false">EN<\/button>/);
+  assert.match(html, /aria-pressed="true">中文<\/button>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -118,6 +118,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /camera\.near = 0\.02/);
   assert.match(page, /findOpenModelPosition/);
   assert.doesNotMatch(page, /controlsRef\.current\.enabled = true/);
-  assert.match(page, /useState<Language>\("en"\)/);
+  assert.match(page, /useRef<Language>\("zh"\)/);
+  assert.match(page, /useState<Language>\("zh"\)/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
 });
