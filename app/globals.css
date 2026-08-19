@@ -1193,7 +1193,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 @media (forced-colors: active) {
-  .tool-rail .fui-Button.active, .perspective-grid-button.active, .pose-card.active, .quick-entry button.active, .category-list button.active { border: 2px solid Highlight; }
+  .tool-rail button.active, .perspective-grid-button.active, .pose-card.active, .quick-entry button.active, .category-list button.active { border: 2px solid Highlight; }
   .status-dot.ready, .file-state::before { background: Highlight; }
 }
 
@@ -1306,11 +1306,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .tool-rail { grid-area: rail; padding: var(--space-2) var(--space-1); border-right: 1px solid var(--border-default); background: var(--surface-primary); }
 .tool-rail-list { gap: var(--space-1); }
-.tool-rail .fui-Button { min-height: 56px; grid-template-rows: 20px 18px; gap: var(--space-1); padding: var(--space-1); border: 0; border-radius: var(--radius-md); font-size: var(--font-meta); font-weight: 500; }
-.tool-rail .fui-Button > span { font-size: var(--font-meta); line-height: 18px; }
-.tool-rail .fui-Button:hover { border: 0; background: var(--surface-secondary); }
-.tool-rail .fui-Button.active { border: 0; background: var(--primary-soft); color: var(--primary); }
-.tool-rail .fui-Button.active::before { left: -4px; width: 3px; height: 32px; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; background: var(--primary); }
+.tool-rail button { min-height: 56px; position: relative; grid-template-rows: 20px 18px; gap: var(--space-1); padding: var(--space-1); border: 0; border-radius: var(--radius-md); font-size: var(--font-meta); font-weight: 500; }
+.tool-rail button > span { font-size: var(--font-meta); line-height: 18px; }
+.tool-rail button:hover { border: 0; background: var(--surface-secondary); }
+.tool-rail button:focus:not(:focus-visible) { outline: 0; box-shadow: none; }
+.tool-rail button.active { border: 0; background: var(--primary-soft); color: var(--primary); }
+.tool-rail button.active::before { content: ""; position: absolute; left: -4px; width: 3px; height: 32px; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; background: var(--primary); }
 .tool-rail .tool-rail-collapse { min-height: var(--control-lg); }
 
 .context-panel { grid-area: panel; min-width: 0; border: 0; border-right: 1px solid var(--border-default); border-left: 0; background: var(--surface-primary); overflow: hidden; }
@@ -1605,7 +1606,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .toolbar-right .history-button, .toolbar-right .toolbar-separator { display: none; }
   .toolbar-center .perspective-grid-button { width: var(--control-md); min-width: var(--control-md); padding: 0; justify-content: center; }
   .perspective-grid-button .perspective-grid-label, .perspective-grid-button kbd { display: none; }
-  .tool-rail .fui-Button > span { font-size: 11px; }
+  .tool-rail button > span { font-size: 11px; }
   .pose-grid { gap: var(--space-2); padding: var(--space-3); }
 }
 

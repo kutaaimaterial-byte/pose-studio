@@ -48,10 +48,11 @@ test("server-renders the PoseBoard studio shell", async () => {
 });
 
 test("keeps the V4 single-panel workstation responsive and restrained", async () => {
-  const [css, page, layout] = await Promise.all([
+  const [css, page, layout, workspaceUi] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/workspace-ui.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(css, /--surface-primary:\s*#ffffff/);
@@ -85,6 +86,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
   assert.match(page, /className="brand-edition">V1\.0\.3/);
+  assert.match(page, /<SSRProvider>/);
+  assert.match(page, /<FluentProvider[^>]*applyStylesToPortals=\{false\}/);
+  assert.doesNotMatch(page, /<Tooltip/);
   assert.match(page, /className="perspective-grid-label"/);
   assert.match(page, /className="export-button-label"/);
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
@@ -106,6 +110,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(page, /canvas-mode-switch/);
   assert.match(page, /const gizmoInside = projected\.z > -1 && projected\.z < 1/);
   assert.doesNotMatch(page, /activateTool\(/);
+  assert.doesNotMatch(workspaceUi, /<Tooltip/);
+  assert.match(workspaceUi, /<button\s+type="button"\s+key=\{tool\}/s);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
   assert.match(page, /setSelectedPoseId\(pose\.id\);\s*setToolMode\("pose"\);\s*setActiveTool\("pose"\);\s*setInteractionMode\("ik-edit"\)/s);
