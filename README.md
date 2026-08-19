@@ -1,100 +1,73 @@
-# vinext-starter
+# PoseBoard 3D Studio
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+PoseBoard is a canvas-first 3D posing workspace for illustrators, storyboard artists and AI image creators. Version `1.0.3` introduces the V4 workstation UI: a compact global header, a dedicated tool rail, one contextual panel at a time and a larger uninterrupted artboard.
 
-## Prerequisites
+## Version branches
 
-- Node.js `>=22.13.0`
+- `1.0.3`: current V4 UI/UX redesign.
+- `1.0.2`: previous interaction UI baseline and rollback branch.
+- `1.0.1`: perspective-grid release.
 
-## Quick Start
+## Run locally
+
+Requirements: Node.js `>=22.13.0`.
 
 ```bash
 npm install
 npm run dev
+```
+
+Open `http://localhost:3000/`.
+
+## Verify
+
+```bash
+npm run lint
 npm run build
+npm test
 ```
 
-This starter does not use `wrangler.jsonc`.
+## V4 workspace
 
-## Included Shape
+- Global Top Bar for project name, canvas ratio, undo/redo, help and export.
+- Tool Rail for Pose, Models, Camera, Perspective, Lighting and Prompt.
+- One contextual panel that can be collapsed to expand the canvas.
+- Explicit interaction modes: camera browse, model transform, IK pose edit and perspective edit.
+- Context Action Bar for the selected tool's most useful actions.
+- Responsive layouts verified at 1440, 1280 and 1024 pixels with no horizontal overflow.
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+Existing production capabilities remain available: pose browsing and local prompt matching, per-limb IK controls, character duplication/deletion, locked image layers, perspective grids, camera and lighting presets, saved custom poses, PNG exports and project JSON export.
 
-## Workspace Auth Headers
+## Keyboard shortcuts
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+- `Esc`: return to camera browsing or close the top dialog.
+- `F`: fit the selected character.
+- `Shift + F`: fit the artboard.
+- `M`: mirror the current pose.
+- `G`: toggle the perspective grid.
+- `Command/Ctrl + C`: copy the selected character.
+- `Command/Ctrl + V`: paste the copied character.
+- `Delete` / `Backspace`: delete the selected character or image layer.
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
+## Persistence and project format
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+Project name, workspace preferences, favorite/recent poses, saved custom poses, character state and image-layer metadata are stored in browser `localStorage`. Project JSON exported by V4 carries `schemaVersion: "4.0"` and `appVersion: "1.0.3"`.
 
-Treat the full name as optional and fall back to email when it is absent:
+Uploaded image pixels are kept in the current browser session/local browser storage; they are not uploaded to an external service by the app.
 
-```tsx
-import { headers } from "next/headers";
+## Architecture
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
+- `app/page.tsx`: Three.js scene lifecycle, pose engine, history, persistence and tool contexts.
+- `app/workspace-ui.tsx`: durable V4 tool-rail and action-bar primitives.
+- `app/perspective-grid.tsx`: perspective grid overlay and edit handles.
+- `app/globals.css`: design tokens and responsive workstation layout.
+- `app/pose-data.ts`: searchable pose catalog.
+- `app/prompt-to-pose.ts`: deterministic local prompt matching.
+- `tests/rendered-html.test.mjs`: rendered shell and responsive contract checks.
+- `PRODUCT.md` / `DESIGN.md`: product truth and visual-system guidance.
 
-  const displayName = fullName ?? email;
-  // ...
-}
-```
+## Release and rollback
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+The production build is deployed from the release branch after lint, build, rendered-shell tests and browser screenshots pass. Roll back the V4 UI by redeploying the tracked `1.0.2` branch; project JSON remains versioned so migrations can be handled explicitly.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+See `docs/V4_IMPLEMENTATION_NOTES.md` and `docs/RELEASE_1.0.3.md` for migration and verification details.

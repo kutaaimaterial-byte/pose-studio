@@ -2,6 +2,15 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Button,
+  FluentProvider,
+  SSRProvider,
+  Toolbar,
+  ToolbarButton,
+  webLightTheme,
+  type Theme,
+} from "@fluentui/react-components";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -9,14 +18,12 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import {
   ArrowLeft,
-  ArrowRight,
   ArrowClockwise,
   ArrowCounterClockwise,
   ArrowsLeftRight,
   ArrowsOutCardinal,
   Check,
   Camera,
-  Clipboard,
   Copy,
   Cube,
   DownloadSimple,
@@ -38,7 +45,6 @@ import {
   Plus,
   Shuffle,
   SidebarSimple,
-  SlidersHorizontal,
   Sparkle,
   Star,
   Trash,
@@ -91,11 +97,16 @@ import {
   type PerspectiveGridMode,
   type PerspectiveGridState,
 } from "./perspective-grid";
+import {
+  ContextActionBar,
+  ToolRail,
+  type ActiveTool,
+  type InteractionMode,
+} from "./workspace-ui";
 
 type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
 type Language = "en" | "zh";
 type ToolMode = "translate" | "rotate" | "pose";
-type InspectorTab = "model" | "camera" | "scene";
 type QuickView = "featured" | "recent" | null;
 type CameraPresetId = "commercial" | "cinematic" | "ecommerce" | "custom";
 type ShotSize = "close" | "medium" | "full" | "long";
@@ -105,6 +116,7 @@ type IKControlId =
   | "hips"
   | "chest"
   | "head"
+  | "headPitch"
   | "leftShoulder"
   | "rightShoulder"
   | "leftElbow"
@@ -124,8 +136,35 @@ type IKControlId =
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 type IKControlGroup = "head-group" | "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
 
+const IK_DRAG_SENSITIVITY = 100 / 60;
+const IK_DRAG_FINE_SENSITIVITY = 10 / 60;
+const HEAD_PITCH_HANDLE_OFFSET = [0, 0.24, 0.56] as const;
+
+const poseBoardTheme: Theme = {
+  ...webLightTheme,
+  colorBrandForeground1: "#2684ff",
+  colorBrandForeground2: "#1672e8",
+  colorBrandBackground: "#2684ff",
+  colorBrandBackgroundHover: "#1672e8",
+  colorBrandBackgroundPressed: "#125fca",
+  colorBrandBackgroundSelected: "#2684ff",
+  colorNeutralForeground1: "#182230",
+  colorNeutralForeground2: "#667085",
+  colorNeutralForeground3: "#98a2b3",
+  colorNeutralBackground1: "#ffffff",
+  colorNeutralBackground2: "#f8fafc",
+  colorNeutralBackground3: "#eef1f5",
+  colorNeutralStroke1: "#dde3ea",
+  colorNeutralStroke2: "#e8edf2",
+  borderRadiusMedium: "8px",
+  borderRadiusLarge: "12px",
+  fontFamilyBase: 'Inter, "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+  fontFamilyMonospace: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+};
+
 const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction"; group: IKControlGroup }> = [
   { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector", group: "head-group" },
+  { id: "headPitch", label: "抬头/低头", labelEn: "Head Pitch", kind: "direction", group: "head-group" },
   { id: "chest", label: "胸腔", labelEn: "Chest", kind: "core", group: "core-group" },
   { id: "hips", label: "骨盆", labelEn: "Pelvis", kind: "core", group: "core-group" },
   { id: "leftShoulder", label: "左肩", labelEn: "Left Shoulder", kind: "joint", group: "left-arm-group" },
@@ -1944,10 +1983,26 @@ function applyHeadIKTarget(rig: RigBinding, targetInRig: [number, number, number
   return true;
 }
 
+function applyHeadPitchTarget(rig: RigBinding, targetInRig: [number, number, number]) {
+  const headPosition = getRigBonePosition(rig, "Head");
+  if (!headPosition) return false;
+  const verticalDelta = targetInRig[1] - (headPosition.y + HEAD_PITCH_HANDLE_OFFSET[1]);
+  const pitch = THREE.MathUtils.clamp(
+    THREE.MathUtils.radToDeg(-Math.atan2(verticalDelta, HEAD_PITCH_HANDLE_OFFSET[2])),
+    -38,
+    38,
+  );
+  applyRigJointRotation(rig, "neck", [pitch * 0.28, 0, 0]);
+  applyRigJointRotation(rig, "head", [pitch * 0.72, 0, 0]);
+  rig.root.updateMatrixWorld(true);
+  return true;
+}
+
 const ikControlBoneMap: Record<IKControlId, HumanoidBoneName> = {
   hips: "Hips",
   chest: "Chest",
   head: "Head",
+  headPitch: "Head",
   leftShoulder: "LeftUpperArm",
   rightShoulder: "RightUpperArm",
   leftElbow: "LeftLowerArm",
@@ -1973,20 +2028,32 @@ const ikDirectionControlConfig: Partial<Record<IKControlId, { bone: HumanoidBone
   rightFootDirection: { bone: "RightFoot", child: "ball_r", distance: 0.42 },
 };
 
+const ikEffectorDirectionControl: Partial<Record<IKControlId, IKControlId>> = {
+  leftHand: "leftHandDirection",
+  rightHand: "rightHandDirection",
+  leftFoot: "leftFootDirection",
+  rightFoot: "rightFootDirection",
+};
+
 function getIKControlPosition(rig: RigBinding, control: IKControlId, targets: IKTargetMap) {
   const stored = targets[control];
+  if (stored) return new THREE.Vector3(...stored);
+  if (control === "headPitch") {
+    const headPosition = getRigBonePosition(rig, "Head");
+    return headPosition?.add(new THREE.Vector3(...HEAD_PITCH_HANDLE_OFFSET)) ?? null;
+  }
+  if (control === "head") {
+    const headPosition = getRigBonePosition(rig, "Head");
+    return headPosition?.add(new THREE.Vector3(0, 0, 0.56)) ?? null;
+  }
   const directionConfig = ikDirectionControlConfig[control];
   if (directionConfig) {
-    if (stored) return new THREE.Vector3(...stored);
     const origin = getRigBonePosition(rig, directionConfig.bone);
     const child = rig.bonesByName.get(directionConfig.child);
     const childPosition = child ? getRigBonePosition(rig, child) : null;
     if (!origin) return null;
     const direction = childPosition?.clone().sub(origin).normalize() ?? new THREE.Vector3(0, 0, 1);
     return origin.clone().addScaledVector(direction, directionConfig.distance);
-  }
-  if ((control === "leftHand" || control === "rightHand" || control === "leftFoot" || control === "rightFoot" || control === "head") && stored) {
-    return new THREE.Vector3(...stored);
   }
   return getRigBonePosition(rig, ikControlBoneMap[control]);
 }
@@ -2010,13 +2077,19 @@ function aimEditorJoint(
   boneName: HumanoidBoneName,
   childName: HumanoidBoneName,
   target: [number, number, number] | undefined,
+  handleBoneName: HumanoidBoneName = childName,
 ) {
   if (!target) return;
   const bone = rig.humanoidBones[boneName];
   const child = rig.humanoidBones[childName];
   const rest = bone ? rig.restQuaternions.get(bone) : undefined;
   if (!bone || !child || !rest) return;
-  aimRigBoneAt(bone, child, rig.root.localToWorld(new THREE.Vector3(...target)), rest);
+  const handlePosition = getRigBonePosition(rig, handleBoneName);
+  const childPosition = getRigBonePosition(rig, childName);
+  if (!handlePosition || !childPosition) return;
+  const handleDelta = new THREE.Vector3(...target).sub(handlePosition);
+  const childTarget = childPosition.add(handleDelta);
+  aimRigBoneAt(bone, child, rig.root.localToWorld(childTarget), rest);
 }
 
 function aimEditorEndDirection(
@@ -2057,10 +2130,10 @@ function solveEditorPole(
 function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
   moveRigBoneToTarget(rig, "Hips", targets.hips);
   aimEditorJoint(rig, "Spine", "Chest", targets.chest);
-  aimEditorJoint(rig, "LeftUpperArm", "LeftLowerArm", targets.leftShoulder);
-  aimEditorJoint(rig, "RightUpperArm", "RightLowerArm", targets.rightShoulder);
-  aimEditorJoint(rig, "LeftUpperLeg", "LeftLowerLeg", targets.leftHip);
-  aimEditorJoint(rig, "RightUpperLeg", "RightLowerLeg", targets.rightHip);
+  aimEditorJoint(rig, "LeftUpperArm", "LeftLowerArm", targets.leftShoulder, "LeftUpperArm");
+  aimEditorJoint(rig, "RightUpperArm", "RightLowerArm", targets.rightShoulder, "RightUpperArm");
+  aimEditorJoint(rig, "LeftUpperLeg", "LeftLowerLeg", targets.leftHip, "LeftUpperLeg");
+  aimEditorJoint(rig, "RightUpperLeg", "RightLowerLeg", targets.rightHip, "RightUpperLeg");
 
   solveEditorPole(rig, "LeftHand", targets.leftElbow, targets.leftHand);
   solveEditorPole(rig, "RightHand", targets.rightElbow, targets.rightHand);
@@ -2077,6 +2150,7 @@ function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
   aimEditorEndDirection(rig, "LeftFoot", "ball_l", targets.leftFootDirection);
   aimEditorEndDirection(rig, "RightFoot", "ball_r", targets.rightFootDirection);
   if (targets.head) applyHeadIKTarget(rig, targets.head);
+  if (targets.headPitch) applyHeadPitchTarget(rig, targets.headPitch);
 
   rig.root.updateMatrixWorld(true);
   if (targets.leftFoot || targets.rightFoot) groundRigInParentSpace(rig);
@@ -2436,6 +2510,15 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
     if (rig) applyRigPose(rig, poseIndex);
     root.add(clone);
     scene.add(root);
+    const bounds = new THREE.Box3().setFromObject(root);
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    const verticalDistance = size.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    const horizontalDistance = size.x / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+    const fitDistance = Math.max(verticalDistance, horizontalDistance) * 1.16;
+    camera.position.set(center.x, center.y + size.y * 0.02, center.z + fitDistance);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
     renderer.render(scene, camera);
     thumbnails[poseIndex] = canvas.toDataURL("image/jpeg", 0.88);
     scene.remove(root);
@@ -2559,6 +2642,7 @@ export default function Home() {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const transformControlsRef = useRef<TransformControls | null>(null);
+  const transformProxyRef = useRef<HTMLButtonElement | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
   const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
   const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -2583,9 +2667,11 @@ export default function Home() {
   const saveTimerRef = useRef<number | null>(null);
   const randomCursorRef = useRef(73);
   const poseThumbnailsRef = useRef<Record<number, string>>({});
-  const languageRef = useRef<Language>("en");
+  const languageRef = useRef<Language>("zh");
+  const interactionModeRef = useRef<InteractionMode>("ik-edit");
+  const cameraLockedRef = useRef(false);
 
-  const [language, setLanguage] = useState<Language>("en");
+  const [language, setLanguage] = useState<Language>("zh");
   const [editor, setEditor] = useState<EditorState>(cloneState(initialState));
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -2605,17 +2691,23 @@ export default function Home() {
   const [savedPoses, setSavedPoses] = useState<SavedPoseRecord[]>([]);
   const [selectedPoseId, setSelectedPoseId] = useState(defaultPose.id);
   const [persistenceReady, setPersistenceReady] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<"library" | "inspector" | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<"context" | null>(null);
   const [toast, setToast] = useState("");
   const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
   const [exporting, setExporting] = useState(false);
   const [modelList, setModelList] = useState<ModelListItem[]>([{ id: "model-1", name: "机器人 01" }]);
   const [selectedModelId, setSelectedModelId] = useState("model-1");
-  const [hasCopiedModel, setHasCopiedModel] = useState(false);
   const [canvasImages, setCanvasImages] = useState<CanvasImageLayer[]>([]);
   const [selectedCanvasImageId, setSelectedCanvasImageId] = useState<string | null>(null);
-  const [toolMode, setToolMode] = useState<ToolMode>("translate");
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("model");
+  const [toolMode, setToolMode] = useState<ToolMode>("pose");
+  const [activeTool, setActiveTool] = useState<ActiveTool>("pose");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("ik-edit");
+  const [contextPanelOpen, setContextPanelOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [cameraLocked, setCameraLocked] = useState(false);
+  const [projectName, setProjectName] = useState("Untitled Project");
   const [activeIKControl, setActiveIKControl] = useState<IKControlId | null>(null);
   const [promptToPoseOpen, setPromptToPoseOpen] = useState(false);
   const [poseText, setPoseText] = useState<string>(promptToPoseExamplesEn[0]);
@@ -2718,6 +2810,11 @@ export default function Home() {
     languageRef.current = language;
   }, [language]);
 
+  useEffect(() => {
+    interactionModeRef.current = interactionMode;
+    cameraLockedRef.current = cameraLocked;
+  }, [cameraLocked, interactionMode]);
+
   const generatedPrompt = useMemo(() => {
     const cameraLabel = editor.cameraPreset === "custom" ? "自定义镜头" : cameraPresets[editor.cameraPreset].label;
     const lightingLabel = editor.lightingPreset === "custom" ? "自定义灯光" : lightingPresets[editor.lightingPreset].label;
@@ -2741,6 +2838,7 @@ export default function Home() {
     };
   }, [editor.cameraPreset, editor.focalLength, editor.lightingPreset, editor.perspectiveGrid.mode, editor.ratio, editor.shotSize, promptPlatform, selectedPose, sourcePosePrompt]);
   const hasActiveFilters = category !== "all" || direction !== "any" || intensity !== "any" || hand !== "any" || body !== "any" || style !== "any" || query.length > 0 || quickView !== null;
+  const activeFilterCount = [direction, intensity, hand, body, style].filter((value) => value !== "any").length;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 200);
@@ -2801,6 +2899,7 @@ export default function Home() {
       const storedSavedPoses = readSavedPoseRecords(JSON.parse(window.localStorage.getItem("poseboard.savedPoses.v1") ?? "[]"));
       const savedProject = JSON.parse(window.localStorage.getItem("poseboard.project.v2") ?? "null") as { editor?: Partial<EditorState>; selectedPoseId?: string } | null;
       const lastSelected = window.localStorage.getItem("poseboard.lastSelectedId");
+      const workspacePreferences = JSON.parse(window.localStorage.getItem("poseboard.workspace.v4") ?? "null") as { projectName?: string; contextPanelOpen?: boolean; cameraLocked?: boolean } | null;
       if (Array.isArray(favorites)) setFavoriteIds(favorites.filter((id): id is string => typeof id === "string"));
       if (Array.isArray(recent)) setRecentIds(recent.filter((id): id is string => typeof id === "string").slice(0, 20));
       setSavedPoses(storedSavedPoses);
@@ -2831,6 +2930,9 @@ export default function Home() {
         setSelectedPoseId(restoredPose.id);
         if (!savedProject?.editor) setEditor((current) => ({ ...current, pose: restoredPose.enginePoseIndex }));
       }
+      if (typeof workspacePreferences?.projectName === "string" && workspacePreferences.projectName.trim()) setProjectName(workspacePreferences.projectName);
+      if (typeof workspacePreferences?.contextPanelOpen === "boolean") setContextPanelOpen(workspacePreferences.contextPanelOpen);
+      if (typeof workspacePreferences?.cameraLocked === "boolean") setCameraLocked(workspacePreferences.cameraLocked);
     } finally {
       setPersistenceReady(true);
     }
@@ -2846,8 +2948,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!persistenceReady) return;
-    window.localStorage.setItem("poseboard.project.v2", JSON.stringify({ version: "3.1", selectedPoseId, editor }));
+    window.localStorage.setItem("poseboard.project.v2", JSON.stringify({ schemaVersion: "4.0", appVersion: "1.0.3", selectedPoseId, editor }));
   }, [editor, persistenceReady, selectedPoseId]);
+
+  useEffect(() => {
+    if (!persistenceReady) return;
+    window.localStorage.setItem("poseboard.workspace.v4", JSON.stringify({ projectName, contextPanelOpen, cameraLocked }));
+  }, [cameraLocked, contextPanelOpen, persistenceReady, projectName]);
 
   useEffect(() => {
     editorLatestRef.current = editor;
@@ -2856,6 +2963,11 @@ export default function Home() {
   useEffect(() => {
     selectedModelIdRef.current = selectedModelId;
   }, [selectedModelId]);
+
+  useEffect(() => {
+    if (!controlsRef.current) return;
+    controlsRef.current.enabled = interactionMode === "camera-browse" && !cameraLocked;
+  }, [cameraLocked, interactionMode]);
 
   useEffect(() => () => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
@@ -2979,6 +3091,14 @@ export default function Home() {
       semanticModifiers: savedPose ? { ...savedPose.semanticModifiers } : {},
     }));
     setSelectedPoseId(pose.id);
+    setToolMode("pose");
+    setActiveTool("pose");
+    setInteractionMode("ik-edit");
+    if (controlsRef.current) controlsRef.current.enabled = false;
+    if (transformControlsRef.current) {
+      transformControlsRef.current.enabled = false;
+      transformControlsRef.current.getHelper().visible = false;
+    }
     setSourcePosePrompt("");
     setRecentIds((ids) => [pose.id, ...ids.filter((id) => id !== pose.id)].slice(0, 20));
     setMobilePanel(null);
@@ -3066,21 +3186,47 @@ export default function Home() {
     selectPose(available[randomCursorRef.current % available.length]);
   };
 
-  const showSimilarPoses = () => {
-    setQuickView(null);
-    setCategory(selectedPose.category);
-    setQuery(isZh ? selectedPose.tags[0] ?? "" : "");
-    setDirection("any");
-    setIntensity("any");
-    setHand("any");
-    setBody("any");
-    setStyle("any");
+  const exitInteractionMode = () => {
+    setActiveIKControl(null);
+    setInteractionMode("camera-browse");
+    if (transformControlsRef.current) {
+      transformControlsRef.current.enabled = false;
+      transformControlsRef.current.getHelper().visible = false;
+    }
+    if (controlsRef.current) controlsRef.current.enabled = !cameraLocked;
   };
 
-  const activateTool = (mode: ToolMode) => {
+  const syncTransformController = (mode: "translate" | "rotate", root = modelRootsRef.current[selectedModelIdRef.current]) => {
+    const transformControls = transformControlsRef.current;
+    if (!transformControls || !root) return;
+
+    transformControls.attach(root);
+    transformControls.setMode(mode);
+    transformControls.setSpace(mode === "rotate" ? "local" : "world");
+    transformControls.enabled = root.visible;
+    transformControls.getHelper().visible = root.visible;
+  };
+
+  const activateCanvasMode = (mode: ToolMode) => {
     setToolMode(mode);
-    setInspectorTab("model");
-    if (controlsRef.current) controlsRef.current.enabled = true;
+    setInteractionMode(mode === "pose" ? "ik-edit" : "model-transform");
+    setActiveIKControl(null);
+    if (controlsRef.current) controlsRef.current.enabled = false;
+    if (mode === "pose") {
+      if (transformControlsRef.current) {
+        transformControlsRef.current.enabled = false;
+        transformControlsRef.current.getHelper().visible = false;
+      }
+    } else {
+      syncTransformController(mode);
+    }
+  };
+
+  const changeActiveTool = (tool: ActiveTool) => {
+    setActiveTool(tool);
+    setAdvancedOpen(false);
+    setContextPanelOpen(true);
+    setMobilePanel(window.innerWidth < 1024 ? "context" : null);
   };
 
   const beginIKDrag = (control: IKControlId, event: React.PointerEvent<HTMLButtonElement>) => {
@@ -3090,39 +3236,81 @@ export default function Home() {
     if (!rig || !camera || !renderer) return;
     const startLocal = getIKControlPosition(rig, control, editorLatestRef.current.ikTargets);
     if (!startLocal) return;
+    const linkedDirectionControl = ikEffectorDirectionControl[control];
+    const startDirectionLocal = linkedDirectionControl
+      ? getIKControlPosition(rig, linkedDirectionControl, editorLatestRef.current.ikTargets)
+      : null;
+    const startWorld = rig.root.localToWorld(startLocal.clone());
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), startWorld);
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const startPointerWorld = new THREE.Vector3();
+    const currentPointerWorld = new THREE.Vector3();
+    const rect = renderer.domElement.getBoundingClientRect();
+    const setPointerRay = (clientX: number, clientY: number) => {
+      pointer.set(
+        ((clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1,
+        -((clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1,
+      );
+      raycaster.setFromCamera(pointer, camera);
+    };
+    setPointerRay(event.clientX, event.clientY);
+    if (!raycaster.ray.intersectPlane(plane, startPointerWorld)) return;
+
     event.preventDefault();
     event.stopPropagation();
     setActiveIKControl(control);
     beginContinuousEdit();
     if (controlsRef.current) controlsRef.current.enabled = false;
 
-    const startWorld = rig.root.localToWorld(startLocal.clone());
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), startWorld);
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    const worldTarget = new THREE.Vector3();
+    let pendingPointer: { clientX: number; clientY: number; shiftKey: boolean } | null = null;
+    let dragFrame: number | null = null;
 
-    const move = (pointerEvent: PointerEvent) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.set(
-        ((pointerEvent.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1,
-        -((pointerEvent.clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1,
-      );
-      raycaster.setFromCamera(pointer, camera);
-      if (!raycaster.ray.intersectPlane(plane, worldTarget)) return;
-      const local = rig.root.worldToLocal(worldTarget.clone());
+    const applyPointer = (pointerEvent: { clientX: number; clientY: number; shiftKey: boolean }) => {
+      setPointerRay(pointerEvent.clientX, pointerEvent.clientY);
+      if (!raycaster.ray.intersectPlane(plane, currentPointerWorld)) return;
+      const sensitivity = pointerEvent.shiftKey ? IK_DRAG_FINE_SENSITIVITY : IK_DRAG_SENSITIVITY;
+      const worldDelta = currentPointerWorld.clone().sub(startPointerWorld).multiplyScalar(sensitivity);
+      const local = rig.root.worldToLocal(startWorld.clone().add(worldDelta));
+      if (control === "headPitch") {
+        local.x = startLocal.x;
+        local.z = startLocal.z;
+      }
       const target: [number, number, number] = [local.x, local.y, local.z];
       updateContinuousEdit((current) => ({
         ...current,
-        ikTargets: { ...current.ikTargets, [control]: target },
+        ikTargets: (() => {
+          const nextTargets: IKTargetMap = { ...current.ikTargets, [control]: target };
+          if (linkedDirectionControl && startDirectionLocal) {
+            const directionTarget = startDirectionLocal.clone().add(local.clone().sub(startLocal));
+            nextTargets[linkedDirectionControl] = [directionTarget.x, directionTarget.y, directionTarget.z];
+          }
+          return nextTargets;
+        })(),
       }));
     };
 
-    const end = () => {
+    const move = (pointerEvent: PointerEvent) => {
+      pendingPointer = { clientX: pointerEvent.clientX, clientY: pointerEvent.clientY, shiftKey: pointerEvent.shiftKey };
+      if (dragFrame !== null) return;
+      dragFrame = window.requestAnimationFrame(() => {
+        dragFrame = null;
+        if (!pendingPointer) return;
+        const nextPointer = pendingPointer;
+        pendingPointer = null;
+        applyPointer(nextPointer);
+      });
+    };
+
+    const end = (pointerEvent: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
-      if (controlsRef.current) controlsRef.current.enabled = true;
+      if (dragFrame !== null) window.cancelAnimationFrame(dragFrame);
+      if (pointerEvent.type === "pointerup") {
+        applyPointer({ clientX: pointerEvent.clientX, clientY: pointerEvent.clientY, shiftKey: pointerEvent.shiftKey });
+      }
+      if (controlsRef.current) controlsRef.current.enabled = interactionModeRef.current === "camera-browse" && !cameraLockedRef.current;
       setActiveIKControl(null);
       endContinuousEdit();
       const definition = ikControlDefinitions.find(({ id }) => id === control);
@@ -3278,7 +3466,8 @@ export default function Home() {
     clearPoseFilters();
     setCategory(result.category);
     setToolMode("pose");
-    setInspectorTab("model");
+    setActiveTool("pose");
+    setInteractionMode("ik-edit");
     setMobilePanel(null);
     setPromptToPoseOpen(false);
     flash(text(`Text pose applied: ${result.pose.nameEn}`, `文字姿态已应用：${result.pose.name}`));
@@ -3308,7 +3497,10 @@ export default function Home() {
 
   const exportProjectJson = () => {
     const project = {
-      version: "3.1",
+      schemaVersion: "4.0",
+      appVersion: "1.0.3",
+      name: projectName,
+      updatedAt: new Date().toISOString(),
       pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers },
       promptToPose: sourcePosePrompt && promptToPoseResult ? { input: sourcePosePrompt, ...promptToPoseJson(promptToPoseResult) } : null,
       camera: {
@@ -3340,9 +3532,47 @@ export default function Home() {
     });
   };
 
-  const setLandscapeRatio = (base: "16:9" | "3:2" | "4:3" | "1:1") => {
-    commit((current) => ({ ...current, ratio: base }));
-    flash(text(`Canvas ratio changed to ${base}`, `画幅已切换为 ${base}`));
+  const beginOffCanvasModelDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const root = modelRootRef.current;
+    const camera = cameraRef.current;
+    const renderer = rendererRef.current;
+    if (!root || !camera || !renderer || interactionModeRef.current !== "model-transform") return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    setToolMode("translate");
+    syncTransformController("translate", root);
+    beginContinuousEdit();
+    if (controlsRef.current) controlsRef.current.enabled = false;
+
+    camera.updateMatrixWorld(true);
+    root.updateMatrixWorld(true);
+    const startPointer = new THREE.Vector2(event.clientX, event.clientY);
+    const startWorld = root.getWorldPosition(new THREE.Vector3());
+    const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    const cameraUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    const distance = Math.max(camera.position.distanceTo(startWorld), 0.1);
+    const worldPerPixel = (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(renderer.domElement.clientHeight, 1);
+
+    const move = (pointerEvent: PointerEvent) => {
+      const deltaX = pointerEvent.clientX - startPointer.x;
+      const deltaY = pointerEvent.clientY - startPointer.y;
+      const nextWorld = startWorld.clone()
+        .addScaledVector(cameraRight, deltaX * worldPerPixel)
+        .addScaledVector(cameraUp, -deltaY * worldPerPixel);
+      const nextLocal = root.parent ? root.parent.worldToLocal(nextWorld.clone()) : nextWorld;
+      updateContinuousEdit((current) => ({ ...current, position: [nextLocal.x, nextLocal.y, nextLocal.z] }));
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      endContinuousEdit();
+      flash(text("Model position updated", "模型位置已更新"));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
   };
 
   const toggleOrientation = () => {
@@ -3358,7 +3588,9 @@ export default function Home() {
       ...current,
       perspectiveGrid: perspectiveDefaultsForMode(mode, current.perspectiveGrid),
     }));
-    setInspectorTab("scene");
+    setActiveTool("perspective");
+    setInteractionMode(mode === "off" ? "camera-browse" : "perspective-edit");
+    if (controlsRef.current) controlsRef.current.enabled = mode === "off" && !cameraLocked;
     flash(mode === "off"
       ? text("Perspective grid hidden", "透视网格已关闭")
       : text(`${mode.replace("-", " ")} perspective enabled`, `已启用${mode === "ground" ? "地面网格" : mode === "one-point" ? "一点透视" : mode === "two-point" ? "两点透视" : "三点透视"}`));
@@ -3453,7 +3685,7 @@ export default function Home() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
-      if (controlsRef.current) controlsRef.current.enabled = true;
+      if (controlsRef.current) controlsRef.current.enabled = interactionModeRef.current === "camera-browse" && !cameraLockedRef.current;
       endContinuousEdit();
       flash(text("Perspective guide updated", "透视辅助线已更新"));
     };
@@ -3471,7 +3703,6 @@ export default function Home() {
       const currentMode = editorLatestRef.current.perspectiveGrid.mode;
       const nextMode: PerspectiveGridMode = currentMode === "off" ? "ground" : "off";
       setEditor((current) => ({ ...current, perspectiveGrid: perspectiveDefaultsForMode(nextMode, current.perspectiveGrid) }));
-      setInspectorTab("scene");
       flash(nextMode === "off" ? text("Perspective grid hidden", "透视网格已关闭") : text("Ground grid enabled", "地面网格已开启"));
     };
     document.addEventListener("keydown", handleGridShortcut);
@@ -3489,6 +3720,13 @@ export default function Home() {
     modelRootRef.current = nextRoot;
     deformableMeshesRef.current = nextMeshes;
     setEditor((current) => ({ ...current, ...cloneModelEditState(nextState) }));
+    if (activeTool === "model") {
+      const nextMode = toolMode === "rotate" ? "rotate" : "translate";
+      setToolMode(nextMode);
+      setInteractionMode("model-transform");
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      syncTransformController(nextMode, nextRoot);
+    }
   };
 
   const createModelInstance = (state: ModelEditState, sequence: number) => {
@@ -3564,8 +3802,28 @@ export default function Home() {
   const copySelectedModel = () => {
     if (!modelInfo.loaded) return;
     modelClipboardRef.current = cloneModelEditState(getModelEditState(editorLatestRef.current));
-    setHasCopiedModel(true);
     flash(text("Character copied · ⌘/Ctrl C", "角色已复制 · ⌘/Ctrl C"));
+  };
+
+  const findOpenModelPosition = (source: ModelEditState): [number, number, number] => {
+    const spacingX = Math.max(1.6, (source.scale / 100) * 1.7);
+    const spacingZ = Math.max(1.1, (source.scale / 100) * 1.25);
+    const occupied = Object.values(modelRootsRef.current)
+      .filter((root) => root.visible)
+      .map((root) => root.position);
+    const offsets: Array<[number, number]> = [
+      [spacingX, 0], [-spacingX, 0],
+      [spacingX * 2, 0], [-spacingX * 2, 0],
+      [0, spacingZ], [0, -spacingZ],
+      [spacingX, spacingZ], [-spacingX, spacingZ],
+    ];
+    const [sourceX, sourceY, sourceZ] = source.position;
+    const candidate = offsets.find(([offsetX, offsetZ]) => occupied.every((position) => {
+      const normalizedX = (sourceX + offsetX - position.x) / spacingX;
+      const normalizedZ = (sourceZ + offsetZ - position.z) / spacingZ;
+      return Math.hypot(normalizedX, normalizedZ) >= 0.92;
+    })) ?? [spacingX * (occupied.length + 1), 0];
+    return [sourceX + candidate[0], sourceY, sourceZ + candidate[1]];
   };
 
   const pasteCopiedModel = () => {
@@ -3580,7 +3838,7 @@ export default function Home() {
     const sequence = modelCounterRef.current;
     modelCounterRef.current += 1;
     const source = cloneModelEditState(modelClipboardRef.current);
-    source.position = [source.position[0] + 0.48, source.position[1], source.position[2] + 0.28];
+    source.position = findOpenModelPosition(source);
     const created = createModelInstance(source, sequence);
     if (!created) return;
     modelClipboardRef.current = cloneModelEditState(source);
@@ -3670,7 +3928,8 @@ export default function Home() {
     }
     setCanvasImages((current) => [...current, ...uploaded]);
     setSelectedCanvasImageId(uploaded.at(-1)?.id ?? null);
-    setInspectorTab("scene");
+    setActiveTool("model");
+    setContextPanelOpen(true);
     flash(text(`${uploaded.length} image layer${uploaded.length > 1 ? "s" : ""} added`, `已添加 ${uploaded.length} 个图片图层`));
   };
 
@@ -3725,7 +3984,7 @@ export default function Home() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
-      if (controlsRef.current) controlsRef.current.enabled = true;
+      if (controlsRef.current) controlsRef.current.enabled = interactionModeRef.current === "camera-browse" && !cameraLockedRef.current;
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
@@ -3749,6 +4008,63 @@ export default function Home() {
     };
     document.addEventListener("keydown", handleModelShortcuts);
     return () => document.removeEventListener("keydown", handleModelShortcuts);
+  });
+
+  function fitSelectedCharacter() {
+    const root = modelRootsRef.current[selectedModelId];
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!root || !camera || !controls) return;
+    const bounds = new THREE.Box3().setFromObject(root);
+    if (bounds.isEmpty()) return;
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const direction = camera.position.clone().sub(controls.target);
+    if (direction.lengthSq() < 0.0001) direction.set(0.45, 0.18, 1);
+    direction.normalize();
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
+    const limitingFov = Math.min(verticalFov, horizontalFov);
+    const distance = Math.max(3.2, sphere.radius / Math.max(Math.sin(limitingFov / 2), 0.1) * 1.14);
+    controls.target.copy(sphere.center);
+    camera.position.copy(sphere.center).addScaledVector(direction, distance);
+    // Keep the near plane in front of every visible character. Deriving it
+    // only from the selected character can slice foreground duplicates after
+    // Fit Character is used.
+    camera.near = 0.02;
+    camera.far = Math.max(100, distance + sphere.radius * 4);
+    camera.updateProjectionMatrix();
+    controls.update();
+    setZoom(76);
+    flash(text("Character fitted to artboard", "人物已适配画板"));
+  }
+
+  useEffect(() => {
+    const handleWorkspaceShortcuts = (event: KeyboardEvent) => {
+      const target = event.target;
+      const editingText = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+      if (event.key === "Escape") {
+        if (exportDialogOpen) setExportDialogOpen(false);
+        else if (helpOpen) setHelpOpen(false);
+        else if (promptOpen) setPromptOpen(false);
+        else if (promptToPoseOpen) setPromptToPoseOpen(false);
+        else exitInteractionMode();
+        return;
+      }
+      if (editingText || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "?") {
+        event.preventDefault();
+        setHelpOpen(true);
+      } else if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (event.shiftKey) setZoom(76);
+        else fitSelectedCharacter();
+      } else if (!event.shiftKey && event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        commit((current) => ({ ...current, mirrored: !current.mirrored }));
+      }
+    };
+    document.addEventListener("keydown", handleWorkspaceShortcuts);
+    return () => document.removeEventListener("keydown", handleWorkspaceShortcuts);
   });
 
   useEffect(() => {
@@ -3815,7 +4131,7 @@ export default function Home() {
       }));
     };
     const handleTransformDragging = (event: { value: unknown }) => {
-      controls.enabled = !event.value;
+      controls.enabled = !event.value && interactionModeRef.current === "camera-browse" && !cameraLockedRef.current;
     };
     const handleTransformMouseUp = () => flash(transformControls.getMode() === "rotate"
       ? languageRef.current === "zh" ? "模型旋转已更新" : "Model rotation updated"
@@ -3935,12 +4251,18 @@ export default function Home() {
       () => setModelInfo({ loaded: false, hasSkeleton: false, label: "GLB 加载失败" }),
     );
 
+    let renderedWidth = 0;
+    let renderedHeight = 0;
     const resize = () => {
-      const width = Math.max(host.clientWidth, 1);
-      const height = Math.max(host.clientHeight, 1);
+      const width = Math.max(Math.round(host.clientWidth), 1);
+      const height = Math.max(Math.round(host.clientHeight), 1);
+      if (width === renderedWidth && height === renderedHeight) return;
+      renderedWidth = width;
+      renderedHeight = height;
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
@@ -3964,6 +4286,34 @@ export default function Home() {
           element.style.display = visible ? "grid" : "none";
           element.style.transform = `translate(${((world.x + 1) * 0.5 * rect.width) - 18}px, ${((-world.y + 1) * 0.5 * rect.height) - 18}px)`;
         });
+      }
+      const proxy = transformProxyRef.current;
+      const selectedRoot = modelRootsRef.current[selectedModelIdRef.current];
+      if (proxy && selectedRoot && interactionModeRef.current === "model-transform" && selectedRoot.visible) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasAreaRect = renderer.domElement.closest<HTMLElement>(".canvas-area")?.getBoundingClientRect();
+        const projected = selectedRoot.getWorldPosition(new THREE.Vector3()).project(camera);
+        const projectedX = ((projected.x + 1) * 0.5) * rect.width;
+        const projectedY = ((-projected.y + 1) * 0.5) * rect.height;
+        const safety = 62;
+        const gizmoInside = projected.z > -1 && projected.z < 1
+          && projectedX >= safety && projectedX <= rect.width - safety
+          && projectedY >= safety && projectedY <= rect.height - safety;
+        if (gizmoInside) {
+          proxy.style.display = "none";
+        } else {
+          const minX = canvasAreaRect ? canvasAreaRect.left - rect.left + 42 : -48;
+          const maxX = canvasAreaRect ? canvasAreaRect.right - rect.left - 42 : rect.width + 48;
+          const minY = canvasAreaRect ? canvasAreaRect.top - rect.top + 42 : -48;
+          const maxY = canvasAreaRect ? canvasAreaRect.bottom - rect.top - 42 : rect.height + 72;
+          const fallbackX = rect.width * 0.5;
+          const fallbackY = rect.height + 52;
+          proxy.style.left = `${clamp(Number.isFinite(projectedX) ? projectedX : fallbackX, minX, maxX)}px`;
+          proxy.style.top = `${clamp(Number.isFinite(projectedY) ? projectedY : fallbackY, minY, maxY)}px`;
+          proxy.style.display = "grid";
+        }
+      } else if (proxy) {
+        proxy.style.display = "none";
       }
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(tick);
@@ -4004,12 +4354,12 @@ export default function Home() {
     const root = modelRootsRef.current[selectedModelId];
     if (!transformControls || !root || !modelInfo.loaded) return;
     transformControls.attach(root);
-    const transformActive = toolMode === "translate" || toolMode === "rotate";
+    const transformActive = interactionMode === "model-transform";
     transformControls.setMode(toolMode === "rotate" ? "rotate" : "translate");
     transformControls.setSpace(toolMode === "rotate" ? "local" : "world");
     transformControls.enabled = editor.visible && transformActive;
     transformControls.getHelper().visible = editor.visible && transformActive;
-  }, [selectedModelId, toolMode, modelInfo.loaded, editor.visible]);
+  }, [selectedModelId, toolMode, interactionMode, modelInfo.loaded, editor.visible]);
 
   useEffect(() => {
     const root = modelRootRef.current;
@@ -4024,7 +4374,7 @@ export default function Home() {
     root.scale.setScalar(editor.scale / 100);
     root.visible = editor.visible;
     if (transformControlsRef.current) {
-      const transformActive = toolMode === "translate" || toolMode === "rotate";
+      const transformActive = interactionMode === "model-transform";
       transformControlsRef.current.enabled = editor.visible && transformActive;
       transformControlsRef.current.getHelper().visible = editor.visible && transformActive;
     }
@@ -4058,7 +4408,7 @@ export default function Home() {
     }
     scene.background = new THREE.Color(editor.background);
     if (scene.fog instanceof THREE.Fog) scene.fog.color.set(editor.background);
-  }, [editor, modelInfo.loaded, selectedModelId, toolMode]);
+  }, [editor, interactionMode, modelInfo.loaded, selectedModelId, toolMode]);
 
   useEffect(() => {
     const group = groundGridRef.current;
@@ -4076,7 +4426,15 @@ export default function Home() {
     group.position.set(grid.origin[0], (grid.snapToFeet ? footY : 0) + grid.origin[1] + 0.004, grid.origin[2]);
   }, [editor.perspectiveGrid, editor.position, editor.pose, editor.rotation, editor.scale, modelInfo.loaded, selectedModelId]);
 
-  const exportPng = async (exportMode: "setting" | "clean" | "with-grid" | "overlay" = "setting") => {
+  useEffect(() => {
+    if (!modelInfo.loaded) return;
+    const timer = window.setTimeout(fitSelectedCharacter, 220);
+    return () => window.clearTimeout(timer);
+  // Fit only when a newly loaded model becomes available; pose changes preserve camera intent.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelInfo.loaded]);
+
+  const exportPng = async (exportMode: "setting" | "clean" | "with-grid" | "transparent" | "overlay" = "setting") => {
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
     const camera = cameraRef.current;
@@ -4106,11 +4464,12 @@ export default function Home() {
       const [targetWidth, targetHeight] = ratioSize[editor.ratio];
       const grid = editor.perspectiveGrid;
       const overlayOnly = exportMode === "overlay";
+      const transparentOutput = exportMode === "transparent";
       const includeGrid = grid.enabled && grid.mode !== "off" && (exportMode === "with-grid" || overlayOnly || (exportMode === "setting" && grid.includeInExport));
       if (transformHelper) transformHelper.visible = false;
       if (groundGrid) groundGrid.visible = includeGrid && grid.mode === "ground";
-      if (overlayOnly) {
-        modelVisibility.forEach(([id]) => { modelRootsRef.current[id].visible = false; });
+      if (overlayOnly || transparentOutput) {
+        if (overlayOnly) modelVisibility.forEach(([id]) => { modelRootsRef.current[id].visible = false; });
         scene.background = null;
         scene.fog = null;
         renderer.setClearColor(0x000000, 0);
@@ -4149,7 +4508,7 @@ export default function Home() {
 
       const link = document.createElement("a");
       link.href = output.toDataURL("image/png");
-      const suffix = overlayOnly ? "grid-overlay" : includeGrid ? "with-grid" : "clean";
+      const suffix = overlayOnly ? "grid-overlay" : transparentOutput ? "transparent" : includeGrid ? "with-grid" : "clean";
       link.download = `poseboard-${selectedPose.name}-${suffix}-${targetWidth}x${targetHeight}.png`;
       link.click();
       flash(overlayOnly
@@ -4178,8 +4537,9 @@ export default function Home() {
   const resetAll = () => {
     commit(() => cloneState(initialState));
     setZoom(76);
-    setToolMode("translate");
-    setInspectorTab("model");
+    setToolMode("pose");
+    setActiveTool("pose");
+    setInteractionMode("ik-edit");
     setMobilePanel(null);
     setSelectedPoseId(defaultPose.id);
     setCanvasImages([]);
@@ -4197,16 +4557,36 @@ export default function Home() {
 
   const currentSize = ratioSize[editor.ratio];
   const zoomWidth = editor.ratio === "9:16" ? zoom * 0.43 : editor.ratio === "2:3" ? zoom * 0.58 : editor.ratio === "3:4" ? zoom * 0.66 : editor.ratio === "1:1" ? zoom * 0.72 : zoom;
-  const landscapeRatio = editor.ratio === "9:16" ? "16:9" : editor.ratio === "2:3" ? "3:2" : editor.ratio === "3:4" ? "4:3" : editor.ratio;
   const selectedModel = modelList.find(({ id }) => id === selectedModelId) ?? modelList[0];
+  const toolLabels: Record<ActiveTool, string> = {
+    pose: text("Pose", "姿势"),
+    model: text("Models", "人物"),
+    camera: text("Camera", "镜头"),
+    perspective: text("Perspective", "透视"),
+    lighting: text("Lighting", "灯光"),
+    prompt: text("Prompt", "提示词"),
+  };
+  const interactionModeLabel: Record<InteractionMode, string> = {
+    "camera-browse": text("Browse Camera", "浏览镜头"),
+    "model-transform": toolMode === "rotate" ? text("Rotate Character", "旋转人物") : text("Move Character", "移动人物"),
+    "ik-edit": text("Fine-tune Pose", "微调姿势"),
+    "perspective-edit": text("Edit Perspective", "编辑透视"),
+  };
+  const nextTool: Record<ActiveTool, ActiveTool> = { pose: "camera", model: "pose", camera: "perspective", perspective: "lighting", lighting: "prompt", prompt: "pose" };
+  const goToNextTool = () => changeActiveTool(nextTool[activeTool]);
 
   return (
-    <main className={`editor-app ${mobilePanel ? `show-${mobilePanel}` : ""}`}>
+    <SSRProvider>
+    <FluentProvider theme={poseBoardTheme} className="fluent-root" applyStylesToPortals={false}>
+    <main className={`editor-app tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${mobilePanel ? "show-context" : ""}`}>
       <header className="topbar">
         <div className="brand-block">
           <span className="brand-mark">P</span>
-          <span className="brand-name">PoseBoard</span>
-          <span className="brand-edition">3D STUDIO</span>
+          <div className="project-identity">
+            <span className="brand-name">PoseBoard</span>
+            <input value={projectName} onChange={(event) => { setProjectName(event.target.value); markSaving(); }} aria-label={text("Project name", "项目名称")} />
+          </div>
+          <span className="brand-edition">V1.0.3</span>
           <div className="language-switch" role="group" aria-label={text("Language", "语言")}>
             <button className={language === "en" ? "active" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
             <button className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} onClick={() => changeLanguage("zh")}>中文</button>
@@ -4214,59 +4594,50 @@ export default function Home() {
           <span className="file-state" aria-live="polite">{saveState === "saving" ? text("Saving…", "正在保存…") : text("Saved · just now", "已保存 · 刚刚")}</span>
         </div>
 
-        <div className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
-          <div className="segmented" aria-label={text("Canvas ratio", "画板比例")}>
-            {(["16:9", "3:2", "4:3", "1:1"] as const).map((ratio) => (
-              <button key={ratio} className={landscapeRatio === ratio ? "active" : ""} aria-pressed={landscapeRatio === ratio} onClick={() => setLandscapeRatio(ratio)}>{ratio}</button>
-            ))}
-          </div>
-          <button className="icon-button swap-button" onClick={toggleOrientation} title={text("Switch orientation", "切换横竖屏")} aria-label={text("Switch orientation", "切换横竖屏")}><ArrowsLeftRight size={18} /></button>
-          <span className="toolbar-separator" />
-          <button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} title={text("Perspective Grid · G", "透视网格 · G")}><Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} /><span>{text("Perspective", "透视网格")}</span><kbd>G</kbd></button>
-          <button className="reset-scene-button" onClick={resetAll} title={text("Reset entire scene", "重置整个场景")}><ArrowCounterClockwise size={17} /><span>{text("Reset Scene", "重置场景")}</span></button>
-          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "library"} onClick={() => setMobilePanel(mobilePanel === "library" ? null : "library")} title={text("Pose Library", "姿势库")} aria-label={text("Open Pose Library", "打开姿势库")}><SidebarSimple size={19} /></button>
-          <button className="icon-button mobile-only" aria-expanded={mobilePanel === "inspector"} onClick={() => setMobilePanel(mobilePanel === "inspector" ? null : "inspector")} title={text("Inspector", "检查器")} aria-label={text("Open Inspector", "打开检查器")}><SlidersHorizontal size={19} /></button>
-          <button className="icon-button mobile-only" onClick={() => setPromptToPoseOpen(true)} title={text("Text to Pose", "文字生成姿态")} aria-label={text("Text to Pose", "文字生成姿态")}><Sparkle size={19} weight="fill" /></button>
-          <button className="icon-button mobile-only" onClick={() => setPromptOpen(true)} title={text("Generate image prompt", "生成绘图 Prompt")} aria-label={text("Generate image prompt", "生成绘图 Prompt")}><Copy size={18} /></button>
-        </div>
+        <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
+          <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => commit((current) => ({ ...current, ratio: event.target.value as Ratio }))} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "2:3", "3:4", "4:3", "9:16", "16:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
+          <ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} title={text("Switch orientation", "切换横竖屏")} />
+          <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span className="perspective-grid-label">{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
+          <ToolbarButton className="icon-button mobile-only" appearance="subtle" icon={<SidebarSimple size={19} />} aria-expanded={mobilePanel === "context"} onClick={() => setMobilePanel(mobilePanel === "context" ? null : "context")} aria-label={text("Open tool panel", "打开工具面板")} title={text("Tool panel", "工具面板")} />
+        </Toolbar>
 
-        <div className="toolbar-right">
-          <button className="icon-button" onClick={undo} disabled={!canUndo} title={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} aria-label={text("Undo", "撤销")}><ArrowCounterClockwise size={18} /></button>
-          <button className="icon-button" onClick={redo} disabled={!canRedo} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} aria-label={text("Redo", "重做")}><ArrowClockwise size={18} /></button>
+        <Toolbar className="toolbar-right" aria-label={text("Project actions", "项目操作")}>
+          <ToolbarButton className="icon-button history-button" appearance="subtle" icon={<ArrowCounterClockwise size={18} />} onClick={undo} disabled={!canUndo} aria-label={text("Undo", "撤销")} title={text("Undo ⌘/Ctrl Z", "撤销 ⌘/Ctrl Z")} />
+          <ToolbarButton className="icon-button history-button" appearance="subtle" icon={<ArrowClockwise size={18} />} onClick={redo} disabled={!canRedo} aria-label={text("Redo", "重做")} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} />
           <span className="toolbar-separator" />
-          <button className="pose-ai-button" onClick={() => setPromptToPoseOpen(true)} disabled={!modelInfo.loaded} title={text("Generate a 3D pose from text", "用文字生成 3D 姿态")}><Sparkle size={17} weight="fill" /> {text("Text to Pose", "文字姿态")}</button>
-          <button className="icon-button prompt-output-button" onClick={() => setPromptOpen(true)} disabled={!modelInfo.loaded} title={text("Generate image prompt", "生成绘图 Prompt")} aria-label={text("Generate image prompt", "生成绘图 Prompt")}><Copy size={17} /></button>
-          <button className={`export-button ${exporting ? "loading" : ""}`} onClick={() => exportPng()} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><DownloadSimple size={18} weight="bold" /> {exporting ? text("Exporting…", "导出中…") : text("Export PNG", "导出 PNG")}</button>
-        </div>
+          <ToolbarButton className="icon-button" appearance="subtle" icon={<Info size={18} />} onClick={() => setHelpOpen(true)} aria-label={text("Open shortcuts", "打开快捷键")} title={text("Shortcuts · ?", "快捷键 · ?")} />
+          <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><span className="export-button-label">{text("Export", "导出")}</span></Button>
+        </Toolbar>
       </header>
 
       <section className="workspace">
-        <aside className="panel library-panel" aria-label="Pose Library">
+        <ToolRail activeTool={activeTool} labels={toolLabels} panelOpen={contextPanelOpen} onChange={changeActiveTool} onTogglePanel={() => setContextPanelOpen((open) => !open)} />
+        <aside className="panel library-panel context-panel" aria-label="Pose Library">
           <div className="library-scroll-header">
             <div className="panel-title-row">
               <div><h2>{text("Pose Library", "姿势预设库")}</h2></div>
-              <span className="count">{poseItems.length + savedPoses.length} poses</span>
+              <div className="panel-heading-actions">
+                <span className="count">{poseItems.length + savedPoses.length} poses</span>
+                <button onClick={() => setHelpOpen(true)} aria-label={text("Open help", "打开帮助")} title={text("Help and shortcuts", "帮助与快捷键")}><Info size={18} /></button>
+                <button onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "收起面板")} title={text("Collapse panel", "收起面板")}><SidebarSimple size={18} weight="fill" /></button>
+              </div>
             </div>
 
             <div className="search-field" role="search">
               <span><MagnifyingGlass size={18} /></span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text("Search poses: look back / sprint / hand on hip", "搜索姿势，例如：回头 / 冲刺 / 叉腰")} aria-label={text("Search poses", "搜索姿势")} />
-              {query && <button className="clear-search" onClick={() => setQuery("")} aria-label={text("Clear search", "清除搜索")} title={text("Clear search", "清除搜索")}><X size={15} /></button>}
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={text("Search or describe a pose", "搜索或描述姿势")} aria-label={text("Describe or search poses", "描述或搜索姿势")} />
+              {query ? <button className="clear-search" onClick={() => setQuery("")} aria-label={text("Clear search", "清除搜索")} title={text("Clear search", "清除搜索")}><X size={15} /></button> : <button className="clear-search prompt-search-action" onClick={() => { setPoseText(query || promptToPoseExamplesEn[0]); setPromptToPoseOpen(true); }} aria-label={text("Generate pose from text", "用文字生成姿势")} title={text("Generate pose from text", "用文字生成姿势")}><Sparkle size={15} weight="fill" /></button>}
             </div>
 
             <div className="quick-entry" aria-label={text("Quick views", "快捷入口")}>
-              {(["featured", "recent"] as const).map((item) => (
-                <button key={item} className={quickView === item ? "active" : ""} aria-pressed={quickView === item} onClick={() => setQuickView(quickView === item ? null : item)}>
-                  {quickViewDisplayName(item)}{item === "recent" ? ` ${recentIds.length}` : ""}
-                </button>
-              ))}
-              <button className={`filter-toggle ${filtersExpanded ? "active" : ""}`} aria-expanded={filtersExpanded} onClick={() => setFiltersExpanded((value) => !value)} title={text("Expand or collapse filters", "展开或收起筛选")}>
-                <FunnelSimple size={15} weight={hasActiveFilters ? "fill" : "regular"} /> {text("Filter", "筛选")}
-              </button>
+              <button className={quickView === "featured" ? "active" : ""} aria-pressed={quickView === "featured"} onClick={() => { setQuickView(quickView === "featured" ? null : "featured"); setCategory("all"); }}><span>{text("Recommended", "推荐")}</span></button>
+              <button className={category === "favorites" ? "active" : ""} aria-pressed={category === "favorites"} onClick={() => { setCategory("favorites"); setQuickView(null); }}><span>{text("Favorites", "收藏")}</span><small>{favoriteIds.length}</small></button>
+              <button className={quickView === "recent" ? "active" : ""} aria-pressed={quickView === "recent"} onClick={() => { setQuickView(quickView === "recent" ? null : "recent"); setCategory("all"); }}><span>{text("Recent", "最近")}</span><small>{recentIds.length}</small></button>
+              <button className={category === "saved" ? "active" : ""} aria-pressed={category === "saved"} onClick={() => { setCategory("saved"); setQuickView(null); }}><span>{text("Saved", "已保存")}</span><small>{savedPoses.length}</small></button>
             </div>
 
             <div className="category-list" role="listbox" aria-label={text("Primary pose categories", "姿势一级分类")}>
-              {poseCategoryTabs.map((item) => (
+              {poseCategoryTabs.filter((item) => item.value !== "favorites" && item.value !== "saved").map((item) => (
                 <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={tabDisplayName(item.value)} onClick={() => { setCategory(item.value); setQuickView(null); }}>
                   {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}
                   {item.value === "saved" && <FloppyDisk size={13} weight={category === "saved" ? "fill" : "regular"} />}
@@ -4275,18 +4646,22 @@ export default function Home() {
               ))}
             </div>
 
-            {filtersExpanded && <div className="pose-filters">
+            <div className="result-line">
+              <button className={`filter-bar-button ${filtersExpanded ? "active" : ""}`} aria-label={text("Filter poses", "筛选姿势")} aria-expanded={filtersExpanded} onClick={() => setFiltersExpanded((value) => !value)}>
+                <FunnelSimple size={15} weight={activeFilterCount ? "fill" : "regular"} />
+                {text("Filter", "筛选")}{activeFilterCount ? ` ${activeFilterCount}` : ""}
+              </button>
+              <strong>{quickView ? quickViewDisplayName(quickView) : tabDisplayName(category)}</strong><span>· {filteredPoses.length}</span>
+              {hasActiveFilters && <button className="clear-filter-button" onClick={clearPoseFilters}>{text("Clear", "清空")}</button>}
+            </div>
+
+            {filtersExpanded && <div className="pose-filters" role="dialog" aria-label={text("Pose filters", "姿势筛选")}>
               <FilterChips label={text("Direction", "朝向")} options={isZh ? directionOptions : directionOptionsEn} value={direction} onChange={(value) => setDirection(value as PoseDirection | "any")} />
               <FilterChips label={text("Motion", "动态程度")} options={isZh ? intensityOptions : intensityOptionsEn} value={intensity} onChange={(value) => setIntensity(value as PoseIntensity | "any")} />
               <FilterChips label={text("Hands", "手部")} options={isZh ? handOptions : handOptionsEn} value={hand} onChange={(value) => setHand(value as PoseHand | "any")} />
               <FilterChips label={text("Body", "身体")} options={isZh ? bodyOptions : bodyOptionsEn} value={body} onChange={(value) => setBody(value as PoseBody | "any")} />
               <FilterChips label={text("Style", "风格")} options={isZh ? styleOptions : styleOptionsEn} value={style} onChange={(value) => setStyle(value as PoseStyle | "any")} />
             </div>}
-
-            <div className="result-line">
-              <strong>{quickView ? quickViewDisplayName(quickView) : tabDisplayName(category)}</strong><span>· {filteredPoses.length}</span>
-              {hasActiveFilters && <button onClick={clearPoseFilters}>{text("Clear filters", "清空筛选")}</button>}
-            </div>
           </div>
 
           <div ref={poseGridRef} className="pose-grid" aria-label={text("Pose results", "姿势结果")}>
@@ -4332,38 +4707,41 @@ export default function Home() {
           </div>
 
           <div className="current-pose-toolbar" aria-label={text("Current pose controls", "当前姿势快捷控制")}>
-            <div className="current-pose-meta"><span>{text("Current Pose", "当前姿势")}</span><strong>{poseDisplayName(selectedPose)}</strong><small>{categoryDisplayName(selectedPose.category)} · {selectedPose.id}</small></div>
+            <div className="current-pose-meta"><span>{text("Current Pose", "当前姿势")}</span><strong>{poseDisplayName(selectedPose)}</strong><small>{categoryDisplayName(selectedPose.category)} · {interactionModeLabel[interactionMode]}</small></div>
             <div className="current-pose-actions">
+              <button className={interactionMode === "ik-edit" ? "active" : ""} onClick={() => interactionMode === "ik-edit" ? exitInteractionMode() : activateCanvasMode("pose")} title={interactionMode === "ik-edit" ? text("Finish fine-tuning", "完成微调") : text("Fine-tune pose", "微调姿势")}><Sparkle size={16} /></button>
               <button className={editor.mirrored ? "active" : ""} onClick={() => { commit((current) => ({ ...current, mirrored: !current.mirrored })); flash(editor.mirrored ? text("Original pose restored", "已恢复原始姿态") : text("Skeleton pose mirrored", "已镜像骨骼姿态")); }} aria-pressed={editor.mirrored} title={text("Mirror skeleton pose", "镜像骨骼姿态")}><ArrowsLeftRight size={16} /></button>
-              <button onClick={() => selectAdjacentPose(-1)} title={text("Previous", "上一个")}><ArrowLeft size={16} /></button>
-              <button onClick={() => selectAdjacentPose(1)} title={text("Next", "下一个")}><ArrowRight size={16} /></button>
-              <button onClick={selectRandomPose} title={text("Random from current results", "在当前筛选中随机")}><Shuffle size={16} /></button>
               <button className={favoriteIds.includes(selectedPose.id) ? "active favorite" : "favorite"} onClick={() => toggleFavorite(selectedPose)} title={text("Favorite current pose", "收藏当前姿势")}><Star size={16} weight={favoriteIds.includes(selectedPose.id) ? "fill" : "regular"} /></button>
-              <button onClick={showSimilarPoses} title={text("Show similar poses", "查看相似动作")}><Sparkle size={16} /></button>
+              <button onClick={saveModifiedPose} disabled={!hasUnsavedJointEdits || !modelInfo.loaded} title={text("Save modified pose", "保存修改后的动作")}><FloppyDisk size={16} /></button>
               <button onClick={() => selectPose(defaultPose)} title={text("Restore natural standing", "恢复自然站立")}><ArrowCounterClockwise size={16} /></button>
             </div>
+            {interactionMode === "ik-edit" && <div className="ik-session-summary">
+              <span>{activeIKControl ? text("Adjusting a joint", "正在调整关节") : text("Drag a colored control · Hold Shift for fine adjustment", "拖动彩色控制点 · 按住 Shift 精细调整")}</span>
+              <button onClick={resetIKEdits}>{text("Restore pose", "恢复姿势")}</button>
+              <button className="primary" onClick={exitInteractionMode}>{text("Done", "完成")}</button>
+            </div>}
           </div>
         </aside>
 
         <section className="canvas-area">
           <div className="canvas-header">
-            <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{modelStatusLabel}</span></div>
-            <div className="canvas-actions">
-              <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
-              <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
-              <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
-              <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
-            </div>
+            <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{text("Current mode", "当前模式")}：{interactionModeLabel[interactionMode]}</span>{cameraLocked && <em><Lock size={12} weight="fill" /> {text("Camera locked", "镜头已锁定")}</em>}</div>
           </div>
 
-          <div className="canvas-stage">
+            <div className="canvas-stage">
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
-              <div className="tool-dock artboard-tool-dock" role="toolbar" aria-label={text("Model editing mode", "模型编辑模式")}>
-                <button className={toolMode === "translate" ? "active" : ""} aria-pressed={toolMode === "translate"} onClick={(event) => { event.stopPropagation(); activateTool("translate"); }} title={text("Select a model to move it", "点击模型后移动")}><ArrowsOutCardinal size={16} /> {text("Move", "选择并移动")}</button>
-                <button className={toolMode === "rotate" ? "active" : ""} aria-pressed={toolMode === "rotate"} onClick={(event) => { event.stopPropagation(); activateTool("rotate"); }} title={text("Rotate model", "旋转模型")}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button>
-                <button className={toolMode === "pose" ? "active" : ""} aria-pressed={toolMode === "pose"} onClick={(event) => { event.stopPropagation(); activateTool("pose"); }} title={text("Drag joint and direction handles to edit the skeleton", "拖动关节与方向控制柄调整骨骼")}><Sparkle size={16} /> {text("Edit Pose", "姿态编辑")}</button>
+              <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>
+                <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
+                <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "rotate"} onClick={() => activateCanvasMode("rotate")} title={text("Rotate character", "旋转人物")}><ArrowClockwise size={16} /><span>{text("Rotate", "旋转")}</span></button>
+                <button className={interactionMode === "ik-edit" ? "active" : ""} aria-pressed={interactionMode === "ik-edit"} onClick={() => activateCanvasMode("pose")} title={text("Edit pose controls", "编辑姿势控制点")}><Sparkle size={16} /><span>{text("Edit Pose", "编辑控制点")}</span></button>
+                <i className="command-bar-divider" />
+                <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
+                <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
+                <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
+                <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
+                <button onClick={redo} disabled={!canRedo} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} aria-label={text("Redo", "重做")}><ArrowClockwise size={17} /></button>
               </div>
-              <div className="artboard-label"><span /> ARTBOARD · {currentSize[0]} × {currentSize[1]}</div>
+              <div className="artboard-label"><span /> {editor.ratio} · {currentSize[0]} × {currentSize[1]}</div>
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
                 <div className="canvas-image-layer" aria-label={text("Uploaded image layers", "已上传图片图层")}>
@@ -4384,12 +4762,13 @@ export default function Home() {
                 </div>
                 <PerspectiveGridOverlay
                   state={editor.perspectiveGrid}
+                  editable={interactionMode === "perspective-edit"}
                   label={text("Editable perspective grid", "可编辑透视网格")}
                   horizonLabel={text("Drag horizon", "拖动地平线")}
                   vanishingPointLabel={text("Drag vanishing point", "拖动消失点")}
                   onDragStart={beginPerspectiveDrag}
                 />
-                <div className={`control-point-layer ${toolMode === "pose" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={toolMode !== "pose"}>
+                <div className={`control-point-layer ${interactionMode === "ik-edit" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={interactionMode !== "ik-edit"}>
                   {ikControlDefinitions.map(({ id: control, label, labelEn, kind, group }) => (
                     <button
                       key={control}
@@ -4397,10 +4776,21 @@ export default function Home() {
                       className={`control-point ${kind} ${group} ${activeIKControl === control ? "selected" : ""}`}
                       onPointerDown={(event) => beginIKDrag(control, event)}
                       aria-label={text(`Drag ${labelEn} control point`, `拖动${label}控制点`)}
-                      tabIndex={toolMode === "pose" ? 0 : -1}
+                      tabIndex={interactionMode === "ik-edit" ? 0 : -1}
                     ><span /><small>{isZh ? label : labelEn}</small></button>
                   ))}
                 </div>
+                <button
+                  ref={transformProxyRef}
+                  className="offcanvas-transform-proxy"
+                  onPointerDown={beginOffCanvasModelDrag}
+                  aria-label={text("Drag to move the off-canvas model", "拖动移动画板外的模型")}
+                  title={text("Model is outside the artboard. Drag to move it back.", "模型已超出画板，拖动可移回。")}
+                >
+                  <i className="proxy-axis proxy-axis-x" /><i className="proxy-axis proxy-axis-y" /><i className="proxy-axis proxy-axis-z" />
+                  <span><ArrowsOutCardinal size={17} weight="bold" /></span>
+                  <small>{text("Move model", "移动模型")}</small>
+                </button>
                 {!modelInfo.loaded && <div className="model-loader"><span /><p>{modelStatusLabel}</p></div>}
                 {editor.grid && <div className="composition-grid"><i /><i /><b /><b /></div>}
               </div>
@@ -4409,70 +4799,63 @@ export default function Home() {
 
           <div className="zoom-control">
             <button onClick={() => setZoom((value) => clamp(value - 8, 34, 100))} aria-label={text("Zoom out", "缩小")}><Minus size={16} /></button>
-            <button className="zoom-value" onClick={() => setZoom(76)} aria-label={text(`Zoom ${zoom}%. Click to reset`, `当前缩放 ${zoom}%，点击恢复默认`)}>{zoom}%</button>
+            <button className="zoom-value" onClick={() => setZoom(100)} aria-label={text(`Zoom ${zoom}%. Click for 100%`, `当前缩放 ${zoom}%，点击显示 100%`)}>{zoom}%</button>
             <button onClick={() => setZoom((value) => clamp(value + 8, 34, 100))} aria-label={text("Zoom in", "放大")}><Plus size={16} /></button>
             <span />
-            <button onClick={() => setZoom(76)}>{text("Fit", "适应")}</button>
+            <button onClick={fitSelectedCharacter} title={text("Fit person · F", "适配人物 · F")}><HouseLine size={15} /> {text("Person", "人物")}</button>
+            <button onClick={() => setZoom(76)} title={text("Fit artboard · Shift F", "适配画板 · Shift F")}><GridFour size={15} /> {text("Artboard", "画板")}</button>
           </div>
+
         </section>
 
-        <aside className="panel inspector-panel" aria-label="Inspector">
+        <aside className="panel inspector-panel context-panel" aria-label={text(`${toolLabels[activeTool]} controls`, `${toolLabels[activeTool]}控制`)}>
           <div className="selection-header">
-            <span className="cube-icon"><Cube size={19} weight="duotone" /></span>
-            <div><strong>{modelDisplayName(selectedModel)}</strong><small>{modelInfo.hasSkeleton ? "Rigged Humanoid" : "Pose Preview · Prototype"}</small></div>
+            <span className="cube-icon">{activeTool === "model" ? <Cube size={19} weight="duotone" /> : activeTool === "camera" ? <Camera size={19} /> : activeTool === "perspective" ? <Perspective size={19} /> : activeTool === "lighting" ? <Lightbulb size={19} /> : <Copy size={19} />}</span>
+            <div><strong>{toolLabels[activeTool]}</strong><small>{activeTool === "model" ? modelDisplayName(selectedModel) : interactionModeLabel[interactionMode]}</small></div>
             <button className={editor.visible ? "visible" : ""} onClick={() => { commit((current) => ({ ...current, visible: !current.visible })); flash(editor.visible ? text("Model hidden", "模型已隐藏") : text("Model shown", "模型已显示")); }} aria-label={editor.visible ? text("Hide model", "隐藏模型") : text("Show model", "显示模型")}>{editor.visible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>
-            <button className="add-model-button" onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8} aria-label={text("Add character model", "添加机器人模型")} title={text("Add character model", "添加机器人模型")}><Plus size={18} weight="bold" /></button>
-          </div>
-
-          <div className="inspector-tabs" role="tablist" aria-label={text("Inspector sections", "属性类型")}>
-            <button className={inspectorTab === "model" ? "active" : ""} role="tab" aria-selected={inspectorTab === "model"} onClick={() => setInspectorTab("model")}>{text("Model", "模型")}</button>
-            <button className={inspectorTab === "camera" ? "active" : ""} role="tab" aria-selected={inspectorTab === "camera"} onClick={() => setInspectorTab("camera")}>{text("Camera", "镜头")}</button>
-            <button className={inspectorTab === "scene" ? "active" : ""} role="tab" aria-selected={inspectorTab === "scene"} onClick={() => setInspectorTab("scene")}>{text("Scene", "场景")}</button>
+            <button className="add-model-button" onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "折叠面板")} title={text("Collapse panel", "折叠面板")}><SidebarSimple size={18} weight="fill" /></button>
           </div>
 
           <div className="inspector-content">
-            {inspectorTab === "model" && <>
+            {activeTool === "model" && <>
               <div className="model-stack" aria-label={text("Canvas models", "画板模型列表")}>
                 <div className="model-stack-title"><span>{text("Canvas Models", "画板模型")}</span><small>{modelList.length} / 8</small></div>
                 <div className="model-stack-list">
-                  {modelList.map((model) => (
-                    <button key={model.id} className={selectedModelId === model.id ? "active" : ""} onClick={() => selectModel(model.id)}>
-                      <Cube size={16} weight={selectedModelId === model.id ? "fill" : "regular"} />
-                      <span>{modelDisplayName(model)}</span>
-                      {selectedModelId === model.id && <Check size={14} weight="bold" />}
-                    </button>
-                  ))}
+                  {modelList.map((model) => {
+                    const selected = selectedModelId === model.id;
+                    return (
+                      <div key={model.id} className={`model-stack-item${selected ? " active" : ""}`}>
+                        <button className="model-stack-select" onClick={() => selectModel(model.id)} aria-pressed={selected}>
+                          <Cube size={16} weight={selected ? "fill" : "regular"} />
+                          <span>{modelDisplayName(model)}</span>
+                        </button>
+                        {selected && (
+                          <button
+                            className="model-stack-delete"
+                            onClick={deleteSelectedModel}
+                            disabled={modelList.length <= 1}
+                            aria-label={text(`Delete ${modelDisplayName(model)}`, `删除${modelDisplayName(model)}`)}
+                            title={text("Delete selected character · Delete/Backspace", "删除所选角色 · Delete/Backspace")}
+                          >
+                            <Trash size={15} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="model-stack-actions" aria-label={text("Selected character actions", "所选角色操作")}>
-                  <button onClick={copySelectedModel} disabled={!modelInfo.loaded} title={text("Copy selected character · ⌘/Ctrl C", "复制所选角色 · ⌘/Ctrl C")}><Copy size={15} /><span>{text("Copy", "复制")}</span><kbd>⌘C</kbd></button>
-                  <button onClick={pasteCopiedModel} disabled={!hasCopiedModel || modelList.length >= 8} title={text("Paste copied character · ⌘/Ctrl V", "粘贴已复制角色 · ⌘/Ctrl V")}><Clipboard size={15} /><span>{text("Paste", "粘贴")}</span><kbd>⌘V</kbd></button>
-                  <button className="delete" onClick={deleteSelectedModel} disabled={modelList.length <= 1} title={text("Delete selected character · Delete/Backspace", "删除所选角色 · Delete/Backspace")}><Trash size={15} /><span>{text("Delete", "删除角色")}</span><kbd>⌫</kbd></button>
-                </div>
+              </div>
+
+              <div className="mode-entry-row" role="group" aria-label={text("Character transform mode", "人物变换模式")}>
+                <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} onClick={() => activateCanvasMode("translate")}><ArrowsOutCardinal size={16} />{text("Move", "移动")}</button>
+                <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} onClick={() => activateCanvasMode("rotate")}><ArrowClockwise size={16} />{text("Rotate", "旋转")}</button>
+                <button onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8}><Plus size={16} />{text("Add", "添加")}</button>
               </div>
 
               <div className="active-tool-card">
-                <span>{toolMode === "translate" ? <ArrowsOutCardinal size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <Sparkle size={18} />}</span>
-                <div><small>{text("Current Mode", "当前模式")}</small><strong>{toolMode === "translate" ? text("Move Model", "选择并移动") : toolMode === "rotate" ? text("Rotate Model", "旋转模型") : text("IK Pose Editing", "IK 姿态编辑")}</strong></div>
+                <span>{interactionMode !== "model-transform" ? <Camera size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <ArrowsOutCardinal size={18} />}</span>
+                <div><small>{text("Current Mode", "当前模式")}</small><strong>{interactionMode !== "model-transform" ? text("Browse Camera", "浏览镜头") : toolMode === "rotate" ? text("Rotate Model", "旋转模型") : text("Move Model", "选择并移动")}</strong></div>
               </div>
-
-              {toolMode === "pose" && <InspectorSection title={text("IK Pose Editing", "IK 姿态编辑")} resetLabel={text("Reset", "重置")} onReset={resetIKEdits}>
-                <div className={`control-point-info ${activeIKControl ? "selected" : ""}`}>
-                  <span><Sparkle size={17} weight="fill" /></span>
-                  <div><strong>{activeIKControl ? text("Adjusting Skeleton", "正在调整骨骼") : text("19 Skeleton Control Points", "19 个人体骨骼控制点")}</strong><small>{text("Each limb uses one color across its four controls. The head is amber, while chest and pelvis core controls remain blue.", "每条四肢的四个控制点使用同一颜色；头部控制点为琥珀色，胸腔与骨盆核心点保持蓝色。")}</small></div>
-                </div>
-                <div className="limb-group-legend" aria-label={text("Control point color groups", "控制点颜色分组")}>
-                  <span className="head"><i />{text("Head", "头部")}</span>
-                  <span className="core"><i />{text("Core", "核心")}</span>
-                  <span className="left-arm"><i />{text("Left Arm", "左臂")}</span>
-                  <span className="right-arm"><i />{text("Right Arm", "右臂")}</span>
-                  <span className="left-leg"><i />{text("Left Leg", "左腿")}</span>
-                  <span className="right-leg"><i />{text("Right Leg", "右腿")}</span>
-                </div>
-                <button className={`save-custom-pose-button ${selectedSavedPose && !hasUnsavedJointEdits ? "saved" : ""}`} onClick={saveModifiedPose} disabled={!hasUnsavedJointEdits || !modelInfo.loaded}>
-                  {selectedSavedPose && !hasUnsavedJointEdits ? <Check size={17} weight="bold" /> : <FloppyDisk size={17} weight="fill" />}
-                  <span>{selectedSavedPose && !hasUnsavedJointEdits ? text("Saved to Library", "已保存到动作库") : hasJointEdits || selectedSavedPose ? text("Save Modified Pose", "保存修改后的动作") : text("Adjust joints to save", "调整关节后可保存")}</span>
-                </button>
-              </InspectorSection>}
 
               <InspectorSection title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
                 <VectorField label={text("Position", "位置")} values={editor.position} step={0.05} onChange={(axis, value) => updateVector("position", axis, value)} />
@@ -4481,21 +4864,28 @@ export default function Home() {
               </InspectorSection>
             </>}
 
-            {inspectorTab === "camera" && <InspectorSection title={text("Camera System", "镜头系统")} resetLabel={text("Reset", "重置")} onReset={() => applyCameraPreset("commercial")}>
+            {activeTool === "camera" && <InspectorSection title={text("Camera Presets", "镜头预设")} resetLabel={text("Reset", "重置")} onReset={() => applyCameraPreset("commercial")}>
               <div className="preset-grid camera-presets">
                 {(Object.entries(cameraPresets) as Array<[Exclude<CameraPresetId, "custom">, (typeof cameraPresets)[Exclude<CameraPresetId, "custom">]]>).map(([id, preset]) => (
-                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}><Camera size={16} /><span>{isZh ? preset.label : preset.labelEn}</span><small>{preset.focalLength}mm</small></button>
+                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}>
+                    <span className="camera-preset-icon"><Camera size={16} /></span>
+                    <span className="camera-preset-label">{isZh ? preset.label : preset.labelEn}</span>
+                    <small>{preset.focalLength}mm</small>
+                  </button>
                 ))}
               </div>
+              <ToggleRow label={cameraLocked ? text("Camera locked", "镜头已锁定") : text("Camera unlocked", "镜头可浏览")} toggleLabel={text("Lock camera orbit, pan and zoom", "锁定镜头旋转、平移与缩放")} active={cameraLocked} onClick={() => setCameraLocked((locked) => !locked)} />
+              <button className="advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? text("Hide advanced parameters", "收起高级参数") : text("Advanced parameters", "高级参数")}</button>
+              {advancedOpen && <>
               <ControlRow label={text("Focal", "焦距")}><div className="range-with-value"><input type="range" min="18" max="120" value={editor.focalLength} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ focalLength: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Camera focal length", "相机焦距")} /><output>{editor.focalLength}mm</output></div></ControlRow>
               <ControlRow label={text("Height", "高度")}><div className="range-with-value"><input type="range" min="0.4" max="3.2" step="0.05" value={editor.cameraHeight} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateCameraComposition({ cameraHeight: Number(event.target.value) }, true)} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Camera height", "相机高度")} /><output>{editor.cameraHeight.toFixed(2)}</output></div></ControlRow>
               <ControlRow label={text("Shot", "景别")}><select value={editor.shotSize} onChange={(event) => updateCameraComposition({ shotSize: event.target.value as ShotSize })} aria-label={text("Camera shot size", "相机景别")}>{(Object.entries(isZh ? shotLabels : shotLabelsEn) as Array<[ShotSize, string]>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></ControlRow>
               <ControlRow label={text("Projection", "投影")}><select defaultValue="perspective" aria-label={text("Camera projection", "相机投影")}><option value="perspective">{text("Perspective", "透视")}</option></select></ControlRow>
+              </>}
               <div className="camera-tip"><span><Info size={17} /></span><p>{text("Presets adjust focal length, camera position, and shot size together. Drag the empty artboard to orbit freely.", "预设会同时调整焦距、机位和景别；画板空白处仍可自由旋转镜头。")}</p></div>
             </InspectorSection>}
 
-            {inspectorTab === "scene" && <>
-              <InspectorSection title={text("Image Layers", "图片图层")} resetLabel={text("Clear", "清除")} onReset={() => {
+            {activeTool === "model" && <InspectorSection title={text("Reference Images", "参考图片")} resetLabel={text("Clear", "清除")} onReset={() => {
                 const lockedCount = canvasImages.filter((image) => image.locked).length;
                 setCanvasImages((images) => images.filter((image) => image.locked));
                 setSelectedCanvasImageId((current) => canvasImages.find((image) => image.id === current)?.locked ? current : null);
@@ -4514,9 +4904,9 @@ export default function Home() {
                   </div>
                   <div className={`canvas-image-lock-note ${selectedCanvasImage.locked ? "active" : ""}`}>{selectedCanvasImage.locked ? <Lock size={15} weight="fill" /> : <ArrowsOutCardinal size={15} />}<span>{selectedCanvasImage.locked ? text("Locked against moving, resizing, opacity changes, and deletion.", "已防止移动、缩放、透明度修改和删除。") : text("Drag the image directly on the artboard to position it.", "可直接在画板上拖动图片定位。")}</span></div>
                 </div>}
-              </InspectorSection>
+              </InspectorSection>}
 
-              <InspectorSection title={text("Perspective Grid", "透视网格")} resetLabel={text("Reset", "重置")} onReset={resetPerspectiveGrid}>
+            {activeTool === "perspective" && <InspectorSection title={text("Perspective Modes", "透视模式")} resetLabel={text("Reset", "重置")} onReset={resetPerspectiveGrid}>
                 <div className="perspective-mode-grid" role="radiogroup" aria-label={text("Perspective grid mode", "透视网格模式")}>
                   {([
                     ["off", text("Off", "关闭")],
@@ -4538,43 +4928,44 @@ export default function Home() {
                   </>}
 
                   {editor.perspectiveGrid.mode === "ground" && <ControlRow label={text("Plane", "平面")}><select value={editor.perspectiveGrid.plane} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, plane: event.target.value as "XZ" | "XY" | "YZ" } }))} aria-label={text("Grid plane", "网格平面")}><option value="XZ">XZ · {text("Ground", "地面")}</option><option value="XY">XY</option><option value="YZ">YZ</option></select></ControlRow>}
-                  <VectorField label={text("Origin", "原点")} values={editor.perspectiveGrid.origin} step={0.05} onChange={updatePerspectiveOrigin} />
-                  {editor.perspectiveGrid.mode === "ground" && <VectorField label={text("Rotation", "旋转")} values={editor.perspectiveGrid.rotation} step={1} onChange={updatePerspectiveRotation} />}
                   <ControlRow label={text("Size", "尺寸")}><div className="range-with-value"><input type="range" min="6" max="40" step="1" value={editor.perspectiveGrid.size} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, size: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid size", "网格尺寸")} /><output>{editor.perspectiveGrid.size}m</output></div></ControlRow>
-                  <ControlRow label={text("Major", "主间距")}><div className="range-with-value"><input type="range" min="0.5" max="5" step="0.25" value={editor.perspectiveGrid.majorStep} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorStep: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Major grid spacing", "主网格间距")} /><output>{editor.perspectiveGrid.majorStep}m</output></div></ControlRow>
-                  <ControlRow label={text("Density", "细分")}><div className="range-with-value"><input type="range" min="1" max="10" step="1" value={editor.perspectiveGrid.subdivisions} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, subdivisions: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid subdivisions", "网格细分数量")} /><output>{editor.perspectiveGrid.subdivisions}×</output></div></ControlRow>
-                  <ControlRow label={text("Opacity", "透明度")}><div className="range-with-value"><input type="range" min="0.08" max="0.8" step="0.01" value={editor.perspectiveGrid.opacity} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, opacity: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid opacity", "网格透明度")} /><output>{Math.round(editor.perspectiveGrid.opacity * 100)}%</output></div></ControlRow>
-                  <ControlRow label={text("Width", "线宽")}><div className="range-with-value"><input type="range" min="0.5" max="3" step="0.25" value={editor.perspectiveGrid.lineWidth} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lineWidth: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid line width", "网格线宽")} /><output>{editor.perspectiveGrid.lineWidth}px</output></div></ControlRow>
-                  <div className="perspective-color-grid">
-                    <label><span>{text("Major", "主线")}</span><input type="color" value={editor.perspectiveGrid.majorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorColor: event.target.value } }))} aria-label={text("Major grid color", "主网格线颜色")} /></label>
-                    <label><span>{text("Minor", "副线")}</span><input type="color" value={editor.perspectiveGrid.minorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, minorColor: event.target.value } }))} aria-label={text("Minor grid color", "副网格线颜色")} /></label>
-                  </div>
                   <ToggleRow label={editor.perspectiveGrid.lock ? text("Grid Locked", "已锁定网格") : text("Lock Editing", "锁定编辑")} toggleLabel={text("Lock perspective grid editing", "锁定透视网格编辑")} active={editor.perspectiveGrid.lock} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lock: !current.perspectiveGrid.lock } }))} />
-                  {editor.perspectiveGrid.mode === "ground" && <ToggleRow label={text("Snap to Feet", "吸附脚底")} toggleLabel={text("Snap grid to lowest foot", "网格吸附人物最低脚底")} active={editor.perspectiveGrid.snapToFeet} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, snapToFeet: !current.perspectiveGrid.snapToFeet } }))} />}
                   <ToggleRow label={text("Include in Export", "导出包含网格")} toggleLabel={text("Include perspective grid in PNG export", "PNG 导出时包含透视网格")} active={editor.perspectiveGrid.includeInExport} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, includeInExport: !current.perspectiveGrid.includeInExport } }))} />
-                  <div className={`perspective-lock-note ${editor.perspectiveGrid.lock ? "active" : ""}`}>{editor.perspectiveGrid.lock ? <Lock size={15} weight="fill" /> : <LockOpen size={15} />}<span>{editor.perspectiveGrid.lock ? text("Handles are protected from accidental dragging.", "地平线和消失点已防止误拖。") : text("Drag the horizon and numbered vanishing points directly on the artboard.", "可直接在画板拖动地平线和带编号的消失点。")}</span></div>
-                  <div className="perspective-export-actions">
-                    <button onClick={() => exportPng("clean")} disabled={exporting}>{text("Clean PNG", "干净图")}</button>
-                    <button className="primary" onClick={() => exportPng("with-grid")} disabled={exporting}>{text("With Grid", "含网格图")}</button>
-                    <button onClick={() => exportPng("overlay")} disabled={exporting}>{text("Overlay", "透明网格")}</button>
-                  </div>
+                  <button className="advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? text("Hide grid details", "收起网格细节") : text("Grid details", "网格细节")}</button>
+                  {advancedOpen && <div className="perspective-advanced-controls">
+                    <VectorField label={text("Origin", "原点")} values={editor.perspectiveGrid.origin} step={0.05} onChange={updatePerspectiveOrigin} />
+                    {editor.perspectiveGrid.mode === "ground" && <VectorField label={text("Rotation", "旋转")} values={editor.perspectiveGrid.rotation} step={1} onChange={updatePerspectiveRotation} />}
+                    <ControlRow label={text("Major", "主间距")}><div className="range-with-value"><input type="range" min="0.5" max="5" step="0.25" value={editor.perspectiveGrid.majorStep} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorStep: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Major grid spacing", "主网格间距")} /><output>{editor.perspectiveGrid.majorStep}m</output></div></ControlRow>
+                    <ControlRow label={text("Density", "细分")}><div className="range-with-value"><input type="range" min="1" max="10" step="1" value={editor.perspectiveGrid.subdivisions} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, subdivisions: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid subdivisions", "网格细分数量")} /><output>{editor.perspectiveGrid.subdivisions}×</output></div></ControlRow>
+                    <ControlRow label={text("Opacity", "透明度")}><div className="range-with-value"><input type="range" min="0.08" max="0.8" step="0.01" value={editor.perspectiveGrid.opacity} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, opacity: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid opacity", "网格透明度")} /><output>{Math.round(editor.perspectiveGrid.opacity * 100)}%</output></div></ControlRow>
+                    <ControlRow label={text("Width", "线宽")}><div className="range-with-value"><input type="range" min="0.5" max="3" step="0.25" value={editor.perspectiveGrid.lineWidth} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, lineWidth: Number(event.target.value) } }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Grid line width", "网格线宽")} /><output>{editor.perspectiveGrid.lineWidth}px</output></div></ControlRow>
+                    <div className="perspective-color-grid">
+                      <label><span>{text("Major", "主线")}</span><input type="color" value={editor.perspectiveGrid.majorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, majorColor: event.target.value } }))} aria-label={text("Major grid color", "主网格线颜色")} /></label>
+                      <label><span>{text("Minor", "副线")}</span><input type="color" value={editor.perspectiveGrid.minorColor} onChange={(event) => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, minorColor: event.target.value } }))} aria-label={text("Minor grid color", "副网格线颜色")} /></label>
+                    </div>
+                    {editor.perspectiveGrid.mode === "ground" && <ToggleRow label={text("Snap to Feet", "吸附脚底")} toggleLabel={text("Snap grid to lowest foot", "网格吸附人物最低脚底")} active={editor.perspectiveGrid.snapToFeet} onClick={() => commit((current) => ({ ...current, perspectiveGrid: { ...current.perspectiveGrid, snapToFeet: !current.perspectiveGrid.snapToFeet } }))} />}
+                  </div>}
+                  {editor.perspectiveGrid.lock && <div className="perspective-lock-note active"><Lock size={15} weight="fill" /><span>{text("Handles are protected from accidental dragging.", "地平线和消失点已防止误拖。")}</span></div>}
                 </>}
-              </InspectorSection>
+              </InspectorSection>}
 
-              <InspectorSection title={text("Lighting System", "灯光系统")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
+            {activeTool === "lighting" && <>
+              <InspectorSection title={text("Lighting Presets", "灯光预设")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
                 <div className="preset-grid lighting-presets">
                   {(Object.entries(lightingPresets) as Array<[Exclude<LightingPresetId, "custom">, (typeof lightingPresets)[Exclude<LightingPresetId, "custom">]]>).map(([id, preset]) => (
-                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}><Lightbulb size={16} /><span>{isZh ? preset.label : preset.labelEn}</span></button>
+                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}>
+                      <span className="lighting-preset-icon"><Lightbulb size={16} /></span>
+                      <span className="lighting-preset-label">{isZh ? preset.label : preset.labelEn}</span>
+                    </button>
                   ))}
                 </div>
-                {([
-                  [text("Key", "主光"), "keyLight", editor.keyLight],
-                  [text("Fill", "补光"), "fillLight", editor.fillLight],
-                  [text("Rim", "轮廓光"), "rimLight", editor.rimLight],
-                  [text("Exposure", "曝光"), "exposure", editor.exposure],
-                ] as Array<[string, "keyLight" | "fillLight" | "rimLight" | "exposure", number]>).map(([label, key, value]) => (
-                  <ControlRow key={key} label={label}><div className="range-with-value"><input type="range" min={key === "exposure" ? "0.6" : "0"} max={key === "exposure" ? "1.5" : "6"} step="0.05" value={value} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateLightingValue(key, Number(event.target.value))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={label} /><output>{value.toFixed(2)}</output></div></ControlRow>
-                ))}
+                <button className="advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>{advancedOpen ? text("Hide advanced parameters", "收起高级参数") : text("Advanced parameters", "高级参数")}</button>
+                {advancedOpen && <>
+                  <LightingRange label={text("Key", "主光")} value={editor.keyLight} min={0} max={6} onStart={beginContinuousEdit} onChange={(value) => updateLightingValue("keyLight", value)} onEnd={endContinuousEdit} />
+                  <LightingRange label={text("Fill", "补光")} value={editor.fillLight} min={0} max={6} onStart={beginContinuousEdit} onChange={(value) => updateLightingValue("fillLight", value)} onEnd={endContinuousEdit} />
+                  <LightingRange label={text("Rim", "轮廓光")} value={editor.rimLight} min={0} max={6} onStart={beginContinuousEdit} onChange={(value) => updateLightingValue("rimLight", value)} onEnd={endContinuousEdit} />
+                  <LightingRange label={text("Exposure", "曝光")} value={editor.exposure} min={0.6} max={1.5} onStart={beginContinuousEdit} onChange={(value) => updateLightingValue("exposure", value)} onEnd={endContinuousEdit} />
+                </>}
               </InspectorSection>
               <InspectorSection title={text("Scene Appearance", "场景外观")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, background: "#eef0f4", shadow: true }))}>
                 <ControlRow label={text("Background", "背景")}><label className="color-control"><span>{editor.background.toUpperCase()}</span><input type="color" value={editor.background} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, background: event.target.value }))} onBlur={endContinuousEdit} aria-label={text("Scene background color", "场景背景颜色")} /></label></ControlRow>
@@ -4587,9 +4978,56 @@ export default function Home() {
                   : text("The current mannequin has no Skeleton. This prototype maps PoseItem data to a procedural preview; production requires a rigged humanoid_v1 model.", "当前白模没有 Skeleton；原型使用 PoseItem 到程序化预览的映射。生产环境需替换为已 Rig 的 humanoid_v1 白模。")}</p>
               </div>
             </>}
+
+            {activeTool === "prompt" && <div className="prompt-context-content">
+              <div className="platform-tabs" role="tablist" aria-label={text("AI platform", "AI 平台")}>
+                {([ ["midjourney", "Midjourney"], ["flux", "Flux"], ["gpt-image", "GPT Image"], ["seedance", "Seedance"], ["jimeng", text("Jimeng", "即梦")] ] as Array<[PromptPlatform, string]>).map(([value, label]) => <button key={value} className={promptPlatform === value ? "active" : ""} onClick={() => setPromptPlatform(value)} role="tab" aria-selected={promptPlatform === value}>{label}</button>)}
+              </div>
+              <label><span>{text("Chinese Prompt", "中文提示词")}</span><textarea readOnly value={generatedPrompt.chinese} /><button onClick={() => copyPrompt(generatedPrompt.chinese)}><Copy size={15} />{text("Copy Chinese", "复制中文")}</button></label>
+              <label><span>English Prompt</span><textarea readOnly value={generatedPrompt.english} /><button onClick={() => copyPrompt(generatedPrompt.english)}><Copy size={15} />Copy English</button></label>
+              <div className="prompt-context-actions"><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button><button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}>{text("Copy all", "复制全部")}</button></div>
+            </div>}
           </div>
         </aside>
+
+        <ContextActionBar
+          label={activeTool === "pose" ? text("Current pose", "当前姿势") : text("Current tool", "当前工具")}
+          title={activeTool === "pose" ? poseDisplayName(selectedPose) : toolLabels[activeTool]}
+          actions={<>
+            {activeTool === "pose" && <><button onClick={() => selectAdjacentPose(-1)} title={text("Previous pose", "上一个姿势")}><ArrowLeft size={16} /></button><button onClick={selectRandomPose} title={text("Random pose", "随机姿势")}><Shuffle size={16} /></button><button className={editor.mirrored ? "active" : ""} onClick={() => commit((current) => ({ ...current, mirrored: !current.mirrored }))} title={text("Mirror pose · M", "镜像姿势 · M")}><ArrowsLeftRight size={16} /></button><button onClick={() => interactionMode === "ik-edit" ? exitInteractionMode() : activateCanvasMode("pose")} title={text("Fine-tune pose", "微调姿势")}><Sparkle size={16} /></button></>}
+            {activeTool === "model" && <><button onClick={() => activateCanvasMode("translate")} className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""}><ArrowsOutCardinal size={16} /> {text("Move", "移动")}</button><button onClick={() => activateCanvasMode("rotate")} className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button><button onClick={copySelectedModel}><Copy size={16} /></button><button onClick={deleteSelectedModel} disabled={modelList.length <= 1}><Trash size={16} /></button></>}
+            {activeTool === "camera" && <><button onClick={() => setCameraLocked((locked) => !locked)} className={cameraLocked ? "active" : ""}>{cameraLocked ? <Lock size={16} /> : <LockOpen size={16} />}</button><button onClick={() => applyCameraPreset("commercial")}><HouseLine size={16} /></button></>}
+            {activeTool === "perspective" && <><button onClick={togglePerspectiveGrid}><Perspective size={16} /></button><button onClick={() => setInteractionMode(interactionMode === "perspective-edit" ? "camera-browse" : "perspective-edit")} className={interactionMode === "perspective-edit" ? "active" : ""}><ArrowsOutCardinal size={16} /></button></>}
+            {activeTool === "lighting" && <button onClick={() => applyLightingPreset("studio")}><ArrowCounterClockwise size={16} /></button>}
+            {activeTool === "prompt" && <button onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} /> {text("Copy", "复制")}</button>}
+          </>}
+          nextLabel={text(`Next: ${toolLabels[nextTool[activeTool]]}`, `下一步：${toolLabels[nextTool[activeTool]]}`)}
+          onNext={goToNextTool}
+        />
       </section>
+
+      {exportDialogOpen && <div className="prompt-backdrop">
+        <section className="prompt-dialog export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
+          <div className="prompt-heading"><div><span><DownloadSimple size={16} weight="fill" /> PoseBoard Export</span><h2 id="export-title">{text("Export reference", "导出参考图")}</h2></div><button onClick={() => setExportDialogOpen(false)} aria-label={text("Close export", "关闭导出")}><X size={18} /></button></div>
+          <div className="export-preset-grid">
+            <button onClick={() => { setExportDialogOpen(false); void exportPng("clean"); }}><span><DownloadSimple size={21} /></span><strong>{text("Clean reference", "干净参考图")}</strong><small>{text("Character, background and final lighting only.", "只保留人物、背景和最终灯光。")}</small></button>
+            <button onClick={() => { setExportDialogOpen(false); void exportPng("with-grid"); }}><span><Perspective size={21} /></span><strong>{text("With perspective grid", "含透视网格图")}</strong><small>{text("Keep the grid without editing handles.", "保留网格辅助线，不包含编辑控制点。")}</small></button>
+            <button onClick={() => { setExportDialogOpen(false); void exportPng("transparent"); }}><span><ImageSquare size={21} /></span><strong>{text("Transparent background", "透明背景图")}</strong><small>{text("PNG with an alpha channel.", "导出带 Alpha 通道的 PNG。")}</small></button>
+          </div>
+          <div className="export-details"><span>{projectName || text("Untitled Project", "未命名项目")}</span><span>{currentSize[0]} × {currentSize[1]}</span><span>PNG</span></div>
+          <div className="prompt-footer"><button onClick={() => { setExportDialogOpen(false); void exportPng("overlay"); }}>{text("Grid Overlay", "透明网格")}</button><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button></div>
+        </section>
+      </div>}
+
+      {helpOpen && <div className="prompt-backdrop">
+        <section className="prompt-dialog shortcut-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
+          <div className="prompt-heading"><div><span><Info size={16} /> PoseBoard Help</span><h2 id="shortcut-title">{text("Shortcuts", "快捷键")}</h2></div><button onClick={() => setHelpOpen(false)} aria-label={text("Close shortcuts", "关闭快捷键")}><X size={18} /></button></div>
+          <div className="shortcut-grid">
+            {[["Esc", text("Return to camera browsing", "返回浏览镜头")], ["⌘/Ctrl Z", text("Undo", "撤销")], ["⌘/Ctrl ⇧ Z", text("Redo", "重做")], ["G", text("Toggle perspective grid", "显示或隐藏透视网格")], ["F", text("Fit person", "适配人物")], ["⇧ F", text("Fit artboard", "适配画板")], ["M", text("Mirror current pose", "镜像当前姿势")], ["⌘/Ctrl C", text("Copy character", "复制人物")], ["⌘/Ctrl V", text("Paste character", "粘贴人物")], ["?", text("Open this help", "打开快捷键帮助")]].map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
+          </div>
+          <div className="prompt-footer"><button onClick={() => { resetAll(); setHelpOpen(false); }}><ArrowCounterClockwise size={15} />{text("Reset scene", "重置场景")}</button></div>
+        </section>
+      </div>}
 
       {promptToPoseOpen && <div className="prompt-backdrop">
         <section className="prompt-dialog pose-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="pose-prompt-title">
@@ -4670,7 +5108,7 @@ export default function Home() {
           <div className="prompt-footer">
             <button onClick={exportProjectJson}>{text("Export Project JSON", "导出项目 JSON")}</button>
             <button onClick={() => { downloadTextFile(`poseboard-${selectedPose.id}-prompt.md`, `# ${selectedPose.nameEn}\n\n## Chinese Prompt\n\n${generatedPrompt.chinese}\n\n## English Prompt\n\n${generatedPrompt.english}\n`, "text/markdown"); flash(text("Prompt Markdown exported", "Prompt Markdown 已导出")); }}>{text("Export Markdown", "导出 Markdown")}</button>
-            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} />{text("Copy All", "复制全部")}</button>
+            <button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}>{text("Copy All", "复制全部")}</button>
           </div>
         </section>
       </div>}
@@ -4678,6 +5116,8 @@ export default function Home() {
       <div className={`toast ${toast ? "show" : ""}`} role="status" aria-live="polite">{toast}</div>
       {mobilePanel && <button className="mobile-scrim" onClick={() => setMobilePanel(null)} aria-label={text("Close panel", "关闭面板")} />}
     </main>
+    </FluentProvider>
+    </SSRProvider>
   );
 }
 
@@ -4699,4 +5139,8 @@ function VectorField({ label, values, step, onChange }: { label: string; values:
 
 function ToggleRow({ label, toggleLabel, active, onClick }: { label: string; toggleLabel: string; active: boolean; onClick: () => void }) {
   return <div className="toggle-row"><span>{label}</span><button className={`toggle ${active ? "active" : ""}`} onClick={onClick} role="switch" aria-label={toggleLabel} aria-checked={active}><i /></button></div>;
+}
+
+function LightingRange({ label, value, min, max, onStart, onChange, onEnd }: { label: string; value: number; min: number; max: number; onStart: () => void; onChange: (value: number) => void; onEnd: () => void }) {
+  return <ControlRow label={label}><div className="range-with-value"><input type="range" min={min} max={max} step="0.05" value={value} onPointerDown={onStart} onFocus={onStart} onChange={(event) => onChange(Number(event.target.value))} onPointerUp={onEnd} onBlur={onEnd} aria-label={label} /><output>{value.toFixed(2)}</output></div></ControlRow>;
 }

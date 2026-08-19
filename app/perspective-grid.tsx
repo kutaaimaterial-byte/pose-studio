@@ -230,12 +230,14 @@ export function cameraLinkedPerspective(camera: THREE.PerspectiveCamera, target:
 
 export function PerspectiveGridOverlay({
   state,
+  editable = true,
   label,
   horizonLabel,
   vanishingPointLabel,
   onDragStart,
 }: {
   state: PerspectiveGridState;
+  editable?: boolean;
   label: string;
   horizonLabel: string;
   vanishingPointLabel: string;
@@ -243,7 +245,7 @@ export function PerspectiveGridOverlay({
 }) {
   const segments = perspectiveSegments(state);
   if (!segments.length) return null;
-  return <div className={`perspective-grid-overlay ${state.lock ? "locked" : ""}`} aria-label={label}>
+  return <div className={`perspective-grid-overlay ${state.lock ? "locked" : ""} ${editable ? "editable" : "view-only"}`} aria-label={label}>
     <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
       {segments.map((segment, index) => <line
         key={`${segment.x1}-${segment.y1}-${index}`}
@@ -257,15 +259,15 @@ export function PerspectiveGridOverlay({
         vectorEffect="non-scaling-stroke"
       />)}
     </svg>
-    <button
+    {editable && <button
       className="perspective-horizon-handle"
       style={{ top: `${state.horizonY * 100}%` }}
       onPointerDown={(event) => onDragStart("horizon", event)}
       disabled={state.lock}
       aria-label={horizonLabel}
       title={horizonLabel}
-    />
-    {state.vanishingPoints.slice(0, state.mode === "one-point" ? 1 : state.mode === "two-point" ? 2 : 3).map((point, index) => <button
+    />}
+    {editable && state.vanishingPoints.slice(0, state.mode === "one-point" ? 1 : state.mode === "two-point" ? 2 : 3).map((point, index) => <button
       key={index}
       className={`perspective-point-handle point-${index + 1}`}
       style={{ left: `${Math.min(0.98, Math.max(0.02, point.x)) * 100}%`, top: `${Math.min(0.98, Math.max(0.02, point.y)) * 100}%` }}
