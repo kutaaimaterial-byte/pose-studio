@@ -74,6 +74,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.artboard-shell\s*\{[^}]*overflow:\s*visible/s);
   assert.match(css, /\.three-viewport\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*layout paint/s);
   assert.match(css, /\.control-point-layer\s*\{[^}]*overflow:\s*visible;[^}]*transition:\s*none/s);
+  assert.match(css, /\.offcanvas-transform-proxy\s*\{[^}]*display:\s*none;[^}]*position:\s*absolute;[^}]*z-index:\s*14/s);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
@@ -90,6 +91,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /transformControls\.attach\(root\)/);
   assert.match(page, /if \(tool === "model"\) \{\s*activateTool\(toolMode === "rotate" \? "rotate" : "translate"\)/s);
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
+  assert.match(page, /const beginOffCanvasModelDrag = \(event: React\.PointerEvent<HTMLButtonElement>\)/);
+  assert.match(page, /className="offcanvas-transform-proxy"/);
+  assert.match(page, /const gizmoInside = projected\.z > -1 && projected\.z < 1/);
   assert.match(page, /else if \(tool === "pose"\) \{\s*activateTool\("pose"\)/s);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);

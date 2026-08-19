@@ -2601,6 +2601,7 @@ export default function Home() {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const transformControlsRef = useRef<TransformControls | null>(null);
+  const transformProxyRef = useRef<HTMLButtonElement | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
   const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
   const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -3457,6 +3458,49 @@ export default function Home() {
     });
   };
 
+  const beginOffCanvasModelDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const root = modelRootRef.current;
+    const camera = cameraRef.current;
+    const renderer = rendererRef.current;
+    if (!root || !camera || !renderer || interactionModeRef.current !== "model-transform") return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    setToolMode("translate");
+    syncTransformController("translate", root);
+    beginContinuousEdit();
+    if (controlsRef.current) controlsRef.current.enabled = false;
+
+    camera.updateMatrixWorld(true);
+    root.updateMatrixWorld(true);
+    const startPointer = new THREE.Vector2(event.clientX, event.clientY);
+    const startWorld = root.getWorldPosition(new THREE.Vector3());
+    const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    const cameraUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    const distance = Math.max(camera.position.distanceTo(startWorld), 0.1);
+    const worldPerPixel = (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(renderer.domElement.clientHeight, 1);
+
+    const move = (pointerEvent: PointerEvent) => {
+      const deltaX = pointerEvent.clientX - startPointer.x;
+      const deltaY = pointerEvent.clientY - startPointer.y;
+      const nextWorld = startWorld.clone()
+        .addScaledVector(cameraRight, deltaX * worldPerPixel)
+        .addScaledVector(cameraUp, -deltaY * worldPerPixel);
+      const nextLocal = root.parent ? root.parent.worldToLocal(nextWorld.clone()) : nextWorld;
+      updateContinuousEdit((current) => ({ ...current, position: [nextLocal.x, nextLocal.y, nextLocal.z] }));
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      endContinuousEdit();
+      flash(text("Model position updated", "模型位置已更新"));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
   const toggleOrientation = () => {
     commit((current) => {
       const ratio: Ratio = current.ratio === "16:9" ? "9:16" : current.ratio === "9:16" ? "16:9" : current.ratio === "3:2" ? "2:3" : current.ratio === "2:3" ? "3:2" : current.ratio === "4:3" ? "3:4" : current.ratio === "3:4" ? "4:3" : "1:1";
@@ -4163,6 +4207,34 @@ export default function Home() {
           element.style.transform = `translate(${((world.x + 1) * 0.5 * rect.width) - 18}px, ${((-world.y + 1) * 0.5 * rect.height) - 18}px)`;
         });
       }
+      const proxy = transformProxyRef.current;
+      const selectedRoot = modelRootsRef.current[selectedModelIdRef.current];
+      if (proxy && selectedRoot && interactionModeRef.current === "model-transform" && selectedRoot.visible) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const canvasAreaRect = renderer.domElement.closest<HTMLElement>(".canvas-area")?.getBoundingClientRect();
+        const projected = selectedRoot.getWorldPosition(new THREE.Vector3()).project(camera);
+        const projectedX = ((projected.x + 1) * 0.5) * rect.width;
+        const projectedY = ((-projected.y + 1) * 0.5) * rect.height;
+        const safety = 62;
+        const gizmoInside = projected.z > -1 && projected.z < 1
+          && projectedX >= safety && projectedX <= rect.width - safety
+          && projectedY >= safety && projectedY <= rect.height - safety;
+        if (gizmoInside) {
+          proxy.style.display = "none";
+        } else {
+          const minX = canvasAreaRect ? canvasAreaRect.left - rect.left + 42 : -48;
+          const maxX = canvasAreaRect ? canvasAreaRect.right - rect.left - 42 : rect.width + 48;
+          const minY = canvasAreaRect ? canvasAreaRect.top - rect.top + 42 : -48;
+          const maxY = canvasAreaRect ? canvasAreaRect.bottom - rect.top - 42 : rect.height + 72;
+          const fallbackX = rect.width * 0.5;
+          const fallbackY = rect.height + 52;
+          proxy.style.left = `${clamp(Number.isFinite(projectedX) ? projectedX : fallbackX, minX, maxX)}px`;
+          proxy.style.top = `${clamp(Number.isFinite(projectedY) ? projectedY : fallbackY, minY, maxY)}px`;
+          proxy.style.display = "grid";
+        }
+      } else if (proxy) {
+        proxy.style.display = "none";
+      }
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(tick);
     };
@@ -4622,6 +4694,17 @@ export default function Home() {
                     ><span /><small>{isZh ? label : labelEn}</small></button>
                   ))}
                 </div>
+                <button
+                  ref={transformProxyRef}
+                  className="offcanvas-transform-proxy"
+                  onPointerDown={beginOffCanvasModelDrag}
+                  aria-label={text("Drag to move the off-canvas model", "拖动移动画板外的模型")}
+                  title={text("Model is outside the artboard. Drag to move it back.", "模型已超出画板，拖动可移回。")}
+                >
+                  <i className="proxy-axis proxy-axis-x" /><i className="proxy-axis proxy-axis-y" /><i className="proxy-axis proxy-axis-z" />
+                  <span><ArrowsOutCardinal size={17} weight="bold" /></span>
+                  <small>{text("Move model", "移动模型")}</small>
+                </button>
                 {!modelInfo.loaded && <div className="model-loader"><span /><p>{modelStatusLabel}</p></div>}
                 {editor.grid && <div className="composition-grid"><i /><i /><b /><b /></div>}
               </div>
