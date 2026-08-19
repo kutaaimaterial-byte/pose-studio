@@ -2028,6 +2028,13 @@ const ikDirectionControlConfig: Partial<Record<IKControlId, { bone: HumanoidBone
   rightFootDirection: { bone: "RightFoot", child: "ball_r", distance: 0.42 },
 };
 
+const ikEffectorDirectionControl: Partial<Record<IKControlId, IKControlId>> = {
+  leftHand: "leftHandDirection",
+  rightHand: "rightHandDirection",
+  leftFoot: "leftFootDirection",
+  rightFoot: "rightFootDirection",
+};
+
 function getIKControlPosition(rig: RigBinding, control: IKControlId, targets: IKTargetMap) {
   const stored = targets[control];
   if (stored) return new THREE.Vector3(...stored);
@@ -3229,6 +3236,10 @@ export default function Home() {
     if (!rig || !camera || !renderer) return;
     const startLocal = getIKControlPosition(rig, control, editorLatestRef.current.ikTargets);
     if (!startLocal) return;
+    const linkedDirectionControl = ikEffectorDirectionControl[control];
+    const startDirectionLocal = linkedDirectionControl
+      ? getIKControlPosition(rig, linkedDirectionControl, editorLatestRef.current.ikTargets)
+      : null;
     const startWorld = rig.root.localToWorld(startLocal.clone());
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), startWorld);
     const raycaster = new THREE.Raycaster();
@@ -3268,7 +3279,14 @@ export default function Home() {
       const target: [number, number, number] = [local.x, local.y, local.z];
       updateContinuousEdit((current) => ({
         ...current,
-        ikTargets: { ...current.ikTargets, [control]: target },
+        ikTargets: (() => {
+          const nextTargets: IKTargetMap = { ...current.ikTargets, [control]: target };
+          if (linkedDirectionControl && startDirectionLocal) {
+            const directionTarget = startDirectionLocal.clone().add(local.clone().sub(startLocal));
+            nextTargets[linkedDirectionControl] = [directionTarget.x, directionTarget.y, directionTarget.z];
+          }
+          return nextTargets;
+        })(),
       }));
     };
 

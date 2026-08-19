@@ -116,6 +116,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
   assert.match(page, /const IK_DRAG_SENSITIVITY = 100 \/ 60/);
   assert.match(page, /const IK_DRAG_FINE_SENSITIVITY = 10 \/ 60/);
+  assert.match(page, /const ikEffectorDirectionControl: Partial<Record<IKControlId, IKControlId>>/);
+  assert.match(page, /nextTargets\[linkedDirectionControl\] = \[directionTarget\.x, directionTarget\.y, directionTarget\.z\]/);
   assert.match(page, /currentPointerWorld\.clone\(\)\.sub\(startPointerWorld\)\.multiplyScalar\(sensitivity\)/);
   assert.match(page, /if \(stored\) return new THREE\.Vector3\(\.\.\.stored\)/);
   assert.match(page, /const handleDelta = new THREE\.Vector3\(\.\.\.target\)\.sub\(handlePosition\)/);
