@@ -114,8 +114,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(workspaceUi, /<button\s+type="button"\s+key=\{tool\}/s);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
-  assert.match(page, /const IK_DRAG_SENSITIVITY = 0\.08/);
-  assert.match(page, /const IK_DRAG_FINE_SENSITIVITY = 0\.03/);
+  assert.match(page, /const IK_DRAG_SENSITIVITY = 1/);
+  assert.match(page, /const IK_DRAG_FINE_SENSITIVITY = 0\.1/);
   assert.match(page, /currentPointerWorld\.clone\(\)\.sub\(startPointerWorld\)\.multiplyScalar\(sensitivity\)/);
   assert.match(page, /if \(stored\) return new THREE\.Vector3\(\.\.\.stored\)/);
   assert.match(page, /const handleDelta = new THREE\.Vector3\(\.\.\.target\)\.sub\(handlePosition\)/);
