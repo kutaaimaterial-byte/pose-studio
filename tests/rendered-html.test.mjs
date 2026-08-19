@@ -75,7 +75,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.three-viewport\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*layout paint/s);
   assert.match(css, /\.control-point-layer\s*\{[^}]*overflow:\s*visible;[^}]*transition:\s*none/s);
   assert.match(css, /\.offcanvas-transform-proxy\s*\{[^}]*display:\s*none;[^}]*position:\s*absolute;[^}]*z-index:\s*14/s);
-  assert.match(css, /\.canvas-mode-switch\s*\{[^}]*grid-column:\s*2;[^}]*justify-self:\s*center/s);
+  assert.match(css, /\.artboard-command-bar\s*\{[^}]*position:\s*absolute;[^}]*left:\s*50%;[^}]*top:\s*-92px;[^}]*translateX\(-50%\)/s);
+  assert.match(css, /\.command-bar-divider\s*\{[^}]*width:\s*1px;[^}]*height:\s*22px/s);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
@@ -95,8 +96,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
   assert.match(page, /const beginOffCanvasModelDrag = \(event: React\.PointerEvent<HTMLButtonElement>\)/);
   assert.match(page, /className="offcanvas-transform-proxy"/);
-  assert.match(page, /className="tool-dock canvas-mode-switch"/);
-  assert.match(page, /aria-label=\{text\("Canvas character controls", "画板人物控制"\)/);
+  assert.match(page, /className="tool-dock artboard-command-bar"/);
+  assert.match(page, /aria-label=\{text\("Canvas character and artboard controls", "画板人物与画板控制"\)/);
+  assert.match(page, /onClick=\{redo\} disabled=\{!canRedo\}/);
+  assert.doesNotMatch(page, /canvas-mode-switch/);
   assert.match(page, /const gizmoInside = projected\.z > -1 && projected\.z < 1/);
   assert.doesNotMatch(page, /activateTool\(/);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);

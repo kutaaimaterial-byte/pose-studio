@@ -4636,21 +4636,21 @@ export default function Home() {
         <section className="canvas-area">
           <div className="canvas-header">
             <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{text("Current mode", "当前模式")}：{interactionModeLabel[interactionMode]}</span>{cameraLocked && <em><Lock size={12} weight="fill" /> {text("Camera locked", "镜头已锁定")}</em>}</div>
-            <div className="tool-dock canvas-mode-switch" role="toolbar" aria-label={text("Canvas character controls", "画板人物控制")}>
-              <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
-              <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "rotate"} onClick={() => activateCanvasMode("rotate")} title={text("Rotate character", "旋转人物")}><ArrowClockwise size={16} /><span>{text("Rotate", "旋转")}</span></button>
-              <button className={interactionMode === "ik-edit" ? "active" : ""} aria-pressed={interactionMode === "ik-edit"} onClick={() => activateCanvasMode("pose")} title={text("Edit pose controls", "编辑姿势控制点")}><Sparkle size={16} /><span>{text("Edit Pose", "姿势编辑")}</span></button>
-            </div>
-            <div className="canvas-actions">
-              <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
-              <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
-              <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
-              <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
-            </div>
           </div>
 
             <div className="canvas-stage">
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
+              <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>
+                <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
+                <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "rotate"} onClick={() => activateCanvasMode("rotate")} title={text("Rotate character", "旋转人物")}><ArrowClockwise size={16} /><span>{text("Rotate", "旋转")}</span></button>
+                <button className={interactionMode === "ik-edit" ? "active" : ""} aria-pressed={interactionMode === "ik-edit"} onClick={() => activateCanvasMode("pose")} title={text("Edit pose controls", "编辑姿势控制点")}><Sparkle size={16} /><span>{text("Edit Pose", "编辑控制点")}</span></button>
+                <i className="command-bar-divider" />
+                <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
+                <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
+                <button className={editor.grid ? "active" : ""} aria-pressed={editor.grid} onClick={(event) => { event.stopPropagation(); commit((current) => ({ ...current, grid: !current.grid })); flash(editor.grid ? text("Composition grid hidden", "构图线已关闭") : text("Composition grid shown", "构图线已开启")); }} title={text("Composition grid", "构图线")} aria-label={text("Toggle composition grid", "切换构图线")}><GridFour size={17} /></button>
+                <button onClick={(event) => { event.stopPropagation(); controlsRef.current?.reset(); flash(text("Camera reset", "镜头已归位")); }} title={text("Reset camera", "归位镜头")} aria-label={text("Reset camera", "归位镜头")}><HouseLine size={17} /></button>
+                <button onClick={redo} disabled={!canRedo} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} aria-label={text("Redo", "重做")}><ArrowClockwise size={17} /></button>
+              </div>
               <div className="artboard-label"><span /> {editor.ratio} · {currentSize[0]} × {currentSize[1]}</div>
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
