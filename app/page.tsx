@@ -116,6 +116,7 @@ type IKControlId =
   | "hips"
   | "chest"
   | "head"
+  | "headPitch"
   | "leftShoulder"
   | "rightShoulder"
   | "leftElbow"
@@ -134,6 +135,10 @@ type IKControlId =
   | "rightFootDirection";
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 type IKControlGroup = "head-group" | "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
+
+const IK_DRAG_SENSITIVITY = 0.35;
+const IK_DRAG_FINE_SENSITIVITY = 0.14;
+const HEAD_PITCH_HANDLE_OFFSET = [0, 0.24, 0.56] as const;
 
 const poseBoardTheme: Theme = {
   ...webLightTheme,
@@ -159,6 +164,7 @@ const poseBoardTheme: Theme = {
 
 const ikControlDefinitions: ReadonlyArray<{ id: IKControlId; label: string; labelEn: string; kind: "core" | "joint" | "effector" | "direction"; group: IKControlGroup }> = [
   { id: "head", label: "头部朝向", labelEn: "Head Direction", kind: "effector", group: "head-group" },
+  { id: "headPitch", label: "抬头/低头", labelEn: "Head Pitch", kind: "direction", group: "head-group" },
   { id: "chest", label: "胸腔", labelEn: "Chest", kind: "core", group: "core-group" },
   { id: "hips", label: "骨盆", labelEn: "Pelvis", kind: "core", group: "core-group" },
   { id: "leftShoulder", label: "左肩", labelEn: "Left Shoulder", kind: "joint", group: "left-arm-group" },
@@ -1977,10 +1983,26 @@ function applyHeadIKTarget(rig: RigBinding, targetInRig: [number, number, number
   return true;
 }
 
+function applyHeadPitchTarget(rig: RigBinding, targetInRig: [number, number, number]) {
+  const headPosition = getRigBonePosition(rig, "Head");
+  if (!headPosition) return false;
+  const verticalDelta = targetInRig[1] - (headPosition.y + HEAD_PITCH_HANDLE_OFFSET[1]);
+  const pitch = THREE.MathUtils.clamp(
+    THREE.MathUtils.radToDeg(-Math.atan2(verticalDelta, HEAD_PITCH_HANDLE_OFFSET[2])),
+    -38,
+    38,
+  );
+  applyRigJointRotation(rig, "neck", [pitch * 0.28, 0, 0]);
+  applyRigJointRotation(rig, "head", [pitch * 0.72, 0, 0]);
+  rig.root.updateMatrixWorld(true);
+  return true;
+}
+
 const ikControlBoneMap: Record<IKControlId, HumanoidBoneName> = {
   hips: "Hips",
   chest: "Chest",
   head: "Head",
+  headPitch: "Head",
   leftShoulder: "LeftUpperArm",
   rightShoulder: "RightUpperArm",
   leftElbow: "LeftLowerArm",
@@ -2008,6 +2030,11 @@ const ikDirectionControlConfig: Partial<Record<IKControlId, { bone: HumanoidBone
 
 function getIKControlPosition(rig: RigBinding, control: IKControlId, targets: IKTargetMap) {
   const stored = targets[control];
+  if (control === "headPitch") {
+    if (stored) return new THREE.Vector3(...stored);
+    const headPosition = getRigBonePosition(rig, "Head");
+    return headPosition?.add(new THREE.Vector3(...HEAD_PITCH_HANDLE_OFFSET)) ?? null;
+  }
   const directionConfig = ikDirectionControlConfig[control];
   if (directionConfig) {
     if (stored) return new THREE.Vector3(...stored);
@@ -2110,6 +2137,7 @@ function applyEditorIKTargets(rig: RigBinding, targets: IKTargetMap) {
   aimEditorEndDirection(rig, "LeftFoot", "ball_l", targets.leftFootDirection);
   aimEditorEndDirection(rig, "RightFoot", "ball_r", targets.rightFootDirection);
   if (targets.head) applyHeadIKTarget(rig, targets.head);
+  if (targets.headPitch) applyHeadPitchTarget(rig, targets.headPitch);
 
   rig.root.updateMatrixWorld(true);
   if (targets.leftFoot || targets.rightFoot) groundRigInParentSpace(rig);
@@ -3195,27 +3223,42 @@ export default function Home() {
     if (!rig || !camera || !renderer) return;
     const startLocal = getIKControlPosition(rig, control, editorLatestRef.current.ikTargets);
     if (!startLocal) return;
+    const startWorld = rig.root.localToWorld(startLocal.clone());
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), startWorld);
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const startPointerWorld = new THREE.Vector3();
+    const currentPointerWorld = new THREE.Vector3();
+    const rect = renderer.domElement.getBoundingClientRect();
+    const setPointerRay = (clientX: number, clientY: number) => {
+      pointer.set(
+        ((clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1,
+        -((clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1,
+      );
+      raycaster.setFromCamera(pointer, camera);
+    };
+    setPointerRay(event.clientX, event.clientY);
+    if (!raycaster.ray.intersectPlane(plane, startPointerWorld)) return;
+
     event.preventDefault();
     event.stopPropagation();
     setActiveIKControl(control);
     beginContinuousEdit();
     if (controlsRef.current) controlsRef.current.enabled = false;
 
-    const startWorld = rig.root.localToWorld(startLocal.clone());
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), startWorld);
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    const worldTarget = new THREE.Vector3();
+    let pendingPointer: { clientX: number; clientY: number; shiftKey: boolean } | null = null;
+    let dragFrame: number | null = null;
 
-    const move = (pointerEvent: PointerEvent) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.set(
-        ((pointerEvent.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1,
-        -((pointerEvent.clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1,
-      );
-      raycaster.setFromCamera(pointer, camera);
-      if (!raycaster.ray.intersectPlane(plane, worldTarget)) return;
-      const local = rig.root.worldToLocal(worldTarget.clone());
+    const applyPointer = (pointerEvent: { clientX: number; clientY: number; shiftKey: boolean }) => {
+      setPointerRay(pointerEvent.clientX, pointerEvent.clientY);
+      if (!raycaster.ray.intersectPlane(plane, currentPointerWorld)) return;
+      const sensitivity = pointerEvent.shiftKey ? IK_DRAG_FINE_SENSITIVITY : IK_DRAG_SENSITIVITY;
+      const worldDelta = currentPointerWorld.clone().sub(startPointerWorld).multiplyScalar(sensitivity);
+      const local = rig.root.worldToLocal(startWorld.clone().add(worldDelta));
+      if (control === "headPitch") {
+        local.x = startLocal.x;
+        local.z = startLocal.z;
+      }
       const target: [number, number, number] = [local.x, local.y, local.z];
       updateContinuousEdit((current) => ({
         ...current,
@@ -3223,10 +3266,26 @@ export default function Home() {
       }));
     };
 
-    const end = () => {
+    const move = (pointerEvent: PointerEvent) => {
+      pendingPointer = { clientX: pointerEvent.clientX, clientY: pointerEvent.clientY, shiftKey: pointerEvent.shiftKey };
+      if (dragFrame !== null) return;
+      dragFrame = window.requestAnimationFrame(() => {
+        dragFrame = null;
+        if (!pendingPointer) return;
+        const nextPointer = pendingPointer;
+        pendingPointer = null;
+        applyPointer(nextPointer);
+      });
+    };
+
+    const end = (pointerEvent: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
+      if (dragFrame !== null) window.cancelAnimationFrame(dragFrame);
+      if (pointerEvent.type === "pointerup") {
+        applyPointer({ clientX: pointerEvent.clientX, clientY: pointerEvent.clientY, shiftKey: pointerEvent.shiftKey });
+      }
       if (controlsRef.current) controlsRef.current.enabled = interactionModeRef.current === "camera-browse" && !cameraLockedRef.current;
       setActiveIKControl(null);
       endContinuousEdit();
@@ -4633,7 +4692,7 @@ export default function Home() {
               <button onClick={() => selectPose(defaultPose)} title={text("Restore natural standing", "恢复自然站立")}><ArrowCounterClockwise size={16} /></button>
             </div>
             {interactionMode === "ik-edit" && <div className="ik-session-summary">
-              <span>{activeIKControl ? text("Adjusting a joint", "正在调整关节") : text("Drag the colored controls on the character", "拖动画板中的彩色控制点")}</span>
+              <span>{activeIKControl ? text("Adjusting a joint", "正在调整关节") : text("Drag a colored control · Hold Shift for fine adjustment", "拖动彩色控制点 · 按住 Shift 精细调整")}</span>
               <button onClick={resetIKEdits}>{text("Restore pose", "恢复姿势")}</button>
               <button className="primary" onClick={exitInteractionMode}>{text("Done", "完成")}</button>
             </div>}

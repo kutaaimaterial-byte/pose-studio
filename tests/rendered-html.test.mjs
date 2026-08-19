@@ -114,6 +114,11 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(workspaceUi, /<button\s+type="button"\s+key=\{tool\}/s);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
+  assert.match(page, /const IK_DRAG_SENSITIVITY = 0\.35/);
+  assert.match(page, /const IK_DRAG_FINE_SENSITIVITY = 0\.14/);
+  assert.match(page, /currentPointerWorld\.clone\(\)\.sub\(startPointerWorld\)\.multiplyScalar\(sensitivity\)/);
+  assert.match(page, /id: "headPitch", label: "抬头\/低头"/);
+  assert.match(page, /if \(targets\.headPitch\) applyHeadPitchTarget\(rig, targets\.headPitch\)/);
   assert.match(page, /setSelectedPoseId\(pose\.id\);\s*setToolMode\("pose"\);\s*setActiveTool\("pose"\);\s*setInteractionMode\("ik-edit"\)/s);
   assert.match(page, /camera\.near = 0\.02/);
   assert.match(page, /findOpenModelPosition/);
