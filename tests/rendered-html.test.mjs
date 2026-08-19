@@ -75,6 +75,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.three-viewport\s*\{[^}]*overflow:\s*hidden;[^}]*contain:\s*layout paint/s);
   assert.match(css, /\.control-point-layer\s*\{[^}]*overflow:\s*visible;[^}]*transition:\s*none/s);
   assert.match(css, /\.offcanvas-transform-proxy\s*\{[^}]*display:\s*none;[^}]*position:\s*absolute;[^}]*z-index:\s*14/s);
+  assert.match(css, /\.canvas-mode-switch\s*\{[^}]*grid-column:\s*2;[^}]*justify-self:\s*center/s);
   assert.match(css, /@media \(max-width:\s*1023px\)/);
   assert.match(css, /@media \(max-width:\s*720px\)/);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
@@ -89,12 +90,15 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
   assert.match(page, /const syncTransformController = \(mode: "translate" \| "rotate"/);
   assert.match(page, /transformControls\.attach\(root\)/);
-  assert.match(page, /if \(tool === "model"\) \{\s*activateTool\(toolMode === "rotate" \? "rotate" : "translate"\)/s);
+  assert.match(page, /const activateCanvasMode = \(mode: ToolMode\)/);
+  assert.match(page, /const changeActiveTool = \(tool: ActiveTool\) => \{\s*setActiveTool\(tool\)/s);
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
   assert.match(page, /const beginOffCanvasModelDrag = \(event: React\.PointerEvent<HTMLButtonElement>\)/);
   assert.match(page, /className="offcanvas-transform-proxy"/);
+  assert.match(page, /className="tool-dock canvas-mode-switch"/);
+  assert.match(page, /aria-label=\{text\("Canvas character controls", "画板人物控制"\)/);
   assert.match(page, /const gizmoInside = projected\.z > -1 && projected\.z < 1/);
-  assert.match(page, /else if \(tool === "pose"\) \{\s*activateTool\("pose"\)/s);
+  assert.doesNotMatch(page, /activateTool\(/);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
   assert.match(page, /setSelectedPoseId\(pose\.id\);\s*setToolMode\("pose"\);\s*setActiveTool\("pose"\);\s*setInteractionMode\("ik-edit"\)/s);

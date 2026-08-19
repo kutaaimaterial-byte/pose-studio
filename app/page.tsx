@@ -3166,11 +3166,9 @@ export default function Home() {
     transformControls.getHelper().visible = root.visible;
   };
 
-  const activateTool = (mode: ToolMode) => {
+  const activateCanvasMode = (mode: ToolMode) => {
     setToolMode(mode);
-    setActiveTool(mode === "pose" ? "pose" : "model");
     setInteractionMode(mode === "pose" ? "ik-edit" : "model-transform");
-    setContextPanelOpen(true);
     setActiveIKControl(null);
     if (controlsRef.current) controlsRef.current.enabled = false;
     if (mode === "pose") {
@@ -3184,14 +3182,7 @@ export default function Home() {
   };
 
   const changeActiveTool = (tool: ActiveTool) => {
-    if (tool === "model") {
-      activateTool(toolMode === "rotate" ? "rotate" : "translate");
-    } else if (tool === "pose") {
-      activateTool("pose");
-    } else {
-      exitInteractionMode();
-      setActiveTool(tool);
-    }
+    setActiveTool(tool);
     setAdvancedOpen(false);
     setContextPanelOpen(true);
     setMobilePanel(window.innerWidth < 1024 ? "context" : null);
@@ -4628,7 +4619,7 @@ export default function Home() {
           <div className="current-pose-toolbar" aria-label={text("Current pose controls", "当前姿势快捷控制")}>
             <div className="current-pose-meta"><span>{text("Current Pose", "当前姿势")}</span><strong>{poseDisplayName(selectedPose)}</strong><small>{categoryDisplayName(selectedPose.category)} · {interactionModeLabel[interactionMode]}</small></div>
             <div className="current-pose-actions">
-              <button className={interactionMode === "ik-edit" ? "active" : ""} onClick={() => interactionMode === "ik-edit" ? exitInteractionMode() : activateTool("pose")} title={interactionMode === "ik-edit" ? text("Finish fine-tuning", "完成微调") : text("Fine-tune pose", "微调姿势")}><Sparkle size={16} /></button>
+              <button className={interactionMode === "ik-edit" ? "active" : ""} onClick={() => interactionMode === "ik-edit" ? exitInteractionMode() : activateCanvasMode("pose")} title={interactionMode === "ik-edit" ? text("Finish fine-tuning", "完成微调") : text("Fine-tune pose", "微调姿势")}><Sparkle size={16} /></button>
               <button className={editor.mirrored ? "active" : ""} onClick={() => { commit((current) => ({ ...current, mirrored: !current.mirrored })); flash(editor.mirrored ? text("Original pose restored", "已恢复原始姿态") : text("Skeleton pose mirrored", "已镜像骨骼姿态")); }} aria-pressed={editor.mirrored} title={text("Mirror skeleton pose", "镜像骨骼姿态")}><ArrowsLeftRight size={16} /></button>
               <button className={favoriteIds.includes(selectedPose.id) ? "active favorite" : "favorite"} onClick={() => toggleFavorite(selectedPose)} title={text("Favorite current pose", "收藏当前姿势")}><Star size={16} weight={favoriteIds.includes(selectedPose.id) ? "fill" : "regular"} /></button>
               <button onClick={saveModifiedPose} disabled={!hasUnsavedJointEdits || !modelInfo.loaded} title={text("Save modified pose", "保存修改后的动作")}><FloppyDisk size={16} /></button>
@@ -4645,6 +4636,11 @@ export default function Home() {
         <section className="canvas-area">
           <div className="canvas-header">
             <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{text("Current mode", "当前模式")}：{interactionModeLabel[interactionMode]}</span>{cameraLocked && <em><Lock size={12} weight="fill" /> {text("Camera locked", "镜头已锁定")}</em>}</div>
+            <div className="tool-dock canvas-mode-switch" role="toolbar" aria-label={text("Canvas character controls", "画板人物控制")}>
+              <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
+              <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "rotate"} onClick={() => activateCanvasMode("rotate")} title={text("Rotate character", "旋转人物")}><ArrowClockwise size={16} /><span>{text("Rotate", "旋转")}</span></button>
+              <button className={interactionMode === "ik-edit" ? "active" : ""} aria-pressed={interactionMode === "ik-edit"} onClick={() => activateCanvasMode("pose")} title={text("Edit pose controls", "编辑姿势控制点")}><Sparkle size={16} /><span>{text("Edit Pose", "姿势编辑")}</span></button>
+            </div>
             <div className="canvas-actions">
               <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
               <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
@@ -4761,8 +4757,8 @@ export default function Home() {
               </div>
 
               <div className="mode-entry-row" role="group" aria-label={text("Character transform mode", "人物变换模式")}>
-                <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} onClick={() => activateTool("translate")}><ArrowsOutCardinal size={16} />{text("Move", "移动")}</button>
-                <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} onClick={() => activateTool("rotate")}><ArrowClockwise size={16} />{text("Rotate", "旋转")}</button>
+                <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} onClick={() => activateCanvasMode("translate")}><ArrowsOutCardinal size={16} />{text("Move", "移动")}</button>
+                <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} onClick={() => activateCanvasMode("rotate")}><ArrowClockwise size={16} />{text("Rotate", "旋转")}</button>
                 <button onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8}><Plus size={16} />{text("Add", "添加")}</button>
               </div>
 
@@ -4908,8 +4904,8 @@ export default function Home() {
           label={activeTool === "pose" ? text("Current pose", "当前姿势") : text("Current tool", "当前工具")}
           title={activeTool === "pose" ? poseDisplayName(selectedPose) : toolLabels[activeTool]}
           actions={<>
-            {activeTool === "pose" && <><button onClick={() => selectAdjacentPose(-1)} title={text("Previous pose", "上一个姿势")}><ArrowLeft size={16} /></button><button onClick={selectRandomPose} title={text("Random pose", "随机姿势")}><Shuffle size={16} /></button><button className={editor.mirrored ? "active" : ""} onClick={() => commit((current) => ({ ...current, mirrored: !current.mirrored }))} title={text("Mirror pose · M", "镜像姿势 · M")}><ArrowsLeftRight size={16} /></button><button onClick={() => interactionMode === "ik-edit" ? exitInteractionMode() : activateTool("pose")} title={text("Fine-tune pose", "微调姿势")}><Sparkle size={16} /></button></>}
-            {activeTool === "model" && <><button onClick={() => activateTool("translate")} className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""}><ArrowsOutCardinal size={16} /> {text("Move", "移动")}</button><button onClick={() => activateTool("rotate")} className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button><button onClick={copySelectedModel}><Copy size={16} /></button><button onClick={deleteSelectedModel} disabled={modelList.length <= 1}><Trash size={16} /></button></>}
+            {activeTool === "pose" && <><button onClick={() => selectAdjacentPose(-1)} title={text("Previous pose", "上一个姿势")}><ArrowLeft size={16} /></button><button onClick={selectRandomPose} title={text("Random pose", "随机姿势")}><Shuffle size={16} /></button><button className={editor.mirrored ? "active" : ""} onClick={() => commit((current) => ({ ...current, mirrored: !current.mirrored }))} title={text("Mirror pose · M", "镜像姿势 · M")}><ArrowsLeftRight size={16} /></button><button onClick={() => interactionMode === "ik-edit" ? exitInteractionMode() : activateCanvasMode("pose")} title={text("Fine-tune pose", "微调姿势")}><Sparkle size={16} /></button></>}
+            {activeTool === "model" && <><button onClick={() => activateCanvasMode("translate")} className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""}><ArrowsOutCardinal size={16} /> {text("Move", "移动")}</button><button onClick={() => activateCanvasMode("rotate")} className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""}><ArrowClockwise size={16} /> {text("Rotate", "旋转")}</button><button onClick={copySelectedModel}><Copy size={16} /></button><button onClick={deleteSelectedModel} disabled={modelList.length <= 1}><Trash size={16} /></button></>}
             {activeTool === "camera" && <><button onClick={() => setCameraLocked((locked) => !locked)} className={cameraLocked ? "active" : ""}>{cameraLocked ? <Lock size={16} /> : <LockOpen size={16} />}</button><button onClick={() => applyCameraPreset("commercial")}><HouseLine size={16} /></button></>}
             {activeTool === "perspective" && <><button onClick={togglePerspectiveGrid}><Perspective size={16} /></button><button onClick={() => setInteractionMode(interactionMode === "perspective-edit" ? "camera-browse" : "perspective-edit")} className={interactionMode === "perspective-edit" ? "active" : ""}><ArrowsOutCardinal size={16} /></button></>}
             {activeTool === "lighting" && <button onClick={() => applyLightingPreset("studio")}><ArrowCounterClockwise size={16} /></button>}
