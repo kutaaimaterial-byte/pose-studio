@@ -136,8 +136,8 @@ type IKControlId =
 type IKTargetMap = Partial<Record<IKControlId, [number, number, number]>>;
 type IKControlGroup = "head-group" | "core-group" | "left-arm-group" | "right-arm-group" | "left-leg-group" | "right-leg-group";
 
-const IK_DRAG_SENSITIVITY = 1;
-const IK_DRAG_FINE_SENSITIVITY = 0.1;
+const IK_DRAG_SENSITIVITY = 2;
+const IK_DRAG_FINE_SENSITIVITY = 0.2;
 const HEAD_PITCH_HANDLE_OFFSET = [0, 0.24, 0.56] as const;
 
 const poseBoardTheme: Theme = {
