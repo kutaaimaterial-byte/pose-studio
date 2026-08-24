@@ -6053,15 +6053,32 @@ export default function Home() {
                 </div>}
               </InspectorSection>}
 
-            {activeTool === "perspective" && <InspectorSection title={text("Perspective Modes", "透视模式")} resetLabel={text("Reset", "重置")} onReset={resetPerspectiveGrid}>
+            {activeTool === "perspective" && <InspectorSection className="perspective-section" title={text("Perspective Modes", "透视模式")} resetLabel={text("Reset", "重置")} onReset={resetPerspectiveGrid}>
                 <div className="perspective-mode-grid" role="radiogroup" aria-label={text("Perspective grid mode", "透视网格模式")}>
                   {([
-                    ["off", text("Off", "关闭")],
-                    ["ground", text("Ground", "地面")],
-                    ["one-point", text("1 Point", "一点")],
-                    ["two-point", text("2 Point", "两点")],
-                    ["three-point", text("3 Point", "三点")],
-                  ] as Array<[PerspectiveGridMode, string]>).map(([mode, label]) => <button key={mode} className={editor.perspectiveGrid.mode === mode ? "active" : ""} role="radio" aria-checked={editor.perspectiveGrid.mode === mode} onClick={() => setPerspectiveMode(mode)}>{label}</button>)}
+                    ["off", text("Off", "关闭"), text("No guide", "无辅助线")],
+                    ["ground", text("Ground", "地面"), text("Ground plane", "水平基准面")],
+                    ["one-point", text("1 Point", "一点"), text("Frontal depth", "正面纵深")],
+                    ["two-point", text("2 Point", "两点"), text("Corner space", "转角空间")],
+                    ["three-point", text("3 Point", "三点"), text("High / low angle", "仰视与俯视")],
+                  ] as Array<[PerspectiveGridMode, string, string]>).map(([mode, label, description]) => (
+                    <button key={mode} data-mode={mode} className={editor.perspectiveGrid.mode === mode ? "active" : ""} role="radio" aria-checked={editor.perspectiveGrid.mode === mode} onClick={() => setPerspectiveMode(mode)}>
+                      <span className={`perspective-card-visual mode-${mode}`} aria-hidden="true">
+                        <i className="perspective-horizon" />
+                        <i className="perspective-vp perspective-vp-a" />
+                        <i className="perspective-vp perspective-vp-b" />
+                        <i className="perspective-vp perspective-vp-c" />
+                        <i className="perspective-ray perspective-ray-a" />
+                        <i className="perspective-ray perspective-ray-b" />
+                        <i className="perspective-ray perspective-ray-c" />
+                        <i className="perspective-ray perspective-ray-d" />
+                        <i className="perspective-depth perspective-depth-a" />
+                        <i className="perspective-depth perspective-depth-b" />
+                        <i className="perspective-depth perspective-depth-c" />
+                      </span>
+                      <span className="perspective-card-copy"><strong>{label}</strong><small>{description}</small></span>
+                    </button>
+                  ))}
                 </div>
 
                 {editor.perspectiveGrid.mode !== "off" && <>
