@@ -2815,7 +2815,7 @@ export default function Home() {
   const timelineHistoryRef = useRef<PoseBoardTimeline[]>([]);
   const timelineFutureRef = useRef<PoseBoardTimeline[]>([]);
   const timelineContinuousEditRef = useRef<PoseBoardTimeline | null>(null);
-  const timelinePlaybackFrameRef = useRef<number | null>(null);
+  const timelinePlaybackTimerRef = useRef<number | null>(null);
   const timelinePlaybackStartRef = useRef({ clock: 0, playhead: 0, shotId: "" });
   const introStartedAtRef = useRef<number | null>(null);
   const playheadRef = useRef(0);
@@ -4692,6 +4692,7 @@ export default function Home() {
     if (!timelineLatestRef.current.shots.length) return;
     if (timelinePlaying) {
       setTimelinePlaying(false);
+      timelineLatestRef.current = { ...timelineLatestRef.current, playhead: playheadRef.current };
       setTimeline((current) => ({ ...current, playhead: playheadRef.current }));
       return;
     }
@@ -4889,7 +4890,11 @@ export default function Home() {
 
   useEffect(() => {
     if (!timelinePlaying) return;
-    const tick = (clock: number) => {
+    const tick = () => {
+      // Read the clock inside the timer instead of mixing performance.now()
+      // with requestAnimationFrame's document-timeline timestamp. Embedded
+      // browsers can expose those clocks from different time origins.
+      const clock = readPlaybackClock();
       const current = timelineLatestRef.current;
       const playback = timelinePlaybackStartRef.current;
       let nextTime = playback.playhead + (clock - playback.clock) / 1000;
@@ -4904,6 +4909,7 @@ export default function Home() {
         } else {
           nextTime = current.duration;
           playheadRef.current = nextTime;
+          timelineLatestRef.current = { ...current, playhead: nextTime };
           setTimelinePlayhead(nextTime);
           setTimeline((value) => ({ ...value, playhead: nextTime }));
           setTimelinePlaying(false);
@@ -4911,6 +4917,7 @@ export default function Home() {
         }
       }
       playheadRef.current = nextTime;
+      timelineLatestRef.current = { ...current, playhead: nextTime };
       setTimelinePlayhead(nextTime);
       const shot = current.shots.find((item) => nextTime >= item.start && nextTime < item.end)
         ?? (nextTime === current.duration ? current.shots.at(-1) : undefined);
@@ -4918,12 +4925,14 @@ export default function Home() {
         timelinePlaybackStartRef.current.shotId = shot.id;
         applyTimelineShot(shot, true);
       }
-      timelinePlaybackFrameRef.current = window.requestAnimationFrame(tick);
     };
-    timelinePlaybackFrameRef.current = window.requestAnimationFrame(tick);
+    // A 30 fps transport clock is smooth for the timeline while avoiding a
+    // full 3D workspace React render on every display refresh.
+    tick();
+    timelinePlaybackTimerRef.current = window.setInterval(tick, 1000 / 30);
     return () => {
-      if (timelinePlaybackFrameRef.current !== null) window.cancelAnimationFrame(timelinePlaybackFrameRef.current);
-      timelinePlaybackFrameRef.current = null;
+      if (timelinePlaybackTimerRef.current !== null) window.clearInterval(timelinePlaybackTimerRef.current);
+      timelinePlaybackTimerRef.current = null;
     };
   // Timeline playback intentionally reads the latest refs so editing the timeline does not restart the high-precision clock.
   // eslint-disable-next-line react-hooks/exhaustive-deps

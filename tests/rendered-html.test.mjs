@@ -219,6 +219,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /snapshotLocked: true,\s*snapshotVersion: 2,\s*dirty: false/s);
   assert.match(page, /const snapshot = buildSnapshotForShotPrompt\(baseSnapshot, value, ratio\);[\s\S]*if \(activeShotIdRef\.current === shotId\) applySceneSnapshot\(snapshot, true\);/s);
   assert.match(page, /const toggleTimelinePlayback = \(\) =>/);
+  assert.match(page, /const tick = \(\) => \{\s*\/\/ Read the clock inside the timer[\s\S]*?const clock = readPlaybackClock\(\);/s);
+  assert.match(page, /timelineLatestRef\.current = \{ \.\.\.current, playhead: nextTime \};\s*setTimelinePlayhead\(nextTime\);/s);
+  assert.match(page, /window\.setInterval\(tick, 1000 \/ 30\)/);
+  assert.match(page, /window\.clearInterval\(timelinePlaybackTimerRef\.current\)/);
   assert.match(page, /videoTimeline: \{ \.\.\.timelineLatestRef\.current/);
   assert.match(timelinePanel, /ArrowsLeftRight size=\{18\}/);
   assert.match(timelinePanel, /requestAnimationFrame\(applyPendingScrub\)/);
