@@ -167,6 +167,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /className="camera-preset-description"/);
   assert.match(page, /className="camera-preset-tags"/);
   assert.match(page, /className="camera-focal-scale" aria-hidden="true"/);
+  assert.match(page, /<PersonSimple size=\{18\} weight=\{selected \? "fill" : "regular"\} \/>/);
+  assert.doesNotMatch(page, /<Cube size=\{16\} weight=\{selected \? "fill" : "regular"\} \/>/);
   assert.match(css, /\.camera-presets button\s*\{[^}]*min-height:\s*104px;[^}]*grid-template-rows:\s*auto 18px;/s);
   assert.match(css, /\.camera-focal-scale::before\s*\{[^}]*background:\s*var\(--border-strong\)/s);
   assert.match(css, /\.convert-flow\s*\{[^}]*min-height:\s*116px;[^}]*border:\s*1px solid var\(--border-default\)/s);

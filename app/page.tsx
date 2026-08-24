@@ -45,6 +45,7 @@ import {
   Minus,
   DotsThree,
   FunnelSimple,
+  PersonSimple,
   Perspective,
   Plus,
   Shuffle,
@@ -5961,7 +5962,7 @@ export default function Home() {
                     return (
                       <div key={model.id} className={`model-stack-item${selected ? " active" : ""}`}>
                         <button className="model-stack-select" onClick={() => selectModel(model.id)} aria-pressed={selected}>
-                          <Cube size={16} weight={selected ? "fill" : "regular"} />
+                          <PersonSimple size={18} weight={selected ? "fill" : "regular"} />
                           <span>{modelDisplayName(model)}</span>
                         </button>
                         {selected && (
