@@ -5770,7 +5770,7 @@ export default function Home() {
 
             <div className="category-list" role="listbox" aria-label={text("Primary pose categories", "姿势一级分类")}>
               {poseCategoryTabs.filter((item) => item.value !== "favorites" && item.value !== "saved").map((item) => (
-                <button key={item.value} className={category === item.value ? "active" : ""} role="option" aria-selected={category === item.value} title={tabDisplayName(item.value)} onClick={() => { setCategory(item.value); setQuickView(null); }}>
+                <button key={item.value} className={!quickView && category === item.value ? "active" : ""} role="option" aria-selected={!quickView && category === item.value} title={tabDisplayName(item.value)} onClick={() => { setCategory(item.value); setQuickView(null); }}>
                   {item.value === "favorites" && <Star size={13} weight={category === "favorites" ? "fill" : "regular"} />}
                   {item.value === "saved" && <FloppyDisk size={13} weight={category === "saved" ? "fill" : "regular"} />}
                   {tabDisplayName(item.value)}{item.value === "favorites" ? ` ${favoriteIds.length}` : item.value === "saved" ? ` ${savedPoses.length}` : ""}

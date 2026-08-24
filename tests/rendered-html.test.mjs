@@ -102,6 +102,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(page, /className="canvas-meta"/);
   assert.match(page, /className="canvas-project-name"/);
   assert.doesNotMatch(page, /className="project-identity"/);
+  assert.match(page, /className=\{!quickView && category === item\.value \? "active" : ""\}/);
   assert.match(page, /<SSRProvider>/);
   assert.match(page, /<FluentProvider[^>]*applyStylesToPortals=\{false\}/);
   assert.doesNotMatch(page, /<Tooltip/);
