@@ -50,11 +50,12 @@ test("server-renders the PoseBoard studio shell", async () => {
 });
 
 test("keeps the V4 single-panel workstation responsive and restrained", async () => {
-  const [css, page, layout, workspaceUi] = await Promise.all([
+  const [css, page, layout, workspaceUi, timelinePanel] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/workspace-ui.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/video-timeline-panel.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(css, /--surface-primary:\s*#ffffff/);
@@ -134,7 +135,18 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /parseTimelinePrompt\(timelinePrompt\)/);
   assert.match(page, /<VideoTimelinePanel/);
   assert.match(page, /const applySceneSnapshot = \(snapshotSource: ShotSceneSnapshot/);
+  assert.match(page, /function keepModelInCameraFrame\(\s*root: THREE\.Group/s);
+  assert.match(page, /const frameFill: Record<ShotSize, number> = \{ close: 2\.35, medium: 1\.35, full: 0\.86, long: 0\.46 \}/);
+  assert.match(page, /const restoredEditor = selected\s*\? cloneState\(\{ \.\.\.snapshot\.editor, \.\.\.cloneModelEditState\(selected\.state\) \}\)/s);
+  assert.match(page, /const snapshotRatio = currentRatioOverride\s*\? currentRatio\s*:\s*storedSnapshot\?\.editor\.ratio \?\? timelineLatestRef\.current\.masterAspect \?\? currentRatio;/s);
+  assert.match(page, /storedSnapshot && !shot\.dirty && shot\.promptText\.trim\(\)\s*\? buildSnapshotForShotPrompt\(storedSnapshot, shot\.promptText, snapshotRatio\)/s);
+  assert.match(page, /applyTimelineShot\(shot, true\);\s*\/\/ Restore the persisted active shot once the asynchronous 3D model is ready\./s);
+  assert.match(page, /setTimelinePlayhead\(0\);\s*applyTimelineShot\(shots\[0\], true\);/s);
   assert.match(page, /const toggleTimelinePlayback = \(\) =>/);
   assert.match(page, /videoTimeline: \{ \.\.\.timelineLatestRef\.current/);
+  assert.match(timelinePanel, /ArrowsLeftRight size=\{18\}/);
+  assert.match(timelinePanel, /requestAnimationFrame\(applyPendingScrub\)/);
+  assert.match(timelinePanel, /const pointerOffset = event\.clientX - handle\.getBoundingClientRect\(\)\.left/);
+  assert.doesNotMatch(timelinePanel, /\{text\("Ripple", "联动"\)\}|\{text\("Split", "切分"\)\}|\{text\("Delete", "删除"\)\}|\{text\("Fit", "适配"\)\}/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
 });

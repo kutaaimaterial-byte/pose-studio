@@ -4,6 +4,7 @@ import { useMemo, useRef } from "react";
 import {
   ArrowCounterClockwise,
   ArrowClockwise,
+  ArrowsLeftRight,
   CaretDown,
   Copy,
   CornersOut,
@@ -146,23 +147,23 @@ export function VideoTimelinePanel<TSnapshot>({
       <div className="timeline-workspace">
         <aside className="timeline-controls">
           <div className="timeline-transport">
-            <button onClick={onRestart} disabled={!timeline.shots.length} title={text("Back to start", "回到开头")}><SkipBack size={16} weight="fill" /></button>
-            <button onClick={onPreviousShot} disabled={!timeline.shots.length} title={text("Previous shot", "上一镜头")}><SkipBack size={15} /></button>
-            <button className="timeline-play" onClick={onTogglePlayback} disabled={!timeline.shots.length} title={text("Play or pause · Space", "播放或暂停 · Space")}>{playing ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}</button>
-            <button onClick={onNextShot} disabled={!timeline.shots.length} title={text("Next shot", "下一镜头")}><SkipForward size={15} /></button>
-            <button className={timeline.loop ? "active timeline-loop" : "timeline-loop"} onClick={onToggleLoop} title={text("Cycle loop: all, shot, off", "循环模式：全部、单镜头、关闭")}><Repeat size={16} />{timeline.loop && <small>{timeline.loopMode === "shot" ? "S" : "A"}</small>}</button>
+            <button onClick={onRestart} disabled={!timeline.shots.length} title={text("Back to start", "回到开头")} aria-label={text("Back to start", "回到开头")}><SkipBack size={18} weight="fill" /></button>
+            <button onClick={onPreviousShot} disabled={!timeline.shots.length} title={text("Previous shot", "上一镜头")} aria-label={text("Previous shot", "上一镜头")}><SkipBack size={18} /></button>
+            <button className="timeline-play" onClick={onTogglePlayback} disabled={!timeline.shots.length} title={text("Play or pause · Space", "播放或暂停 · Space")} aria-label={text("Play or pause", "播放或暂停")}>{playing ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}</button>
+            <button onClick={onNextShot} disabled={!timeline.shots.length} title={text("Next shot", "下一镜头")} aria-label={text("Next shot", "下一镜头")}><SkipForward size={18} /></button>
+            <button className={timeline.loop ? "active timeline-loop" : "timeline-loop"} onClick={onToggleLoop} title={text("Cycle loop: all, shot, off", "循环模式：全部、单镜头、关闭")} aria-label={text("Cycle loop mode", "切换循环模式")}><Repeat size={18} />{timeline.loop && <small>{timeline.loopMode === "shot" ? "S" : "A"}</small>}</button>
           </div>
           <div className="timeline-time"><strong>{formatTimecode(playhead, true, timeline.fps)}</strong><span>/ {formatTimecode(timeline.duration, true, timeline.fps)}</span></div>
           <div className="timeline-mode-row">
-            <button className={timeline.ripple ? "active" : ""} onClick={onToggleRipple}>{text("Ripple", "联动")}</button>
-            <button onClick={onSplitShot} disabled={!activeShot}><Scissors size={14} />{text("Split", "切分")}</button>
-            <button onClick={onDuplicateShot} disabled={!activeShot} title={text("Duplicate shot", "复制镜头")}><Copy size={14} /></button>
-            <button onClick={onDeleteShot} disabled={!activeShot}><Trash size={14} />{text("Delete", "删除")}</button>
+            <button className={timeline.ripple ? "active" : ""} onClick={onToggleRipple} title={text("Toggle ripple editing", "切换联动编辑")} aria-label={text("Toggle ripple editing", "切换联动编辑")}><ArrowsLeftRight size={18} /></button>
+            <button onClick={onSplitShot} disabled={!activeShot} title={text("Split shot", "切分镜头")} aria-label={text("Split shot", "切分镜头")}><Scissors size={18} /></button>
+            <button onClick={onDuplicateShot} disabled={!activeShot} title={text("Duplicate shot", "复制镜头")} aria-label={text("Duplicate shot", "复制镜头")}><Copy size={18} /></button>
+            <button onClick={onDeleteShot} disabled={!activeShot} title={text("Delete shot", "删除镜头")} aria-label={text("Delete shot", "删除镜头")}><Trash size={18} /></button>
           </div>
           <div className="timeline-zoom">
-            <button onClick={() => onZoom(Math.max(24, pixelsPerSecond - 12))}><Minus size={14} /></button>
-            <button onClick={onFit}><CornersOut size={14} />{text("Fit", "适配")}</button>
-            <button onClick={() => onZoom(Math.min(160, pixelsPerSecond + 12))}><Plus size={14} /></button>
+            <button onClick={() => onZoom(Math.max(24, pixelsPerSecond - 12))} title={text("Zoom out", "缩小时间轴")} aria-label={text("Zoom out", "缩小时间轴")}><Minus size={18} /></button>
+            <button onClick={onFit} title={text("Fit timeline", "适配时间轴")} aria-label={text("Fit timeline", "适配时间轴")}><CornersOut size={18} /></button>
+            <button onClick={() => onZoom(Math.min(160, pixelsPerSecond + 12))} title={text("Zoom in", "放大时间轴")} aria-label={text("Zoom in", "放大时间轴")}><Plus size={18} /></button>
           </div>
         </aside>
 
@@ -211,17 +212,32 @@ export function VideoTimelinePanel<TSnapshot>({
                 style={{ left: playhead * pixelsPerSecond }}
                 onPointerDown={(event) => {
                   event.preventDefault();
-                  const move = (pointerEvent: PointerEvent) => {
+                  event.stopPropagation();
+                  const handle = event.currentTarget;
+                  const pointerOffset = event.clientX - handle.getBoundingClientRect().left;
+                  let pendingClientX = event.clientX;
+                  let scrubFrame: number | null = null;
+                  const applyPendingScrub = () => {
+                    scrubFrame = null;
                     const content = contentRef.current;
                     if (!content) return;
                     const rect = content.getBoundingClientRect();
-                    onScrub(Math.min(timeline.duration, Math.max(0, (pointerEvent.clientX - rect.left) / pixelsPerSecond)));
+                    onScrub(Math.min(timeline.duration, Math.max(0, (pendingClientX - pointerOffset - rect.left) / pixelsPerSecond)));
                   };
-                  const end = () => {
+                  const move = (pointerEvent: PointerEvent) => {
+                    pendingClientX = pointerEvent.clientX;
+                    if (scrubFrame === null) scrubFrame = window.requestAnimationFrame(applyPendingScrub);
+                  };
+                  const end = (pointerEvent: PointerEvent) => {
                     window.removeEventListener("pointermove", move);
                     window.removeEventListener("pointerup", end);
                     window.removeEventListener("pointercancel", end);
+                    if (scrubFrame !== null) window.cancelAnimationFrame(scrubFrame);
+                    pendingClientX = pointerEvent.clientX;
+                    applyPendingScrub();
+                    handle.classList.remove("dragging");
                   };
+                  handle.classList.add("dragging");
                   window.addEventListener("pointermove", move);
                   window.addEventListener("pointerup", end);
                   window.addEventListener("pointercancel", end);

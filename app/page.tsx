@@ -2696,6 +2696,62 @@ function clonePoseBoardTimeline(timeline: PoseBoardTimeline): PoseBoardTimeline 
   return normalizeVideoTimeline<ShotSceneSnapshot>(JSON.parse(JSON.stringify(timeline)), timeline.masterAspect);
 }
 
+function keepModelInCameraFrame(
+  root: THREE.Group,
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  shotSize: ShotSize,
+  normalizeShotSize = false,
+) {
+  root.updateWorldMatrix(true, true);
+  const bounds = new THREE.Box3().setFromObject(root);
+  if (bounds.isEmpty()) return false;
+  const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+  const boundsSize = bounds.getSize(new THREE.Vector3());
+  controls.update();
+  camera.updateMatrixWorld(true);
+  const projected = sphere.center.clone().project(camera);
+  const subjectIsVisible = projected.z > -1 && projected.z < 1
+    && Math.abs(projected.x) <= 0.9
+    && Math.abs(projected.y) <= 0.9;
+  if (subjectIsVisible && !normalizeShotSize) return false;
+
+  const direction = camera.position.clone().sub(controls.target);
+  if (direction.lengthSq() < 0.0001) direction.set(0.45, 0.18, 1);
+  direction.normalize();
+  if (normalizeShotSize) {
+    const target = sphere.center.clone();
+    if (shotSize === "close") target.y += boundsSize.y * 0.32;
+    else if (shotSize === "medium") target.y += boundsSize.y * 0.18;
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
+    const frameFill: Record<ShotSize, number> = { close: 2.35, medium: 1.35, full: 0.86, long: 0.46 };
+    const fill = frameFill[shotSize];
+    const heightDistance = boundsSize.y / Math.max(2 * Math.tan(verticalFov / 2) * fill, 0.1);
+    const widthDistance = boundsSize.x / Math.max(2 * Math.tan(horizontalFov / 2) * fill, 0.1);
+    const distance = Math.max(0.35, heightDistance, widthDistance);
+    controls.target.copy(target);
+    camera.position.copy(target).addScaledVector(direction, distance);
+    camera.near = 0.02;
+    camera.far = Math.max(100, distance + sphere.radius * 4);
+    camera.updateProjectionMatrix();
+    controls.update();
+    return true;
+  }
+
+  // Older timeline snapshots aimed camera presets at the world origin even
+  // when the selected character had been translated. Translate the complete
+  // camera rig to the character while preserving its angle and shot distance.
+  const offset = sphere.center.clone().sub(controls.target);
+  camera.position.add(offset);
+  controls.target.add(offset);
+  camera.near = 0.02;
+  camera.far = Math.max(100, camera.position.distanceTo(sphere.center) + sphere.radius * 4);
+  camera.updateProjectionMatrix();
+  controls.update();
+  return true;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -2745,6 +2801,7 @@ export default function Home() {
   const timelinePlaybackStartRef = useRef({ clock: 0, playhead: 0, shotId: "" });
   const playheadRef = useRef(0);
   const activeShotIdRef = useRef<string | null>(null);
+  const restoredTimelineShotRef = useRef<string | null>(null);
   const applyingShotRef = useRef(false);
 
   const [language, setLanguage] = useState<Language>("zh");
@@ -4100,7 +4157,7 @@ export default function Home() {
   const buildSnapshotForShotPrompt = (baseSnapshot: ShotSceneSnapshot, promptText: string, ratio: Ratio) => {
     const snapshot = cloneShotSceneSnapshot(baseSnapshot);
     const prompt = promptText.toLowerCase();
-    const hasPoseIntent = /低头|抬头|转身|前倾|后仰|疾跑|冲刺|行走|奔跑|站立|坐|蹲|跪|跳|手|腿|肩|头部|look|turn|lean|run|sprint|walk|sit|kneel|jump|arm|hand|leg/.test(prompt);
+    const hasPoseIntent = /低头|抬头|仰头|回头|看向|朝向|停下|停止|转身|前倾|后仰|疾跑|冲刺|行走|奔跑|站立|坐|蹲|跪|跳|手|腿|肩|头部|look|turn|lean|run|sprint|stop|walk|sit|kneel|jump|arm|hand|leg/.test(prompt);
     const hasCameraIntent = /特写|近景|中景|远景|全身|俯拍|仰拍|侧面|正面|镜头|机位|焦距|close.?up|medium|wide|long shot|camera|angle|view/.test(prompt);
     const hasLightingIntent = /灯光|棚拍|逆光|侧光|顶光|蓝橙|夜景|夕阳|柔光|lighting|rim light|night|sunset|soft light/.test(prompt);
     const result = analyzePromptToPose(promptText);
@@ -4155,12 +4212,18 @@ export default function Home() {
     snapshot.sourcePrompt = promptText;
     snapshot.promptPlatform = "seedance";
     if (hasCameraIntent) {
-      const target = new THREE.Vector3(...cameraPreset.target);
-      const direction = new THREE.Vector3(...cameraPreset.position).sub(target).normalize();
-      const position = target.clone().addScaledVector(direction, shotDistance[shotSize]);
+      const subjectScale = Math.max(0.25, nextEditor.scale / 100);
+      const presetTarget = new THREE.Vector3(...cameraPreset.target);
+      const target = new THREE.Vector3(
+        nextEditor.position[0] + presetTarget.x * subjectScale,
+        nextEditor.position[1] + presetTarget.y * subjectScale,
+        nextEditor.position[2] + presetTarget.z * subjectScale,
+      );
+      const direction = new THREE.Vector3(...cameraPreset.position).sub(presetTarget).normalize();
+      const position = target.clone().addScaledVector(direction, shotDistance[shotSize] * subjectScale);
       snapshot.camera = {
         position: [position.x, position.y, position.z],
-        target: [...cameraPreset.target],
+        target: [target.x, target.y, target.z],
         focalLength: cameraPreset.focalLength,
       };
     }
@@ -4171,7 +4234,7 @@ export default function Home() {
     return snapshot;
   };
 
-  const applySceneSnapshot = (snapshotSource: ShotSceneSnapshot, fromPlayback = false) => {
+  const applySceneSnapshot = (snapshotSource: ShotSceneSnapshot, fromPlayback = false, normalizeShotSize = false) => {
     const snapshot = cloneShotSceneSnapshot(snapshotSource);
     applyingShotRef.current = true;
     const targetIds = new Set(snapshot.models.map((model) => model.id));
@@ -4208,8 +4271,14 @@ export default function Home() {
       modelRootRef.current = modelRootsRef.current[selected.id];
       deformableMeshesRef.current = modelMeshesRef.current[selected.id] ?? [];
     }
-    editorLatestRef.current = cloneState(snapshot.editor);
-    setEditor(cloneState(snapshot.editor));
+    // The selected model state is the canonical source for transform and pose.
+    // This prevents a legacy editor snapshot from immediately overwriting the
+    // model pose that was just restored for the selected timeline shot.
+    const restoredEditor = selected
+      ? cloneState({ ...snapshot.editor, ...cloneModelEditState(selected.state) })
+      : cloneState(snapshot.editor);
+    editorLatestRef.current = restoredEditor;
+    setEditor(restoredEditor);
     setSelectedPoseId(snapshot.selectedPoseId);
     setCanvasImages(cloneCanvasImageLayers(snapshot.canvasImages));
     setSelectedCanvasImageId(null);
@@ -4223,18 +4292,41 @@ export default function Home() {
       camera.setFocalLength(snapshot.camera.focalLength);
       camera.updateProjectionMatrix();
       controls.update();
+      const selectedRoot = selected ? modelRootsRef.current[selected.id] : undefined;
+      if (selectedRoot) keepModelInCameraFrame(selectedRoot, camera, controls, restoredEditor.shotSize, normalizeShotSize);
     }
     window.setTimeout(() => { applyingShotRef.current = false; }, 80);
     if (!fromPlayback) flash(text("Shot scene restored", "已恢复镜头场景"));
   };
 
   const applyTimelineShot = (shot: VideoShot<ShotSceneSnapshot>, fromPlayback = false) => {
-    const ratio = editorLatestRef.current.ratio;
-    const snapshot = shot.aspectOverrides[ratio]?.snapshot ?? shot.sceneSnapshot;
-    if (snapshot) applySceneSnapshot(snapshot, fromPlayback);
+    const currentRatio = editorLatestRef.current.ratio;
+    const currentRatioOverride = shot.aspectOverrides[currentRatio]?.snapshot;
+    const storedSnapshot = currentRatioOverride ?? shot.sceneSnapshot;
+    const snapshotRatio = currentRatioOverride
+      ? currentRatio
+      : storedSnapshot?.editor.ratio ?? timelineLatestRef.current.masterAspect ?? currentRatio;
+    // Regenerate untouched automatic shots from their prompt on restore. This
+    // repairs timelines created before pose-aware snapshot playback while
+    // preserving every manually updated shot exactly as saved.
+    const snapshot = storedSnapshot && !shot.dirty && shot.promptText.trim()
+      ? buildSnapshotForShotPrompt(storedSnapshot, shot.promptText, snapshotRatio)
+      : storedSnapshot;
+    if (snapshot) applySceneSnapshot(snapshot, fromPlayback, !shot.dirty);
     setActiveShotId(shot.id);
     activeShotIdRef.current = shot.id;
   };
+
+  useEffect(() => {
+    if (!modelInfo.loaded || !persistenceReady || restoredTimelineShotRef.current) return;
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current)
+      ?? timelineLatestRef.current.shots[0];
+    if (!shot) return;
+    restoredTimelineShotRef.current = shot.id;
+    applyTimelineShot(shot, true);
+  // Restore the persisted active shot once the asynchronous 3D model is ready.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelInfo.loaded, persistenceReady]);
 
   const createTimelineFromPrompt = () => {
     if (!modelInfo.loaded) {
@@ -4273,8 +4365,7 @@ export default function Home() {
     setTimelinePromptOpen(false);
     setTimelinePlaying(false);
     setTimelinePlayhead(0);
-    setActiveShotId(shots[0].id);
-    applySceneSnapshot(shots[0].sceneSnapshot, true);
+    applyTimelineShot(shots[0], true);
     markSaving();
     flash(parsed.issues.some((issue) => issue.severity === "error")
       ? text(`Created ${shots.length} valid shots with timing notes`, `已创建 ${shots.length} 个有效镜头，另有时间提示`)
