@@ -24,6 +24,7 @@ import {
   ArrowsOutCardinal,
   Check,
   Camera,
+  CalendarDots,
   Copy,
   Cube,
   DownloadSimple,
@@ -39,6 +40,7 @@ import {
   Lock,
   LockOpen,
   MagnifyingGlass,
+  MagicWand,
   Minus,
   DotsThree,
   FunnelSimple,
@@ -4668,13 +4670,19 @@ export default function Home() {
   };
 
   const beginTimelineClipDrag = (shotId: string, mode: "move" | "trim-start" | "trim-end", event: React.PointerEvent<HTMLElement>) => {
-    const sourceTimeline = clonePoseBoardTimeline(timelineLatestRef.current);
-    const sourceShot = sourceTimeline.shots.find((shot) => shot.id === shotId);
-    if (!sourceShot) return;
     event.preventDefault();
     event.stopPropagation();
     setTimelinePlaying(false);
-    setActiveShotId(shotId);
+    // Clip pointer-down starts before click. Restore the selected shot here so
+    // the click handler cannot see an already-active id and skip its scene.
+    const selectedShot = timelineLatestRef.current.shots.find((shot) => shot.id === shotId);
+    if (!selectedShot) return;
+    if (activeShotIdRef.current !== shotId) selectTimelineShot(selectedShot);
+    // Clone after selection because selecting a different clip persists the
+    // outgoing clip before restoring this clip's independent scene.
+    const sourceTimeline = clonePoseBoardTimeline(timelineLatestRef.current);
+    const sourceShot = sourceTimeline.shots.find((shot) => shot.id === shotId);
+    if (!sourceShot) return;
     const startX = event.clientX;
     timelineContinuousEditRef.current = sourceTimeline;
     const frame = 1 / sourceTimeline.fps;
@@ -5652,6 +5660,8 @@ export default function Home() {
           <ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} title={text("Switch orientation", "切换横竖屏")} />
           <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span className="perspective-grid-label">{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
           <Button className={`video-timeline-button ${timelineOpen ? "active" : ""}`} appearance="subtle" aria-pressed={timelineOpen} onClick={() => setTimelineOpen((open) => !open)} icon={<FilmStrip size={18} weight={timelineOpen ? "fill" : "regular"} />}><span>{text("Timeline", "时间轴")}</span>{timeline.shots.length > 0 && <small>{timeline.shots.length}</small>}</Button>
+          <ToolbarButton className={`icon-button topbar-quick-action ${promptOpen ? "active" : ""}`} appearance="subtle" icon={<MagicWand size={19} weight={promptOpen ? "fill" : "regular"} />} aria-pressed={promptOpen} onClick={() => setPromptOpen(true)} aria-label={text("Generate", "生成")} title={text("Generate prompt", "生成提示词")} />
+          <ToolbarButton className={`icon-button topbar-quick-action ${timelinePromptOpen ? "active" : ""}`} appearance="subtle" icon={<CalendarDots size={19} weight={timelinePromptOpen ? "fill" : "regular"} />} aria-pressed={timelinePromptOpen} onClick={() => { setTimelineOpen(true); setTimelinePromptOpen(true); }} aria-label={text("Plan", "计划")} title={text("Plan shots", "计划分镜")} />
           <ToolbarButton className="icon-button mobile-only" appearance="subtle" icon={<SidebarSimple size={19} />} aria-expanded={mobilePanel === "context"} onClick={() => setMobilePanel(mobilePanel === "context" ? null : "context")} aria-label={text("Open tool panel", "打开工具面板")} title={text("Tool panel", "工具面板")} />
         </Toolbar>
 

@@ -1691,6 +1691,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: var(--radius-md);
   white-space: nowrap;
 }
+.toolbar-center .topbar-quick-action {
+  width: var(--control-md);
+  min-width: var(--control-md);
+  height: var(--control-md);
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+}
+.toolbar-center .topbar-quick-action:hover { background: var(--surface-secondary); color: var(--text-primary); }
+.toolbar-center .topbar-quick-action.active { border-color: #b7d7fb; background: var(--primary-soft); color: var(--primary); }
 .video-timeline-button.active { background: var(--primary-soft); color: var(--primary); }
 .video-timeline-button small { min-width: 18px; height: 18px; display: grid; place-items: center; padding-inline: 5px; border-radius: var(--radius-full); background: var(--primary); color: #fff; font-size: 10px; font-weight: 700; }
 

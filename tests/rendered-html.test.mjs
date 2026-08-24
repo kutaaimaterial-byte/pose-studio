@@ -135,6 +135,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /useState<Language>\("zh"\)/);
   assert.match(page, /parseTimelinePrompt\(timelinePrompt\)/);
   assert.match(page, /<VideoTimelinePanel/);
+  assert.match(page, /className=\{`icon-button topbar-quick-action \$\{promptOpen \? "active" : ""\}`\}/);
+  assert.match(page, /aria-label=\{text\("Plan", "计划"\)\}/);
   assert.match(page, /const applySceneSnapshot = \(snapshotSource: ShotSceneSnapshot/);
   assert.match(page, /function keepModelInCameraFrame\(\s*root: THREE\.Group/s);
   assert.match(page, /const frameFill: Record<ShotSize, number> = \{ close: 2\.35, medium: 1\.35, full: 0\.86, long: 0\.46 \}/);
@@ -149,6 +151,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /includeThumbnail \? capturePoseThumbnail\(rendererRef\.current\?\.domElement\) : ""/);
   assert.match(page, /A captured scene is authoritative[\s\S]*snapshotLocked: true,[\s\S]*dirty: false/);
   assert.match(page, /const outgoingShotId = activeShotIdRef\.current;\s*const isCurrentShot = outgoingShotId === shot\.id;\s*if \(outgoingShotId\) persistTimelineShotScene\(outgoingShotId\);[\s\S]*if \(isCurrentShot\) return;/s);
+  assert.match(page, /const selectedShot = timelineLatestRef\.current\.shots\.find\(\(shot\) => shot\.id === shotId\);[\s\S]*if \(activeShotIdRef\.current !== shotId\) selectTimelineShot\(selectedShot\);[\s\S]*const sourceTimeline = clonePoseBoardTimeline\(timelineLatestRef\.current\);/s);
+  const timelineClipDragBlock = page.match(/const beginTimelineClipDrag = \([\s\S]*?const startX = event\.clientX;/)?.[0] ?? "";
+  assert.doesNotMatch(timelineClipDragBlock, /setActiveShotId\(shotId\)/);
   assert.match(page, /if \(applyShot && shot && shot\.id !== activeShotIdRef\.current\) \{/);
   assert.doesNotMatch(page, /if \(applyShot && shot && shot\.id !== activeShotIdRef\.current\) \{\s*persistActiveTimelineShotScene\(\);/s);
   assert.match(page, /onScrubStart=\{\(\) => persistActiveTimelineShotScene\(\)\}/);
