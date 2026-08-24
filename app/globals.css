@@ -1497,8 +1497,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .control-row > span, .toggle-row > span { font-size: var(--font-label); font-weight: 500; line-height: 18px; }
 .vector-field label, .range-with-value output, .control-row select, .mode-entry-row button, .advanced-toggle { min-height: var(--control-md); border-radius: var(--radius-md); font-size: var(--font-label); }
 .toggle-row { min-height: var(--control-lg); }
-.toggle { width: 36px; height: 20px; }
-.toggle i { width: 16px; height: 16px; }
+.toggle { width: 40px; height: 24px; padding: 2px; border-radius: var(--radius-full); }
+.toggle i { width: 18px; height: 18px; border-radius: 50%; }
 .toggle.active i { transform: translateX(16px); }
 .preset-grid { gap: var(--space-2); }
 .preset-grid button { min-height: 72px; border-radius: var(--radius-lg); }

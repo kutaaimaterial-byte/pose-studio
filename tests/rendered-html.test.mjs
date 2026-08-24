@@ -73,6 +73,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.lighting-presets\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.tool-rail\s*\{/);
   assert.match(css, /\.tool-rail button\.active::before\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(css, /\.toggle\s*\{[^}]*width:\s*40px;[^}]*height:\s*24px;[^}]*border-radius:\s*var\(--radius-full\)/s);
+  assert.match(css, /\.toggle i\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px;[^}]*border-radius:\s*50%/s);
   assert.match(css, /\.context-action-bar\s*\{/);
   assert.match(css, /\.toolbar-center \.perspective-grid-button\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*max-content/s);
   assert.match(css, /\.toolbar-right \.export-button\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*92px/s);
