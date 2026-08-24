@@ -373,14 +373,18 @@ const presetCameraFov = 34;
 const cameraPresets: Record<Exclude<CameraPresetId, "custom">, {
   label: string;
   labelEn: string;
+  description: string;
+  descriptionEn: string;
+  profile: string;
+  profileEn: string;
   focalLength: number;
   position: [number, number, number];
   target: [number, number, number];
   shotSize: ShotSize;
 }> = {
-  commercial: { label: "商业摄影", labelEn: "Commercial", focalLength: 85, position: [4.7, 2.8, 8.4], target: [0, 1.55, 0], shotSize: "full" },
-  cinematic: { label: "电影英雄", labelEn: "Cinematic Hero", focalLength: 24, position: [5.4, 1.1, 7.4], target: [0, 1.9, 0], shotSize: "full" },
-  ecommerce: { label: "电商模特", labelEn: "E-commerce", focalLength: 50, position: [0, 2.25, 8.7], target: [0, 1.65, 0], shotSize: "full" },
+  commercial: { label: "商业摄影", labelEn: "Commercial", description: "自然压缩，突出人物轮廓", descriptionEn: "Natural compression and clean contours", profile: "人像", profileEn: "Portrait", focalLength: 85, position: [4.7, 2.8, 8.4], target: [0, 1.55, 0], shotSize: "full" },
+  cinematic: { label: "电影英雄", labelEn: "Cinematic Hero", description: "广角透视，增强空间张力", descriptionEn: "Wide perspective with stronger depth", profile: "低机位", profileEn: "Low angle", focalLength: 24, position: [5.4, 1.1, 7.4], target: [0, 1.9, 0], shotSize: "full" },
+  ecommerce: { label: "电商模特", labelEn: "E-commerce", description: "均衡视角，保持比例自然", descriptionEn: "Balanced view with natural proportions", profile: "标准", profileEn: "Standard", focalLength: 50, position: [0, 2.25, 8.7], target: [0, 1.65, 0], shotSize: "full" },
 };
 
 const shotDistance: Record<ShotSize, number> = { close: 3.8, medium: 5.1, full: 8.5, long: 11.5 };
@@ -5993,10 +5997,26 @@ export default function Home() {
             {activeTool === "camera" && <InspectorSection title={text("Camera Presets", "镜头预设")} resetLabel={text("Reset", "重置")} onReset={() => applyCameraPreset("commercial")}>
               <div className="preset-grid camera-presets">
                 {(Object.entries(cameraPresets) as Array<[Exclude<CameraPresetId, "custom">, (typeof cameraPresets)[Exclude<CameraPresetId, "custom">]]>).map(([id, preset]) => (
-                  <button key={id} className={editor.cameraPreset === id ? "active" : ""} onClick={() => applyCameraPreset(id)}>
+                  <button
+                    key={id}
+                    className={editor.cameraPreset === id ? "active" : ""}
+                    onClick={() => applyCameraPreset(id)}
+                    aria-pressed={editor.cameraPreset === id}
+                    style={{ "--camera-focal-position": `${((preset.focalLength - 24) / 61) * 100}%` } as React.CSSProperties}
+                  >
                     <span className="camera-preset-icon"><Camera size={16} /></span>
-                    <span className="camera-preset-label">{isZh ? preset.label : preset.labelEn}</span>
-                    <small>{preset.focalLength}mm</small>
+                    <span className="camera-preset-copy">
+                      <strong className="camera-preset-label">{isZh ? preset.label : preset.labelEn}</strong>
+                      <span className="camera-preset-description">{isZh ? preset.description : preset.descriptionEn}</span>
+                      <span className="camera-preset-tags">
+                        <em>{isZh ? shotLabels[preset.shotSize] : shotLabelsEn[preset.shotSize]}</em>
+                        <em>{isZh ? preset.profile : preset.profileEn}</em>
+                      </span>
+                    </span>
+                    <span className="camera-preset-focal"><strong>{preset.focalLength}</strong><small>mm</small></span>
+                    <span className="camera-focal-scale" aria-hidden="true">
+                      <span>24</span><span>50</span><span>85</span><i />
+                    </span>
                   </button>
                 ))}
               </div>

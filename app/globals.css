@@ -1520,31 +1520,34 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .toggle.active i { transform: translateX(16px); }
 .preset-grid { gap: var(--space-2); }
 .preset-grid button { min-height: 72px; border-radius: var(--radius-lg); }
-.camera-presets { grid-template-columns: 1fr; gap: var(--space-1); margin-bottom: var(--space-3); }
+.camera-presets { grid-template-columns: 1fr; gap: var(--space-2); margin-bottom: var(--space-3); }
 .camera-presets button {
-  min-height: 44px;
+  min-height: 104px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  grid-template-rows: 1fr;
-  gap: var(--space-2);
-  padding: 5px var(--space-2);
-  border-color: transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-rows: auto 18px;
+  column-gap: var(--space-3);
+  row-gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-secondary);
+  text-align: left;
 }
-.camera-presets button:hover { border-color: transparent; background: var(--surface-secondary); box-shadow: none; }
-.camera-presets button.active { border-color: #b8d7ff; background: var(--primary-soft); box-shadow: none; }
+.camera-presets button:hover { border-color: var(--border-strong); background: var(--surface-primary); box-shadow: 0 4px 12px rgba(24, 34, 48, .06); transform: translateY(-1px); }
+.camera-presets button.active { border-color: #9bc8fb; background: var(--primary-soft); box-shadow: 0 4px 14px rgba(38, 132, 255, .08); }
 .camera-presets .camera-preset-icon {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  grid-row: auto;
-  border-radius: var(--radius-sm);
+  grid-row: 1;
+  border-radius: var(--radius-md);
   background: var(--surface-tertiary);
   color: var(--text-secondary);
 }
 .camera-presets button.active .camera-preset-icon { background: var(--surface-primary); color: var(--primary); }
+.camera-presets .camera-preset-copy { min-width: 0; display: grid; gap: 2px; overflow: visible; font-size: inherit; font-weight: inherit; white-space: normal; }
 .camera-presets .camera-preset-label {
   min-width: 0;
   overflow: hidden;
@@ -1555,18 +1558,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.camera-presets button small {
-  min-width: 42px;
-  padding: 3px 6px;
-  border-radius: var(--radius-xs);
-  background: var(--surface-tertiary);
+.camera-presets .camera-preset-description { overflow: hidden; color: var(--text-secondary); font-size: var(--font-meta); font-weight: 400; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.camera-presets .camera-preset-tags { display: flex; gap: var(--space-1); margin-top: 2px; overflow: visible; font-size: inherit; font-weight: inherit; white-space: normal; }
+.camera-preset-tags em { padding: 2px 5px; border-radius: var(--radius-xs); background: var(--surface-tertiary); color: var(--text-secondary); font-size: 10px; font-style: normal; font-weight: 500; line-height: 14px; }
+.camera-presets button.active .camera-preset-tags em { background: rgba(255, 255, 255, .78); color: var(--primary); }
+.camera-presets .camera-preset-focal { display: flex; align-items: baseline; justify-content: flex-end; gap: 2px; min-width: 52px; overflow: visible; color: var(--text-primary); font-family: var(--mono); font-size: inherit; font-weight: inherit; white-space: normal; }
+.camera-preset-focal strong { font-size: 17px; font-weight: 500; line-height: 20px; }
+.camera-preset-focal small { color: var(--text-tertiary); font-size: 10px; line-height: 14px; }
+.camera-presets button.active .camera-preset-focal { color: var(--primary); }
+.camera-presets .camera-focal-scale {
+  min-width: 0;
+  height: 18px;
+  position: relative;
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
   color: var(--text-secondary);
   font-family: var(--mono);
-  font-size: var(--font-meta);
-  line-height: 16px;
-  text-align: center;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 10px;
+  overflow: visible;
+  white-space: normal;
 }
-.camera-presets button.active small { background: var(--surface-primary); color: var(--primary); }
+.camera-focal-scale::before { content: ""; height: 1px; position: absolute; left: 3px; right: 3px; top: 4px; background: var(--border-strong); }
+.camera-presets .camera-focal-scale > span { overflow: visible; font-size: 9px; font-weight: 400; white-space: normal; }
+.camera-focal-scale > span:nth-child(2) { text-align: center; }
+.camera-focal-scale > span:nth-child(3) { text-align: right; }
+.camera-focal-scale i { width: 7px; height: 7px; position: absolute; left: clamp(3px, var(--camera-focal-position), calc(100% - 4px)); top: 1px; border: 2px solid var(--surface-secondary); border-radius: 50%; background: var(--text-tertiary); transform: translateX(-50%); }
+.camera-presets button:hover .camera-focal-scale i { border-color: var(--surface-primary); }
+.camera-presets button.active .camera-focal-scale { color: var(--primary); }
+.camera-presets button.active .camera-focal-scale::before { background: #b7d8fd; }
+.camera-presets button.active .camera-focal-scale i { border-color: var(--primary-soft); background: var(--primary); }
 .perspective-mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); padding: var(--space-1); }
 .perspective-mode-grid button { height: var(--control-sm); font-size: var(--font-label); }
 .perspective-advanced-controls { display: grid; gap: var(--space-1); margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border-muted); }

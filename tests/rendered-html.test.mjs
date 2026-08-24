@@ -162,6 +162,13 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.search-field\s*\{[^}]*background:\s*var\(--surface-search\)/s);
   assert.match(css, /\.search-field:hover\s*\{[^}]*background:\s*var\(--surface-search-hover\)/s);
   assert.match(css, /\.search-field:focus-within\s*\{[^}]*background:\s*var\(--surface-search-focus\)/s);
+  assert.match(page, /description:\s*"自然压缩，突出人物轮廓"/);
+  assert.match(page, /aria-pressed=\{editor\.cameraPreset === id\}/);
+  assert.match(page, /className="camera-preset-description"/);
+  assert.match(page, /className="camera-preset-tags"/);
+  assert.match(page, /className="camera-focal-scale" aria-hidden="true"/);
+  assert.match(css, /\.camera-presets button\s*\{[^}]*min-height:\s*104px;[^}]*grid-template-rows:\s*auto 18px;/s);
+  assert.match(css, /\.camera-focal-scale::before\s*\{[^}]*background:\s*var\(--border-strong\)/s);
   assert.match(css, /\.convert-flow\s*\{[^}]*min-height:\s*116px;[^}]*border:\s*1px solid var\(--border-default\)/s);
   assert.match(page, /className=\{`icon-button topbar-quick-action \$\{promptOpen \? "active" : ""\}`\}/);
   assert.match(page, /aria-label=\{text\("Plan", "计划"\)\}/);
