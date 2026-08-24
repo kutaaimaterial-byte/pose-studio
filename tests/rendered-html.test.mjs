@@ -59,6 +59,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   ]);
 
   assert.match(css, /--surface-primary:\s*#ffffff/);
+  assert.match(css, /\.timeline-workspace \{[^}]*grid-template-columns:\s*190px minmax\(0, 1fr\)/);
   assert.match(css, /--primary:\s*#2684ff/);
   assert.match(css, /--context-panel:\s*380px/);
   assert.match(css, /\.workspace\s*\{[^}]*grid-template-areas:\s*"rail canvas panel"/s);
