@@ -1239,6 +1239,9 @@ button:disabled { cursor: not-allowed; }
   --bg-canvas: #e9edf2;
   --surface-primary: #fff;
   --surface-secondary: #f8fafc;
+  --surface-search: #eef5f4;
+  --surface-search-hover: #e9f1f0;
+  --surface-search-focus: #f5f9f8;
   --border-default: #dde3ea;
   --border-strong: #c8d1dc;
   --text-primary: #182230;
@@ -1339,10 +1342,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .selection-header.without-visibility { grid-template-columns: var(--control-sm) minmax(0, 1fr) var(--control-sm); }
 .library-scroll-header { position: relative; z-index: 5; overflow: visible; border-bottom: 1px solid var(--border-default); background: var(--surface-primary); container-type: inline-size; }
 
-.search-field { height: var(--control-xl); margin: var(--space-3) var(--space-4); grid-template-columns: var(--control-lg) minmax(0, 1fr) var(--control-md); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
-.search-field:hover { border-color: var(--border-strong); }
-.search-field:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(38, 132, 255, .14); }
-.search-field input { padding: 0 var(--space-2) 0 0; font-size: var(--font-body); line-height: 20px; }
+.search-field { height: var(--control-xl); margin: var(--space-3) var(--space-4); grid-template-columns: var(--control-lg) minmax(0, 1fr) var(--control-md); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-search); }
+.search-field:hover { border-color: var(--border-strong); background: var(--surface-search-hover); }
+.search-field:focus-within { border-color: var(--primary); background: var(--surface-search-focus); box-shadow: 0 0 0 3px rgba(38, 132, 255, .14); }
+.search-field input { padding: 0 var(--space-2) 0 0; background: transparent; font-size: var(--font-body); line-height: 20px; }
 .quick-entry { min-height: var(--control-md); display: flex; flex-wrap: nowrap; gap: var(--space-1); padding: 0 var(--space-4) var(--space-2); overflow-x: auto; }
 .quick-entry button { height: var(--control-sm); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-size: var(--font-label); font-weight: 500; }
 .quick-entry button:hover { border: 0; background: var(--surface-secondary); }
