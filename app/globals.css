@@ -2686,6 +2686,9 @@ button[data-mode="off"] .perspective-card-visual { width: 72px; height: 44px; }
   .lighting-presets button:hover .lighting-preset-scene { transform: scale(1.012); }
 }
 
+/* Chinese is the product default; keep the language control available in code but out of the workspace chrome. */
+.language-switch { display: none; }
+
 @keyframes selection-confirm {
   0% { opacity: .5; transform: scale(.72); }
   100% { opacity: 1; transform: scale(1); }
