@@ -328,12 +328,6 @@ button:disabled:active { transform: none; }
 .canvas-image-lock-note { min-height: 44px; display: grid; grid-template-columns: 20px minmax(0,1fr); align-items: center; gap: 7px; margin-top: 7px; padding: 7px 8px; border: 1px solid #dce1e8; border-radius: 8px; background: #f7f8fa; color: var(--faint); }
 .canvas-image-lock-note.active { border-color: #cfd6df; background: #f0f2f5; color: #5d6675; }
 .canvas-image-lock-note span { font-size: 10px; line-height: 1.4; }
-.active-tool-card { min-height: 64px; display: grid; grid-template-columns: 36px minmax(0,1fr); align-items: center; gap: 10px; margin: 14px 16px 0; padding: 10px 11px; border: 1px solid #d5e1ff; border-radius: 11px; background: #f3f7ff; }
-.active-tool-card > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: var(--accent); color: white; box-shadow: 0 4px 10px rgba(22,137,245,.22); }
-.active-tool-card div { min-width: 0; }
-.active-tool-card small, .active-tool-card strong { display: block; }
-.active-tool-card small { color: var(--muted); font-size: 11px; }
-.active-tool-card strong { margin-top: 3px; font-size: 13px; font-weight: 720; }
 .inspector-section { padding: 0 16px 16px; border-bottom: 1px solid var(--border); }
 .section-heading { height: 50px; display: flex; align-items: center; justify-content: space-between; }
 .section-heading h3 { margin: 0; font-size: 12px; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
@@ -477,7 +471,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tool-dock button, .zoom-control, .zoom-control button, .selection-header button,
 .cube-icon, .inspector-tabs button, .model-stack-item, .model-stack-select, .model-stack-delete,
 .canvas-image-upload, .canvas-image-list button, .canvas-image-empty,
-.canvas-image-actions button, .canvas-image-lock-note, .active-tool-card, .active-tool-card > span,
+.canvas-image-actions button, .canvas-image-lock-note,
 .control-point-info, .limb-group-legend span, .save-custom-pose-button, .vector-field label,
 .range-with-value output, .control-row select, .perspective-mode-grid, .perspective-mode-grid button,
 .perspective-color-grid label, .perspective-lock-note, .perspective-export-actions button,
@@ -497,7 +491,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .pose-card-actions button, .current-pose-toolbar, .canvas-area, .tool-dock, .tool-dock button.active,
 .canvas-actions button, .status-dot, .status-dot.ready, .artboard-shell, .canvas-image-item:hover,
 .canvas-image-item.selected, .canvas-image-item.locked:hover, .canvas-image-item.locked.selected,
-.canvas-image-lock, .zoom-control, .inspector-tabs button.active, .active-tool-card > span,
+.canvas-image-lock, .zoom-control, .inspector-tabs button.active,
 .save-custom-pose-button, .perspective-mode-grid button.active, .preset-grid button.active,
 .toggle i, .prompt-dialog, .pose-prompt-input textarea:focus, .pose-analyze-button,
 .prompt-fields textarea:focus, .prompt-fields label > button, .prompt-footer button.primary,
@@ -550,8 +544,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .inspector-tabs button.active { border: 1px solid #cbdcf9; background: #eef4ff; }
 .model-stack { padding: 12px; }
 .model-stack-item { height: 36px; }
-.active-tool-card { min-height: 56px; margin: 10px 12px 0; padding: 8px; border-color: var(--border); background: #f7f8f9; }
-.active-tool-card > span { width: 30px; height: 30px; border-radius: 3px; }
 .inspector-section { padding: 0 12px 12px; }
 .section-heading { height: 44px; }
 .section-heading h3, .model-stack-title span { font-weight: 650; letter-spacing: .05em; }
@@ -850,7 +842,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .mode-entry-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 12px 0; }
 .mode-entry-row button, .advanced-toggle { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-primary); color: var(--text-secondary); cursor: pointer; font-size: 12px; }
 .mode-entry-row button:hover, .mode-entry-row button.active, .advanced-toggle:hover { border-color: #add3ff; background: var(--primary-soft); color: var(--primary); }
-.active-tool-card { border-radius: 9px; }
 .inspector-section { padding: 0 14px 16px; }
 .section-heading { height: 50px; }
 .section-heading h3 { font-size: 13px; letter-spacing: 0; text-transform: none; }
@@ -1118,7 +1109,6 @@ button:disabled { cursor: not-allowed; }
 .mode-entry-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 12px 0; }
 .mode-entry-row button, .advanced-toggle { min-height: 38px; border: 1px solid var(--border-default); border-radius: 8px; background: #fff; color: var(--text-secondary); font-size: 12px; }
 .mode-entry-row button:hover, .mode-entry-row button.active, .advanced-toggle:hover { border-color: #b7d7fb; background: var(--primary-soft); color: var(--primary); }
-.active-tool-card { border: 1px solid var(--border-muted); border-radius: 10px; background: var(--surface-secondary); }
 .inspector-section { padding: 0 14px 16px; }
 .section-heading { height: 50px; }
 .section-heading h3 { color: var(--text-primary); font-size: 13px; font-weight: 680; letter-spacing: 0; text-transform: none; }

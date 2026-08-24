@@ -5917,11 +5917,6 @@ export default function Home() {
                 <button onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8}><Plus size={16} />{text("Add", "添加")}</button>
               </div>
 
-              <div className="active-tool-card">
-                <span>{interactionMode !== "model-transform" ? <Camera size={18} /> : toolMode === "rotate" ? <ArrowClockwise size={18} /> : <ArrowsOutCardinal size={18} />}</span>
-                <div><small>{text("Current Mode", "当前模式")}</small><strong>{interactionMode !== "model-transform" ? text("Browse Camera", "浏览镜头") : toolMode === "rotate" ? text("Rotate Model", "旋转模型") : text("Move Model", "选择并移动")}</strong></div>
-              </div>
-
               <InspectorSection title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
                 <VectorField label={text("Position", "位置")} values={editor.position} step={0.05} onChange={(axis, value) => updateVector("position", axis, value)} />
                 <VectorField label={text("Rotation", "旋转")} values={editor.rotation} step={1} onChange={(axis, value) => updateVector("rotation", axis, value)} />

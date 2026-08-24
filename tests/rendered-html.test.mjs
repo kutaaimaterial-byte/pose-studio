@@ -144,6 +144,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /<VideoTimelinePanel/);
   assert.match(page, /convert: text\("2D to 3D", "2转3"\)/);
   assert.match(page, /activeTool === "convert" && <div className="convert-context-content">/);
+  assert.doesNotMatch(page, /className="active-tool-card"/);
+  assert.doesNotMatch(css, /\.active-tool-card/);
   assert.match(css, /\.convert-flow\s*\{[^}]*min-height:\s*116px;[^}]*border:\s*1px solid var\(--border-default\)/s);
   assert.match(page, /className=\{`icon-button topbar-quick-action \$\{promptOpen \? "active" : ""\}`\}/);
   assert.match(page, /aria-label=\{text\("Plan", "计划"\)\}/);
