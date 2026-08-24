@@ -146,6 +146,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /activeTool === "convert" && <div className="convert-context-content">/);
   assert.doesNotMatch(page, /className="active-tool-card"/);
   assert.doesNotMatch(css, /\.active-tool-card/);
+  assert.match(page, /<div className="result-line">\s*<strong>[^<]+<\/strong><span>· \{filteredPoses\.length\}<\/span>\s*<button className=\{`filter-bar-button/s);
+  assert.match(css, /\.result-line \.filter-bar-button\s*\{[^}]*margin-left:\s*auto;/s);
   assert.match(css, /\.convert-flow\s*\{[^}]*min-height:\s*116px;[^}]*border:\s*1px solid var\(--border-default\)/s);
   assert.match(page, /className=\{`icon-button topbar-quick-action \$\{promptOpen \? "active" : ""\}`\}/);
   assert.match(page, /aria-label=\{text\("Plan", "计划"\)\}/);

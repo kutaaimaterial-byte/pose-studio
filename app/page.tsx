@@ -5712,11 +5712,11 @@ export default function Home() {
             </div>
 
             <div className="result-line">
+              <strong>{quickView ? quickViewDisplayName(quickView) : tabDisplayName(category)}</strong><span>· {filteredPoses.length}</span>
               <button className={`filter-bar-button ${filtersExpanded ? "active" : ""}`} aria-label={text("Filter poses", "筛选姿势")} aria-expanded={filtersExpanded} onClick={() => setFiltersExpanded((value) => !value)}>
                 <FunnelSimple size={15} weight={activeFilterCount ? "fill" : "regular"} />
                 {text("Filter", "筛选")}{activeFilterCount ? ` ${activeFilterCount}` : ""}
               </button>
-              <strong>{quickView ? quickViewDisplayName(quickView) : tabDisplayName(category)}</strong><span>· {filteredPoses.length}</span>
               {hasActiveFilters && <button className="clear-filter-button" onClick={clearPoseFilters}>{text("Clear", "清空")}</button>}
             </div>
 

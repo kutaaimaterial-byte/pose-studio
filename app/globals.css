@@ -1385,8 +1385,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .result-line strong { font-size: var(--font-label); font-weight: 500; }
 .result-line > span { margin-left: -4px; }
 .filter-bar-button { height: var(--control-sm); display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 0 10px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-size: var(--font-label); font-weight: 500; }
+.result-line .filter-bar-button { margin-left: auto; }
 .filter-bar-button:hover, .filter-bar-button.active { background: var(--primary-soft); color: var(--primary); }
-.result-line .clear-filter-button { margin-left: auto; font-size: var(--font-meta); }
+.result-line .clear-filter-button { margin-left: 0; font-size: var(--font-meta); }
 .pose-filters { width: calc(100% - 32px); max-height: min(420px, calc(100vh - 280px)); position: absolute; z-index: 20; top: 100%; left: var(--space-4); overflow-y: auto; padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-xl); background: var(--surface-primary); box-shadow: 0 8px 24px rgba(16, 24, 40, .12); }
 .filter-row { grid-template-columns: 72px minmax(0, 1fr); gap: var(--space-2); padding: var(--space-2) 0; }
 .filter-row + .filter-row { margin-top: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--border-default); }
