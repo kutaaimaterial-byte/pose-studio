@@ -111,6 +111,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
   assert.match(page, /const beginOffCanvasModelDrag = \(event: React\.PointerEvent<HTMLButtonElement>\)/);
   assert.match(page, /className="offcanvas-transform-proxy"/);
+  assert.match(page, /<div><strong>\{toolLabels\[activeTool\]\}<\/strong><\/div>/);
+  assert.doesNotMatch(page, /<div><strong>\{toolLabels\[activeTool\]\}<\/strong><small>/);
   assert.match(page, /className="tool-dock artboard-command-bar"/);
   assert.match(page, /aria-label=\{text\("Canvas character and artboard controls", "画板人物与画板控制"\)/);
   assert.match(page, /onClick=\{redo\} disabled=\{!canRedo\}/);

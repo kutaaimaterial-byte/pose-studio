@@ -5616,7 +5616,6 @@ export default function Home() {
 
   const currentSize = ratioSize[editor.ratio];
   const zoomWidth = editor.ratio === "9:16" ? zoom * 0.43 : editor.ratio === "2:3" ? zoom * 0.58 : editor.ratio === "3:4" ? zoom * 0.66 : editor.ratio === "4:5" ? zoom * 0.69 : editor.ratio === "1:1" ? zoom * 0.72 : editor.ratio === "21:9" ? zoom * 1.08 : zoom;
-  const selectedModel = modelList.find(({ id }) => id === selectedModelId) ?? modelList[0];
   const toolLabels: Record<ActiveTool, string> = {
     pose: text("Pose", "姿势"),
     model: text("Models", "人物"),
@@ -5877,7 +5876,7 @@ export default function Home() {
         <aside className="panel inspector-panel context-panel" aria-label={text(`${toolLabels[activeTool]} controls`, `${toolLabels[activeTool]}控制`)}>
           <div className="selection-header">
             <span className="cube-icon">{activeTool === "model" ? <Cube size={19} weight="duotone" /> : activeTool === "camera" ? <Camera size={19} /> : activeTool === "perspective" ? <Perspective size={19} /> : activeTool === "lighting" ? <Lightbulb size={19} /> : activeTool === "convert" ? <CubeFocus size={19} /> : <Copy size={19} />}</span>
-            <div><strong>{toolLabels[activeTool]}</strong><small>{activeTool === "model" ? modelDisplayName(selectedModel) : activeTool === "convert" ? text("Image to editable character", "图像转可编辑人物") : interactionModeLabel[interactionMode]}</small></div>
+            <div><strong>{toolLabels[activeTool]}</strong></div>
             <button className={editor.visible ? "visible" : ""} onClick={() => { commit((current) => ({ ...current, visible: !current.visible })); flash(editor.visible ? text("Model hidden", "模型已隐藏") : text("Model shown", "模型已显示")); }} aria-label={editor.visible ? text("Hide model", "隐藏模型") : text("Show model", "显示模型")}>{editor.visible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>
             <button className="add-model-button" onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "折叠面板")} title={text("Collapse panel", "折叠面板")}><SidebarSimple size={18} weight="fill" /></button>
           </div>

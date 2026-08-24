@@ -283,9 +283,8 @@ button:disabled:active { transform: none; }
 .selection-header { min-height: 68px; position: sticky; z-index: 4; top: 0; display: grid; grid-template-columns: 36px minmax(0,1fr) 40px 40px; align-items: center; gap: 8px; padding: 8px 12px 8px 16px; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(12px); }
 .cube-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #d5e1ff; border-radius: 9px; background: #eef4ff; color: var(--accent); }
 .selection-header div { min-width: 0; }
-.selection-header strong, .selection-header small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.selection-header strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .selection-header strong { font-size: 14px; font-weight: 680; }
-.selection-header small { margin-top: 4px; color: var(--faint); font-size: 12px; font-family: var(--mono); }
 .selection-header button { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--faint); cursor: pointer; }
 .selection-header button:hover { background: var(--surface-raised); }
 .selection-header button.visible { color: var(--text); }
@@ -846,7 +845,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .selection-header { min-height: 58px; grid-template-columns: 36px minmax(0, 1fr) 40px 40px; border-bottom-color: var(--border-default); }
 .selection-header strong { font-size: 16px; }
-.selection-header small { font-family: inherit; font-size: 11px; }
 .cube-icon { border-radius: 8px; }
 .inspector-content { padding-bottom: 16px; }
 .mode-entry-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 12px 0; }
@@ -1114,7 +1112,6 @@ button:disabled { cursor: not-allowed; }
 
 .selection-header { min-height: 60px; grid-template-columns: 36px minmax(0, 1fr) 38px 38px; padding: 0 12px; border-bottom: 1px solid var(--border-muted); }
 .selection-header strong { font-size: 16px; font-weight: 720; letter-spacing: -.015em; }
-.selection-header small { font-family: inherit; font-size: 10px; }
 .selection-header button { width: 34px; height: 34px; border-radius: 7px; }
 .cube-icon { border-radius: 8px; background: var(--primary-soft); color: var(--primary); }
 .inspector-content { padding-bottom: 16px; }
@@ -1327,7 +1324,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .panel-heading-actions button, .selection-header button { width: var(--control-sm); height: var(--control-sm); display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); }
 .panel-heading-actions button:hover, .selection-header button:hover { background: var(--surface-secondary); color: var(--text-primary); }
 .selection-header { grid-template-columns: var(--control-sm) minmax(0, 1fr) var(--control-sm) var(--control-sm); gap: var(--space-2); }
-.selection-header small { font-size: var(--font-meta); line-height: 18px; }
 .library-scroll-header { position: relative; z-index: 5; overflow: visible; border-bottom: 1px solid var(--border-default); background: var(--surface-primary); container-type: inline-size; }
 
 .search-field { height: var(--control-xl); margin: var(--space-3) var(--space-4); grid-template-columns: var(--control-lg) minmax(0, 1fr) var(--control-md); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
