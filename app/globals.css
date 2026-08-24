@@ -1318,7 +1318,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .tool-rail { grid-area: rail; padding: var(--space-2) var(--space-1); border-right: 1px solid var(--border-default); background: var(--surface-primary); }
 .tool-rail-list { gap: var(--space-1); }
-.tool-rail button { min-height: 56px; position: relative; grid-template-rows: 20px 18px; gap: var(--space-1); padding: var(--space-1); border: 0; border-radius: var(--radius-md); font-size: var(--font-meta); font-weight: 500; }
+.tool-rail .fui-Button, .tool-rail button { min-height: 64px; position: relative; grid-template-rows: 22px 18px; gap: 6px; padding: 8px var(--space-1); border: 0; border-radius: var(--radius-md); font-size: var(--font-meta); font-weight: 500; }
 .tool-rail button > span { font-size: var(--font-meta); line-height: 18px; }
 .tool-rail button:hover { border: 0; background: var(--surface-secondary); }
 .tool-rail button:focus:not(:focus-visible) { outline: 0; box-shadow: none; }
