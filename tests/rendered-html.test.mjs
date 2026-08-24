@@ -157,6 +157,14 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /\.convert-flow\s*\{[^}]*min-height:\s*116px;[^}]*border:\s*1px solid var\(--border-default\)/s);
   assert.match(page, /className=\{`icon-button topbar-quick-action \$\{promptOpen \? "active" : ""\}`\}/);
   assert.match(page, /aria-label=\{text\("Plan", "计划"\)\}/);
+  assert.match(page, /const \[poseControlsVisible, setPoseControlsVisible\] = useState\(true\)/);
+  assert.match(page, /const contextVisibilityAvailable = activeTool === "model" \|\| activeTool === "perspective" \|\| activeTool === "pose"/);
+  assert.match(page, /const contextVisibilityVisible = activeTool === "model"[\s\S]*?editor\.perspectiveGrid\.mode !== "off"[\s\S]*?poseControlsVisible/);
+  assert.match(page, /const toggleContextVisibility = \(\) => \{/);
+  assert.match(page, /contextVisibilityAvailable && <button className=\{contextVisibilityVisible \? "visible" : ""\}/);
+  assert.match(page, /interactionMode === "ik-edit" && poseControlsVisible && modelInfo\.hasSkeleton && editor\.visible/);
+  assert.match(css, /\.selection-header\.without-visibility\s*\{[^}]*grid-template-columns:/s);
+  assert.doesNotMatch(page, /aria-label=\{editor\.visible \? text\("Hide model"/);
   assert.match(page, /const applySceneSnapshot = \(snapshotSource: ShotSceneSnapshot/);
   assert.match(page, /function keepModelInCameraFrame\(\s*root: THREE\.Group/s);
   assert.match(page, /const frameFill: Record<ShotSize, number> = \{ close: 2\.35, medium: 1\.35, full: 0\.86, long: 0\.46 \}/);

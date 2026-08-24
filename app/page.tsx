@@ -2807,6 +2807,7 @@ export default function Home() {
   const activeShotIdRef = useRef<string | null>(null);
   const restoredTimelineShotRef = useRef<string | null>(null);
   const applyingShotRef = useRef(false);
+  const lastPerspectiveModeRef = useRef<PerspectiveGridMode>("ground");
 
   const [language, setLanguage] = useState<Language>("zh");
   const [editor, setEditor] = useState<EditorState>(cloneState(initialState));
@@ -2839,6 +2840,7 @@ export default function Home() {
   const [toolMode, setToolMode] = useState<ToolMode>("pose");
   const [activeTool, setActiveTool] = useState<ActiveTool>("pose");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("ik-edit");
+  const [poseControlsVisible, setPoseControlsVisible] = useState(true);
   const [contextPanelOpen, setContextPanelOpen] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -3427,6 +3429,7 @@ export default function Home() {
     setActiveIKControl(null);
     if (controlsRef.current) controlsRef.current.enabled = false;
     if (mode === "pose") {
+      setPoseControlsVisible(true);
       if (transformControlsRef.current) {
         transformControlsRef.current.enabled = false;
         transformControlsRef.current.getHelper().visible = false;
@@ -3797,6 +3800,7 @@ export default function Home() {
   };
 
   const setPerspectiveMode = (mode: PerspectiveGridMode) => {
+    if (mode !== "off") lastPerspectiveModeRef.current = mode;
     commit((current) => ({
       ...current,
       perspectiveGrid: perspectiveDefaultsForMode(mode, current.perspectiveGrid),
@@ -3810,7 +3814,7 @@ export default function Home() {
   };
 
   const togglePerspectiveGrid = () => {
-    const nextMode: PerspectiveGridMode = editorLatestRef.current.perspectiveGrid.mode === "off" ? "ground" : "off";
+    const nextMode: PerspectiveGridMode = editorLatestRef.current.perspectiveGrid.mode === "off" ? lastPerspectiveModeRef.current : "off";
     setPerspectiveMode(nextMode);
   };
 
@@ -3914,7 +3918,8 @@ export default function Home() {
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== "g") return;
       event.preventDefault();
       const currentMode = editorLatestRef.current.perspectiveGrid.mode;
-      const nextMode: PerspectiveGridMode = currentMode === "off" ? "ground" : "off";
+      const nextMode: PerspectiveGridMode = currentMode === "off" ? lastPerspectiveModeRef.current : "off";
+      if (nextMode !== "off") lastPerspectiveModeRef.current = nextMode;
       setEditor((current) => ({ ...current, perspectiveGrid: perspectiveDefaultsForMode(nextMode, current.perspectiveGrid) }));
       flash(nextMode === "off" ? text("Perspective grid hidden", "透视网格已关闭") : text("Ground grid enabled", "地面网格已开启"));
     };
@@ -5656,6 +5661,33 @@ export default function Home() {
   };
   const nextTool: Record<ActiveTool, ActiveTool> = { pose: "camera", model: "pose", camera: "perspective", perspective: "lighting", lighting: "prompt", prompt: "convert", convert: "pose" };
   const goToNextTool = () => changeActiveTool(nextTool[activeTool]);
+  const contextVisibilityAvailable = activeTool === "model" || activeTool === "perspective" || activeTool === "pose";
+  const contextVisibilityVisible = activeTool === "model"
+    ? editor.visible
+    : activeTool === "perspective"
+      ? editor.perspectiveGrid.mode !== "off"
+      : poseControlsVisible;
+  const contextVisibilityLabel = activeTool === "model"
+    ? editor.visible ? text("Hide character", "隐藏人物") : text("Show character", "显示人物")
+    : activeTool === "perspective"
+      ? editor.perspectiveGrid.mode !== "off" ? text("Hide perspective grid", "隐藏透视网格") : text("Show perspective grid", "显示透视网格")
+      : poseControlsVisible ? text("Hide pose controls", "隐藏姿势控制点") : text("Show pose controls", "显示姿势控制点");
+  const toggleContextVisibility = () => {
+    if (activeTool === "model") {
+      commit((current) => ({ ...current, visible: !current.visible }));
+      flash(editor.visible ? text("Character hidden", "人物已隐藏") : text("Character shown", "人物已显示"));
+      return;
+    }
+    if (activeTool === "perspective") {
+      togglePerspectiveGrid();
+      return;
+    }
+    if (activeTool === "pose") {
+      const nextVisible = !poseControlsVisible;
+      setPoseControlsVisible(nextVisible);
+      flash(nextVisible ? text("Pose controls shown", "姿势控制点已显示") : text("Pose controls hidden", "姿势控制点已隐藏"));
+    }
+  };
 
   return (
     <SSRProvider>
@@ -5869,7 +5901,7 @@ export default function Home() {
                   vanishingPointLabel={text("Drag vanishing point", "拖动消失点")}
                   onDragStart={beginPerspectiveDrag}
                 />
-                <div className={`control-point-layer ${interactionMode === "ik-edit" && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={interactionMode !== "ik-edit"}>
+                <div className={`control-point-layer ${interactionMode === "ik-edit" && poseControlsVisible && modelInfo.hasSkeleton && editor.visible ? "visible" : ""}`} aria-hidden={interactionMode !== "ik-edit" || !poseControlsVisible}>
                   {ikControlDefinitions.map(({ id: control, label, labelEn, kind, group }) => (
                     <button
                       key={control}
@@ -5910,10 +5942,10 @@ export default function Home() {
         </section>
 
         <aside className="panel inspector-panel context-panel" aria-label={text(`${toolLabels[activeTool]} controls`, `${toolLabels[activeTool]}控制`)}>
-          <div className="selection-header">
+          <div className={`selection-header ${contextVisibilityAvailable ? "" : "without-visibility"}`}>
             <span className="cube-icon">{activeTool === "model" ? <Cube size={19} weight="duotone" /> : activeTool === "camera" ? <Camera size={19} /> : activeTool === "perspective" ? <Perspective size={19} /> : activeTool === "lighting" ? <Lightbulb size={19} /> : activeTool === "convert" ? <CubeFocus size={19} /> : <Copy size={19} />}</span>
             <div><strong>{toolLabels[activeTool]}</strong></div>
-            <button className={editor.visible ? "visible" : ""} onClick={() => { commit((current) => ({ ...current, visible: !current.visible })); flash(editor.visible ? text("Model hidden", "模型已隐藏") : text("Model shown", "模型已显示")); }} aria-label={editor.visible ? text("Hide model", "隐藏模型") : text("Show model", "显示模型")}>{editor.visible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>
+            {contextVisibilityAvailable && <button className={contextVisibilityVisible ? "visible" : ""} onClick={toggleContextVisibility} aria-pressed={contextVisibilityVisible} aria-label={contextVisibilityLabel} title={contextVisibilityLabel}>{contextVisibilityVisible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>}
             <button className="add-model-button" onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "折叠面板")} title={text("Collapse panel", "折叠面板")}><SidebarSimple size={18} weight="fill" /></button>
           </div>
 
