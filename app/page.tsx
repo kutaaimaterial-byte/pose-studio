@@ -5988,7 +5988,7 @@ export default function Home() {
                 <button onClick={addModel} disabled={!modelInfo.loaded || modelList.length >= 8}><Plus size={16} />{text("Add", "添加")}</button>
               </div>
 
-              <InspectorSection title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
+              <InspectorSection className="model-transform-section" title={text("Model Transform", "模型变换")} resetLabel={text("Reset", "重置")} onReset={() => commit((current) => ({ ...current, position: [0, 0, 0], rotation: [0, 0, 0], scale: 100 }))}>
                 <VectorField label={text("Position", "位置")} values={editor.position} step={0.05} onChange={(axis, value) => updateVector("position", axis, value)} />
                 <VectorField label={text("Rotation", "旋转")} values={editor.rotation} step={1} onChange={(axis, value) => updateVector("rotation", axis, value)} />
                 <ControlRow label={text("Scale", "缩放")}><div className="range-with-value"><input type="range" min="50" max="300" value={editor.scale} onPointerDown={beginContinuousEdit} onFocus={beginContinuousEdit} onChange={(event) => updateContinuousEdit((current) => ({ ...current, scale: Number(event.target.value) }))} onPointerUp={endContinuousEdit} onBlur={endContinuousEdit} aria-label={text("Model scale", "模型缩放")} /><output>{editor.scale}%</output></div></ControlRow>
@@ -6032,7 +6032,7 @@ export default function Home() {
               <div className="camera-tip"><span><Info size={17} /></span><p>{text("Presets adjust focal length, camera position, and shot size together. Drag the empty artboard to orbit freely.", "预设会同时调整焦距、机位和景别；画板空白处仍可自由旋转镜头。")}</p></div>
             </InspectorSection>}
 
-            {activeTool === "model" && <InspectorSection title={text("Reference Images", "参考图片")} resetLabel={text("Clear", "清除")} onReset={() => {
+            {activeTool === "model" && <InspectorSection className="reference-images-section" title={text("Reference Images", "参考图片")} resetLabel={text("Clear", "清除")} onReset={() => {
                 const lockedCount = canvasImages.filter((image) => image.locked).length;
                 setCanvasImages((images) => images.filter((image) => image.locked));
                 setSelectedCanvasImageId((current) => canvasImages.find((image) => image.id === current)?.locked ? current : null);
@@ -6359,8 +6359,8 @@ function FilterChips({ label, options, value, onChange }: { label: string; optio
   return <div className="filter-row"><span>{label}</span><div>{options.map(([optionLabel, optionValue]) => <button key={optionValue} className={value === optionValue ? "active" : ""} aria-pressed={value === optionValue} onClick={() => onChange(optionValue)}>{optionLabel}</button>)}</div></div>;
 }
 
-function InspectorSection({ title, resetLabel, children, onReset }: { title: string; resetLabel: string; children: React.ReactNode; onReset: () => void }) {
-  return <section className="inspector-section"><div className="section-heading"><h3>{title}</h3><button onClick={onReset} title={`${resetLabel} ${title}`} aria-label={`${resetLabel} ${title}`}><ArrowCounterClockwise size={17} /></button></div>{children}</section>;
+function InspectorSection({ title, resetLabel, children, onReset, className = "" }: { title: string; resetLabel: string; children: React.ReactNode; onReset: () => void; className?: string }) {
+  return <section className={`inspector-section${className ? ` ${className}` : ""}`}><div className="section-heading"><h3>{title}</h3><button onClick={onReset} title={`${resetLabel} ${title}`} aria-label={`${resetLabel} ${title}`}><ArrowCounterClockwise size={17} /></button></div>{children}</section>;
 }
 
 function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
