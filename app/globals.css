@@ -1439,6 +1439,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-area { grid-area: canvas; contain: layout paint style; background: var(--bg-canvas); animation: none !important; transition: none !important; }
 .canvas-area::before { background: var(--bg-canvas); }
 .canvas-header { height: 48px; left: var(--space-4); right: var(--space-4); }
+.canvas-project-name { width: min(280px, 42vw); height: var(--control-sm); pointer-events: auto; padding: 0 10px; border: 1px solid transparent; border-radius: var(--radius-md); background: rgba(255, 255, 255, .92); color: var(--text-primary); font-size: var(--font-body); font-weight: 500; box-shadow: none; transition: border-color 160ms, background 160ms; }
+.canvas-project-name:hover { border-color: var(--border-default); background: var(--surface-primary); }
+.canvas-project-name:focus { border-color: var(--primary); background: var(--surface-primary); }
 .canvas-meta { width: max-content; height: var(--control-sm); display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 10px; border: 1px solid rgba(0, 0, 0, .06); border-radius: var(--radius-md); background: rgba(255, 255, 255, .92); color: var(--text-secondary); font-size: var(--font-meta); font-weight: 500; }
 .canvas-meta em { height: 24px; padding: 0 6px; border: 0; background: var(--surface-secondary); font-size: var(--font-meta); }
 .artboard-command-bar { min-height: 40px; position: absolute; z-index: 16; left: 50%; top: -92px; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); box-shadow: 0 4px 12px rgba(16, 24, 40, .08); backdrop-filter: none; pointer-events: auto; white-space: nowrap; }

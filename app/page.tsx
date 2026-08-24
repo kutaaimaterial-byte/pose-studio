@@ -5856,6 +5856,9 @@ export default function Home() {
         </aside>
 
         <section className="canvas-area">
+          <div className="canvas-header">
+            <input className="canvas-project-name" value={projectName} onChange={(event) => { setProjectName(event.target.value); markSaving(); }} aria-label={text("Project name", "项目名称")} />
+          </div>
           <div className="canvas-stage">
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
               <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>

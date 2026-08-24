@@ -41,7 +41,7 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /aria-label="Workspace tools"/);
   assert.match(html, /class="tool-rail"/);
   assert.match(html, /class="context-action-bar"/);
-  assert.doesNotMatch(html, /aria-label="项目名称"/);
+  assert.match(html, /aria-label="项目名称"/);
   assert.match(html, /class="export-button-label">导出<\/span>/);
   assert.match(html, /class="language-switch" role="group" aria-label="语言"/);
   assert.match(html, /video-timeline-button/);
@@ -100,6 +100,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
   assert.doesNotMatch(page, /className="brand-edition"/);
   assert.doesNotMatch(page, /className="canvas-meta"/);
+  assert.match(page, /className="canvas-project-name"/);
+  assert.doesNotMatch(page, /className="project-identity"/);
   assert.match(page, /<SSRProvider>/);
   assert.match(page, /<FluentProvider[^>]*applyStylesToPortals=\{false\}/);
   assert.doesNotMatch(page, /<Tooltip/);
