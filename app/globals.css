@@ -1758,12 +1758,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   white-space: nowrap;
 }
 .toolbar-center .topbar-quick-action {
-  width: var(--control-md);
-  min-width: var(--control-md);
+  width: auto;
+  min-width: max-content;
   height: var(--control-md);
+  gap: 6px;
+  padding-inline: var(--space-3);
   border: 1px solid transparent;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
+.topbar-quick-action-label { font-size: var(--font-label); font-weight: 600; line-height: 1; }
 .toolbar-center .topbar-quick-action:hover { background: var(--surface-secondary); color: var(--text-primary); }
 .toolbar-center .topbar-quick-action.active { border-color: #b7d7fb; background: var(--primary-soft); color: var(--primary); }
 .video-timeline-button.active { background: var(--primary-soft); color: var(--primary); }
@@ -1912,6 +1916,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 @media (max-width: 720px) {
   .toolbar-center .video-timeline-button { display: none; }
+  .toolbar-center .topbar-quick-action { width: var(--control-md); min-width: var(--control-md); padding: 0; }
+  .topbar-quick-action-label { display: none; }
   .timeline-workspace { grid-template-columns: 178px minmax(0, 1fr); }
   .timeline-controls { padding-inline: 6px; }
   .timeline-heading { min-width: 128px; }
