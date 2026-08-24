@@ -31,6 +31,8 @@ test("server-renders the PoseBoard studio shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>AI Character Studio \| PoseBoard 3D Studio<\/title>/i);
   assert.match(html, /class="editor-app/);
+  assert.match(html, /class="intro-loader/);
+  assert.match(html, />正在准备 3D 工作区<\/p>/);
   assert.match(html, />PoseBoard<\/span>/);
   assert.match(html, />V1\.0\.3<\/span>/);
   assert.match(html, />姿势预设库<\/h2>/);
@@ -59,6 +61,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   ]);
 
   assert.match(css, /--surface-primary:\s*#ffffff/);
+  assert.match(css, /\.intro-loader\s*\{[^}]*position:\s*fixed;[^}]*background:\s*#fff;/s);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.intro-loader/s);
+  assert.match(page, /const \[introPhase, setIntroPhase\] = useState<"loading" \| "leaving" \| "hidden">\("loading"\)/);
+  assert.match(page, /if \(!modelInfo\.loaded && !modelInfo\.label\.includes\("失败"\)\) return;/);
   assert.match(css, /\.timeline-workspace \{[^}]*grid-template-columns:\s*190px minmax\(0, 1fr\)/);
   assert.match(css, /--primary:\s*#2684ff/);
   assert.match(css, /--context-panel:\s*380px/);

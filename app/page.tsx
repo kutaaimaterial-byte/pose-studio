@@ -2802,6 +2802,7 @@ export default function Home() {
   const timelineContinuousEditRef = useRef<PoseBoardTimeline | null>(null);
   const timelinePlaybackFrameRef = useRef<number | null>(null);
   const timelinePlaybackStartRef = useRef({ clock: 0, playhead: 0, shotId: "" });
+  const introStartedAtRef = useRef<number | null>(null);
   const playheadRef = useRef(0);
   const activeShotIdRef = useRef<string | null>(null);
   const restoredTimelineShotRef = useRef<string | null>(null);
@@ -2865,6 +2866,7 @@ export default function Home() {
   const [timelineCanUndo, setTimelineCanUndo] = useState(false);
   const [timelineCanRedo, setTimelineCanRedo] = useState(false);
   const [cameraRevision, setCameraRevision] = useState(0);
+  const [introPhase, setIntroPhase] = useState<"loading" | "leaving" | "hidden">("loading");
 
   const isZh = language === "zh";
   const text = (english: string, chinese: string) => isZh ? chinese : english;
@@ -2884,6 +2886,27 @@ export default function Home() {
     : modelInfo.label.includes("失败")
       ? text("GLB failed to load", "GLB 加载失败")
       : text("Loading GLB…", "正在加载 GLB…");
+
+  useEffect(() => {
+    introStartedAtRef.current = window.performance.now();
+  }, []);
+
+  useEffect(() => {
+    if (!modelInfo.loaded && !modelInfo.label.includes("失败")) return;
+
+    let hideTimer: number | undefined;
+    const elapsed = introStartedAtRef.current === null ? 0 : window.performance.now() - introStartedAtRef.current;
+    const minimumDisplayTime = Math.max(0, 1100 - elapsed);
+    const leaveTimer = window.setTimeout(() => {
+      setIntroPhase("leaving");
+      hideTimer = window.setTimeout(() => setIntroPhase("hidden"), 420);
+    }, minimumDisplayTime);
+
+    return () => {
+      window.clearTimeout(leaveTimer);
+      if (hideTimer) window.clearTimeout(hideTimer);
+    };
+  }, [modelInfo.loaded, modelInfo.label]);
   const poseMeta = (pose: PoseItem) => {
     if (isZh) return [getPoseCategoryLabel(pose.category), ...pose.tags].slice(0, 3).join(" · ");
     const detail = pose.hand.find((value) => value !== "natural");
@@ -5640,7 +5663,20 @@ export default function Home() {
     <main
       className={`editor-app tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${timelineOpen ? "timeline-open" : ""} ${mobilePanel ? "show-context" : ""}`}
       style={{ "--timeline-height": `${timelineHeight}px` } as React.CSSProperties}
+      aria-busy={introPhase !== "hidden"}
     >
+      {introPhase !== "hidden" && (
+        <div className={`intro-loader ${introPhase === "leaving" ? "leaving" : ""}`} role="status" aria-live="polite">
+          <div className="intro-loader-content">
+            <div className="intro-loader-brand" aria-hidden="true">
+              <span className="intro-loader-mark">P</span>
+              <strong>PoseBoard</strong>
+            </div>
+            <div className="intro-loader-rail" aria-hidden="true"><span /></div>
+            <p>{text("Preparing 3D workspace", "正在准备 3D 工作区")}</p>
+          </div>
+        </div>
+      )}
       <header className="topbar">
         <div className="brand-block">
           <span className="brand-mark">P</span>
