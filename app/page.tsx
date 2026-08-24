@@ -2922,7 +2922,6 @@ export default function Home() {
   const allPoseItems = useMemo(() => [...savedPoseItems, ...poseItems], [savedPoseItems]);
   const selectedPose = useMemo(() => allPoseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [allPoseItems, selectedPoseId]);
   const selectedSavedPose = savedPoseById.get(selectedPoseId);
-  const activeTimelineShot = timeline.shots.find((shot) => shot.id === activeShotId) ?? null;
   const timelinePromptPreview = useMemo(() => parseTimelinePrompt(timelinePrompt), [timelinePrompt]);
   const hasJointEdits = Object.keys(editor.ikTargets).length > 0;
   const hasUnsavedJointEdits = selectedSavedPose
@@ -4154,6 +4153,41 @@ export default function Home() {
     };
   };
 
+  const persistActiveTimelineShotScene = () => {
+    const id = activeShotIdRef.current;
+    if (!id || !modelInfo.loaded || applyingShotRef.current) return false;
+    const current = timelineLatestRef.current;
+    const active = current.shots.find((shot) => shot.id === id);
+    if (!active) return false;
+    const snapshot = captureSceneSnapshot(active.promptText || sourcePosePrompt);
+    const thumbnail = capturePoseThumbnail(rendererRef.current?.domElement);
+    const next: PoseBoardTimeline = {
+      ...current,
+      updatedAt: current.updatedAt + 1,
+      shots: current.shots.map((shot) => shot.id === id ? {
+        ...shot,
+        sceneSnapshot: snapshot,
+        aspectOverrides: {
+          ...shot.aspectOverrides,
+          [snapshot.editor.ratio]: {
+            ratio: snapshot.editor.ratio,
+            snapshot: cloneShotSceneSnapshot(snapshot),
+            updatedAt: (shot.aspectOverrides[snapshot.editor.ratio]?.updatedAt ?? 0) + 1,
+          },
+        },
+        thumbnail: thumbnail || shot.thumbnail,
+        // A captured scene is authoritative. Do not regenerate it from the
+        // original prompt when the user returns to this shot.
+        snapshotLocked: true,
+        dirty: false,
+      } : shot),
+    };
+    timelineLatestRef.current = next;
+    setTimeline(next);
+    markSaving();
+    return true;
+  };
+
   const buildSnapshotForShotPrompt = (baseSnapshot: ShotSceneSnapshot, promptText: string, ratio: Ratio) => {
     const snapshot = cloneShotSceneSnapshot(baseSnapshot);
     const prompt = promptText.toLowerCase();
@@ -4309,10 +4343,10 @@ export default function Home() {
     // Regenerate untouched automatic shots from their prompt on restore. This
     // repairs timelines created before pose-aware snapshot playback while
     // preserving every manually updated shot exactly as saved.
-    const snapshot = storedSnapshot && !shot.dirty && shot.promptText.trim()
+    const snapshot = storedSnapshot && !shot.snapshotLocked && shot.promptText.trim()
       ? buildSnapshotForShotPrompt(storedSnapshot, shot.promptText, snapshotRatio)
       : storedSnapshot;
-    if (snapshot) applySceneSnapshot(snapshot, fromPlayback, !shot.dirty);
+    if (snapshot) applySceneSnapshot(snapshot, fromPlayback, !shot.snapshotLocked);
     setActiveShotId(shot.id);
     activeShotIdRef.current = shot.id;
   };
@@ -4376,8 +4410,12 @@ export default function Home() {
     setTimelinePlaying(false);
     setTimelinePlayhead(shot.start);
     playheadRef.current = shot.start;
+    const isCurrentShot = activeShotIdRef.current === shot.id;
+    persistActiveTimelineShotScene();
     setTimeline((current) => ({ ...current, playhead: shot.start }));
-    applyTimelineShot(shot);
+    if (isCurrentShot) return;
+    const target = timelineLatestRef.current.shots.find((item) => item.id === shot.id) ?? shot;
+    applyTimelineShot(target);
   };
 
   const addBlankTimelineShot = () => {
@@ -4406,6 +4444,7 @@ export default function Home() {
         [snapshot.editor.ratio]: { ratio: snapshot.editor.ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
       },
       thumbnail: capturePoseThumbnail(rendererRef.current?.domElement),
+      snapshotLocked: true,
       dirty: false,
     };
     commitTimeline((timelineValue) => ({
@@ -4420,28 +4459,9 @@ export default function Home() {
   };
 
   const updateActiveTimelineShot = () => {
-    const id = activeShotIdRef.current;
-    if (!id) return;
-    const snapshot = captureSceneSnapshot(activeTimelineShot?.promptText ?? sourcePosePrompt);
-    const thumbnail = capturePoseThumbnail(rendererRef.current?.domElement);
-    commitTimeline((current) => ({
-      ...current,
-      shots: current.shots.map((shot) => shot.id === id ? {
-        ...shot,
-        sceneSnapshot: snapshot,
-        aspectOverrides: {
-          ...shot.aspectOverrides,
-          [snapshot.editor.ratio]: {
-            ratio: snapshot.editor.ratio,
-            snapshot: cloneShotSceneSnapshot(snapshot),
-            updatedAt: (shot.aspectOverrides[snapshot.editor.ratio]?.updatedAt ?? 0) + 1,
-          },
-        },
-        thumbnail: thumbnail || shot.thumbnail,
-        dirty: false,
-      } : shot),
-    }));
-    flash(text("Current scene saved to this shot", "当前场景已保存到该镜头"));
+    if (persistActiveTimelineShotScene()) {
+      flash(text("Current scene saved to this shot", "当前场景已保存到该镜头"));
+    }
   };
 
   const splitActiveTimelineShot = () => {
@@ -4494,7 +4514,8 @@ export default function Home() {
       color: shotColorForId(id, source.index, source.color, new Set(current.shots.map((shot) => shot.color))),
       sceneSnapshot: source.sceneSnapshot ? cloneShotSceneSnapshot(source.sceneSnapshot) : null,
       aspectOverrides: Object.fromEntries(Object.entries(source.aspectOverrides).map(([ratio, override]) => [ratio, { ...override, snapshot: cloneShotSceneSnapshot(override.snapshot) }])),
-      dirty: false,
+      snapshotLocked: source.snapshotLocked,
+      dirty: source.dirty,
     };
     commitTimeline((timelineValue) => {
       const shots = timelineValue.shots.flatMap((shot, index) => {
@@ -4548,7 +4569,11 @@ export default function Home() {
     playheadRef.current = value;
     const shot = timelineLatestRef.current.shots.find((item) => value >= item.start && value < item.end)
       ?? (value === timelineLatestRef.current.duration ? timelineLatestRef.current.shots.at(-1) : undefined);
-    if (shot && shot.id !== activeShotIdRef.current) applyTimelineShot(shot, true);
+    if (shot && shot.id !== activeShotIdRef.current) {
+      persistActiveTimelineShotScene();
+      const target = timelineLatestRef.current.shots.find((item) => item.id === shot.id) ?? shot;
+      applyTimelineShot(target, true);
+    }
   };
 
   const previousTimelineShot = () => {
@@ -4577,6 +4602,7 @@ export default function Home() {
       setTimeline((current) => ({ ...current, playhead: playheadRef.current }));
       return;
     }
+    persistActiveTimelineShotScene();
     const start = playheadRef.current >= timelineLatestRef.current.duration ? 0 : playheadRef.current;
     if (start !== playheadRef.current) {
       setTimelinePlayhead(start);
@@ -4723,6 +4749,7 @@ export default function Home() {
       ...current,
       shots: current.shots.map((item) => item.id === shot.id ? {
         ...item,
+        snapshotLocked: true,
         aspectOverrides: {
           ...item.aspectOverrides,
           [currentRatio]: {
@@ -4793,6 +4820,11 @@ export default function Home() {
       timelineLatestRef.current = next;
       return next;
     });
+    const saveTimer = window.setTimeout(() => persistActiveTimelineShotScene(), 180);
+    return () => window.clearTimeout(saveTimer);
+  // Scene edits are debounced into the active shot; keeping the capture helper
+  // outside dependencies avoids restarting this effect for unrelated renders.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraRevision, canvasImages, editor, modelList, persistenceReady, selectedPoseId, sourcePosePrompt, timelinePlaying]);
 
   useEffect(() => {
