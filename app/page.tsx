@@ -4153,14 +4153,14 @@ export default function Home() {
     };
   };
 
-  const persistActiveTimelineShotScene = () => {
+  const persistActiveTimelineShotScene = (includeThumbnail = false) => {
     const id = activeShotIdRef.current;
     if (!id || !modelInfo.loaded || applyingShotRef.current) return false;
     const current = timelineLatestRef.current;
     const active = current.shots.find((shot) => shot.id === id);
     if (!active) return false;
     const snapshot = captureSceneSnapshot(active.promptText || sourcePosePrompt);
-    const thumbnail = capturePoseThumbnail(rendererRef.current?.domElement);
+    const thumbnail = includeThumbnail ? capturePoseThumbnail(rendererRef.current?.domElement) : "";
     const next: PoseBoardTimeline = {
       ...current,
       updatedAt: current.updatedAt + 1,
@@ -4459,7 +4459,7 @@ export default function Home() {
   };
 
   const updateActiveTimelineShot = () => {
-    if (persistActiveTimelineShotScene()) {
+    if (persistActiveTimelineShotScene(true)) {
       flash(text("Current scene saved to this shot", "当前场景已保存到该镜头"));
     }
   };
@@ -4562,15 +4562,14 @@ export default function Home() {
     flash(text("Shot deleted", "镜头已删除"));
   };
 
-  const scrubTimeline = (time: number) => {
+  const scrubTimeline = (time: number, applyShot = true) => {
     setTimelinePlaying(false);
     const value = clamp(time, 0, timelineLatestRef.current.duration);
     setTimelinePlayhead(value);
     playheadRef.current = value;
     const shot = timelineLatestRef.current.shots.find((item) => value >= item.start && value < item.end)
       ?? (value === timelineLatestRef.current.duration ? timelineLatestRef.current.shots.at(-1) : undefined);
-    if (shot && shot.id !== activeShotIdRef.current) {
-      persistActiveTimelineShotScene();
+    if (applyShot && shot && shot.id !== activeShotIdRef.current) {
       const target = timelineLatestRef.current.shots.find((item) => item.id === shot.id) ?? shot;
       applyTimelineShot(target, true);
     }
@@ -6004,6 +6003,7 @@ export default function Home() {
           onExport={exportTimelineJson}
           onSelectShot={selectTimelineShot}
           onEditShotText={editTimelineShotText}
+          onScrubStart={() => persistActiveTimelineShotScene()}
           onScrub={scrubTimeline}
           onClipPointerDown={beginTimelineClipDrag}
           onResizePointerDown={beginTimelineResize}

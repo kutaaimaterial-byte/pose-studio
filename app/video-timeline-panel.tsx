@@ -57,7 +57,8 @@ type VideoTimelinePanelProps<TSnapshot> = {
   onExport: () => void;
   onSelectShot: (shot: VideoShot<TSnapshot>) => void;
   onEditShotText: (shotId: string, promptText: string) => void;
-  onScrub: (time: number) => void;
+  onScrubStart: () => void;
+  onScrub: (time: number, applyShot?: boolean) => void;
   onClipPointerDown: (shotId: string, mode: ClipDragMode, event: React.PointerEvent<HTMLElement>) => void;
   onResizePointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
 };
@@ -99,6 +100,7 @@ export function VideoTimelinePanel<TSnapshot>({
   onExport,
   onSelectShot,
   onEditShotText,
+  onScrubStart,
   onScrub,
   onClipPointerDown,
   onResizePointerDown,
@@ -121,7 +123,7 @@ export function VideoTimelinePanel<TSnapshot>({
     if (!content) return;
     const rect = content.getBoundingClientRect();
     const time = Math.min(timeline.duration, Math.max(0, (event.clientX - rect.left) / pixelsPerSecond));
-    onScrub(time);
+    onScrub(time, true);
   };
 
   return (
@@ -213,19 +215,24 @@ export function VideoTimelinePanel<TSnapshot>({
                 onPointerDown={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
+                  onScrubStart();
                   const handle = event.currentTarget;
                   const pointerOffset = event.clientX - handle.getBoundingClientRect().left;
                   let pendingClientX = event.clientX;
                   let scrubFrame: number | null = null;
+                  const timeFromClientX = (clientX: number) => {
+                    const content = contentRef.current;
+                    if (!content) return playhead;
+                    const rect = content.getBoundingClientRect();
+                    return Math.min(timeline.duration, Math.max(0, (clientX - pointerOffset - rect.left) / pixelsPerSecond));
+                  };
                   const applyPendingScrub = () => {
                     scrubFrame = null;
-                    const content = contentRef.current;
-                    if (!content) return;
-                    const rect = content.getBoundingClientRect();
-                    onScrub(Math.min(timeline.duration, Math.max(0, (pendingClientX - pointerOffset - rect.left) / pixelsPerSecond)));
+                    onScrub(timeFromClientX(pendingClientX), false);
                   };
                   const move = (pointerEvent: PointerEvent) => {
                     pendingClientX = pointerEvent.clientX;
+                    handle.style.left = `${timeFromClientX(pendingClientX) * pixelsPerSecond}px`;
                     if (scrubFrame === null) scrubFrame = window.requestAnimationFrame(applyPendingScrub);
                   };
                   const end = (pointerEvent: PointerEvent) => {
@@ -234,7 +241,8 @@ export function VideoTimelinePanel<TSnapshot>({
                     window.removeEventListener("pointercancel", end);
                     if (scrubFrame !== null) window.cancelAnimationFrame(scrubFrame);
                     pendingClientX = pointerEvent.clientX;
-                    applyPendingScrub();
+                    handle.style.left = `${timeFromClientX(pendingClientX) * pixelsPerSecond}px`;
+                    onScrub(timeFromClientX(pendingClientX), true);
                     handle.classList.remove("dragging");
                   };
                   handle.classList.add("dragging");

@@ -1774,7 +1774,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .clip-trim-start { left: 0; }
 .clip-trim-end { right: 0; }
 .timeline-playhead { width: 1px; height: calc(100% - 20px); position: absolute; z-index: 4; top: 20px; padding: 0; border: 0; background: var(--danger); cursor: ew-resize; touch-action: none; }
-.timeline-playhead.dragging { cursor: grabbing; }
+.timeline-playhead.dragging { cursor: grabbing; will-change: left; }
 .timeline-playhead::before { content: ""; width: 9px; height: 9px; position: absolute; top: 0; left: -4px; transform: rotate(45deg); border-radius: 2px 2px 0 2px; background: var(--danger); }
 .timeline-playhead span { position: absolute; top: 3px; left: 6px; padding: 1px 4px; border-radius: var(--radius-xs); background: var(--danger); color: #fff; font: 600 9px/13px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
 .timeline-empty { width: min(620px, calc(100% - 32px)); min-height: 76px; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: var(--space-3); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: rgba(255,255,255,.78); color: var(--text-secondary); text-align: left; }
