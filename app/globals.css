@@ -1422,7 +1422,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .pose-card:hover { border-color: var(--border-strong); transform: none; box-shadow: 0 2px 8px rgba(16, 24, 40, .06); }
 .pose-card.active { border: 1.5px solid var(--primary); outline: 0; box-shadow: none; }
 .pose-thumb { aspect-ratio: 168 / 156; background: #eef1f5; }
-.pose-thumb img { object-fit: cover; }
+.pose-thumb img { object-fit: contain; object-position: center center; }
 .pose-card-body { min-height: 68px; padding: 10px var(--space-3) var(--space-3); }
 .pose-card-body strong { font-size: var(--font-body); font-weight: 600; line-height: 20px; }
 .pose-card-body small { min-height: 18px; margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--font-meta); line-height: 18px; white-space: nowrap; -webkit-line-clamp: 1; }

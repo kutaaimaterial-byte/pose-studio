@@ -2522,9 +2522,12 @@ function applyRigidPose(mesh: THREE.Mesh, poseIndex: number, mirrored = false) {
 }
 
 function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
+  const thumbnailWidth = 336;
+  const thumbnailHeight = 312;
+  const thumbnailAspect = thumbnailWidth / thumbnailHeight;
   const canvas = document.createElement("canvas");
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-  renderer.setSize(256, 200, false);
+  renderer.setSize(thumbnailWidth, thumbnailHeight, false);
   renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -2538,7 +2541,7 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
   light.position.set(4, 7, 5);
   light.castShadow = true;
   scene.add(light);
-  const camera = new THREE.PerspectiveCamera(presetCameraFov, 1.28, 0.05, 50);
+  const camera = new THREE.PerspectiveCamera(presetCameraFov, thumbnailAspect, 0.05, 50);
   camera.position.set(...presetCameraPosition);
   camera.lookAt(...presetCameraTarget);
 
@@ -2567,8 +2570,8 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
     const center = bounds.getCenter(new THREE.Vector3());
     const verticalDistance = size.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
     const horizontalDistance = size.x / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    const fitDistance = Math.max(verticalDistance, horizontalDistance) * 1.16;
-    camera.position.set(center.x, center.y + size.y * 0.02, center.z + fitDistance);
+    const fitDistance = Math.max(verticalDistance, horizontalDistance) * 1.22;
+    camera.position.set(center.x, center.y, center.z + fitDistance);
     camera.lookAt(center);
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
@@ -2636,8 +2639,8 @@ function readSavedPoseRecords(value: unknown): SavedPoseRecord[] {
 function capturePoseThumbnail(source: HTMLCanvasElement | undefined): string {
   if (!source || !source.width || !source.height) return "";
   const output = document.createElement("canvas");
-  output.width = 256;
-  output.height = 200;
+  output.width = 336;
+  output.height = 312;
   const context = output.getContext("2d");
   if (!context) return "";
   context.fillStyle = "#e9ebef";
