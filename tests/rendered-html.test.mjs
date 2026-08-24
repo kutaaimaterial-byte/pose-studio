@@ -42,6 +42,8 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /aria-label="项目名称"/);
   assert.match(html, /class="export-button-label">导出<\/span>/);
   assert.match(html, /class="language-switch" role="group" aria-label="语言"/);
+  assert.match(html, /video-timeline-button/);
+  assert.match(html, />时间轴<\/span>/);
   assert.match(html, /aria-pressed="false">EN<\/button>/);
   assert.match(html, /aria-pressed="true">中文<\/button>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
@@ -129,5 +131,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(page, /controlsRef\.current\.enabled = true/);
   assert.match(page, /useRef<Language>\("zh"\)/);
   assert.match(page, /useState<Language>\("zh"\)/);
+  assert.match(page, /parseTimelinePrompt\(timelinePrompt\)/);
+  assert.match(page, /<VideoTimelinePanel/);
+  assert.match(page, /const applySceneSnapshot = \(snapshotSource: ShotSceneSnapshot/);
+  assert.match(page, /const toggleTimelinePlayback = \(\) =>/);
+  assert.match(page, /videoTimeline: \{ \.\.\.timelineLatestRef\.current/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
 });

@@ -29,6 +29,7 @@ import {
   DownloadSimple,
   Eye,
   EyeSlash,
+  FilmStrip,
   FloppyDisk,
   GridFour,
   HouseLine,
@@ -103,8 +104,19 @@ import {
   type ActiveTool,
   type InteractionMode,
 } from "./workspace-ui";
+import { VideoTimelinePanel } from "./video-timeline-panel";
+import {
+  createEmptyTimeline,
+  formatTimecode,
+  normalizeVideoTimeline,
+  parseTimelinePrompt,
+  shotColorForId,
+  timelinePromptText,
+  type VideoShot,
+  type VideoTimeline,
+} from "./video-timeline";
 
-type Ratio = "16:9" | "9:16" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
+type Ratio = "16:9" | "9:16" | "21:9" | "4:5" | "3:2" | "2:3" | "4:3" | "3:4" | "1:1";
 type Language = "en" | "zh";
 type ToolMode = "translate" | "rotate" | "pose";
 type QuickView = "featured" | "recent" | null;
@@ -222,6 +234,15 @@ const promptToPoseExamplesEn = [
   "A person sitting on a chair, resting one hand on the chin and looking to the side",
 ] as const;
 
+const timelinePromptExample = `总时长15秒，画面9:16，24fps。
+0-2秒：脸部极近景，角色低头，画面稳定。
+2-5秒：侧面中景，角色慢慢抬头。
+5-8秒：大远景，镜头快速向后拉开。
+8-12秒：角色身体前倾，向前疾跑冲刺。
+12-15秒：上半身中近景，角色停下并看向镜头，稳定收尾。`;
+
+const readPlaybackClock = () => globalThis.performance.now();
+
 type EditorState = {
   pose: number;
   mirrored: boolean;
@@ -275,6 +296,32 @@ type CanvasImageLayer = {
   locked: boolean;
 };
 
+type ShotCameraSnapshot = {
+  position: [number, number, number];
+  target: [number, number, number];
+  focalLength: number;
+};
+
+type ShotModelSnapshot = {
+  id: string;
+  name: string;
+  state: ModelEditState;
+};
+
+type ShotSceneSnapshot = {
+  editor: EditorState;
+  selectedPoseId: string;
+  selectedModelId: string;
+  models: ShotModelSnapshot[];
+  camera: ShotCameraSnapshot;
+  canvasImages: CanvasImageLayer[];
+  sourcePrompt: string;
+  promptPlatform: PromptPlatform;
+  capturedAt: number;
+};
+
+type PoseBoardTimeline = VideoTimeline<ShotSceneSnapshot>;
+
 const initialState: EditorState = {
   pose: 0,
   mirrored: false,
@@ -307,6 +354,8 @@ const initialState: EditorState = {
 const ratioSize: Record<Ratio, [number, number]> = {
   "16:9": [1920, 1080],
   "9:16": [1080, 1920],
+  "21:9": [2560, 1080],
+  "4:5": [1080, 1350],
   "3:2": [1800, 1200],
   "2:3": [1200, 1800],
   "4:3": [1600, 1200],
@@ -2629,6 +2678,24 @@ function cloneModelEditState(state: ModelEditState): ModelEditState {
   return getModelEditState({ ...initialState, ...state });
 }
 
+function cloneCanvasImageLayers(layers: CanvasImageLayer[]) {
+  return layers.map((layer) => ({ ...layer }));
+}
+
+function cloneShotSceneSnapshot(snapshot: ShotSceneSnapshot): ShotSceneSnapshot {
+  return {
+    ...snapshot,
+    editor: cloneState(snapshot.editor),
+    camera: { ...snapshot.camera, position: [...snapshot.camera.position], target: [...snapshot.camera.target] },
+    models: snapshot.models.map((model) => ({ ...model, state: cloneModelEditState(model.state) })),
+    canvasImages: cloneCanvasImageLayers(snapshot.canvasImages),
+  };
+}
+
+function clonePoseBoardTimeline(timeline: PoseBoardTimeline): PoseBoardTimeline {
+  return normalizeVideoTimeline<ShotSceneSnapshot>(JSON.parse(JSON.stringify(timeline)), timeline.masterAspect);
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -2670,6 +2737,15 @@ export default function Home() {
   const languageRef = useRef<Language>("zh");
   const interactionModeRef = useRef<InteractionMode>("ik-edit");
   const cameraLockedRef = useRef(false);
+  const timelineLatestRef = useRef<PoseBoardTimeline>(createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+  const timelineHistoryRef = useRef<PoseBoardTimeline[]>([]);
+  const timelineFutureRef = useRef<PoseBoardTimeline[]>([]);
+  const timelineContinuousEditRef = useRef<PoseBoardTimeline | null>(null);
+  const timelinePlaybackFrameRef = useRef<number | null>(null);
+  const timelinePlaybackStartRef = useRef({ clock: 0, playhead: 0, shotId: "" });
+  const playheadRef = useRef(0);
+  const activeShotIdRef = useRef<string | null>(null);
+  const applyingShotRef = useRef(false);
 
   const [language, setLanguage] = useState<Language>("zh");
   const [editor, setEditor] = useState<EditorState>(cloneState(initialState));
@@ -2717,6 +2793,18 @@ export default function Home() {
   const [promptPlatform, setPromptPlatform] = useState<PromptPlatform>("midjourney");
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
   const [modelInfo, setModelInfo] = useState({ loaded: false, hasSkeleton: false, label: "正在加载 GLB…" });
+  const [timeline, setTimeline] = useState<PoseBoardTimeline>(() => createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timelinePromptOpen, setTimelinePromptOpen] = useState(false);
+  const [timelinePrompt, setTimelinePrompt] = useState(timelinePromptExample);
+  const [timelinePlaying, setTimelinePlaying] = useState(false);
+  const [timelinePlayhead, setTimelinePlayhead] = useState(0);
+  const [activeShotId, setActiveShotId] = useState<string | null>(null);
+  const [timelinePixelsPerSecond, setTimelinePixelsPerSecond] = useState(64);
+  const [timelineHeight, setTimelineHeight] = useState(236);
+  const [timelineCanUndo, setTimelineCanUndo] = useState(false);
+  const [timelineCanRedo, setTimelineCanRedo] = useState(false);
+  const [cameraRevision, setCameraRevision] = useState(0);
 
   const isZh = language === "zh";
   const text = (english: string, chinese: string) => isZh ? chinese : english;
@@ -2777,6 +2865,8 @@ export default function Home() {
   const allPoseItems = useMemo(() => [...savedPoseItems, ...poseItems], [savedPoseItems]);
   const selectedPose = useMemo(() => allPoseItems.find((pose) => pose.id === selectedPoseId) ?? defaultPose, [allPoseItems, selectedPoseId]);
   const selectedSavedPose = savedPoseById.get(selectedPoseId);
+  const activeTimelineShot = timeline.shots.find((shot) => shot.id === activeShotId) ?? null;
+  const timelinePromptPreview = useMemo(() => parseTimelinePrompt(timelinePrompt), [timelinePrompt]);
   const hasJointEdits = Object.keys(editor.ikTargets).length > 0;
   const hasUnsavedJointEdits = selectedSavedPose
     ? JSON.stringify({ ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers, mirrored: editor.mirrored }) !== JSON.stringify({ ikTargets: selectedSavedPose.ikTargets, semanticModifiers: selectedSavedPose.semanticModifiers, mirrored: selectedSavedPose.mirrored })
@@ -2814,6 +2904,18 @@ export default function Home() {
     interactionModeRef.current = interactionMode;
     cameraLockedRef.current = cameraLocked;
   }, [cameraLocked, interactionMode]);
+
+  useEffect(() => {
+    timelineLatestRef.current = timeline;
+  }, [timeline]);
+
+  useEffect(() => {
+    playheadRef.current = timelinePlayhead;
+  }, [timelinePlayhead]);
+
+  useEffect(() => {
+    activeShotIdRef.current = activeShotId;
+  }, [activeShotId]);
 
   const generatedPrompt = useMemo(() => {
     const cameraLabel = editor.cameraPreset === "custom" ? "自定义镜头" : cameraPresets[editor.cameraPreset].label;
@@ -2897,7 +2999,14 @@ export default function Home() {
       const favorites = JSON.parse(window.localStorage.getItem("poseboard.favoriteIds") ?? "[]");
       const recent = JSON.parse(window.localStorage.getItem("poseboard.recentIds") ?? "[]");
       const storedSavedPoses = readSavedPoseRecords(JSON.parse(window.localStorage.getItem("poseboard.savedPoses.v1") ?? "[]"));
-      const savedProject = JSON.parse(window.localStorage.getItem("poseboard.project.v2") ?? "null") as { editor?: Partial<EditorState>; selectedPoseId?: string } | null;
+      const savedProject = JSON.parse(window.localStorage.getItem("poseboard.project.v3") ?? window.localStorage.getItem("poseboard.project.v2") ?? "null") as {
+        editor?: Partial<EditorState>;
+        selectedPoseId?: string;
+        videoTimeline?: unknown;
+        activeShotId?: string | null;
+        timelineOpen?: boolean;
+        timelineHeight?: number;
+      } | null;
       const lastSelected = window.localStorage.getItem("poseboard.lastSelectedId");
       const workspacePreferences = JSON.parse(window.localStorage.getItem("poseboard.workspace.v4") ?? "null") as { projectName?: string; contextPanelOpen?: boolean; cameraLocked?: boolean } | null;
       if (Array.isArray(favorites)) setFavoriteIds(favorites.filter((id): id is string => typeof id === "string"));
@@ -2933,6 +3042,19 @@ export default function Home() {
       if (typeof workspacePreferences?.projectName === "string" && workspacePreferences.projectName.trim()) setProjectName(workspacePreferences.projectName);
       if (typeof workspacePreferences?.contextPanelOpen === "boolean") setContextPanelOpen(workspacePreferences.contextPanelOpen);
       if (typeof workspacePreferences?.cameraLocked === "boolean") setCameraLocked(workspacePreferences.cameraLocked);
+      if (savedProject?.videoTimeline) {
+        const restoredTimeline = normalizeVideoTimeline<ShotSceneSnapshot>(savedProject.videoTimeline, savedProject.editor?.ratio ?? "16:9");
+        setTimeline(restoredTimeline);
+        timelineLatestRef.current = restoredTimeline;
+        const restoredShotId = restoredTimeline.shots.some((shot) => shot.id === savedProject.activeShotId)
+          ? savedProject.activeShotId ?? null
+          : restoredTimeline.shots[0]?.id ?? null;
+        setActiveShotId(restoredShotId);
+        setTimelinePlayhead(restoredTimeline.playhead);
+        if (typeof savedProject.timelineOpen === "boolean") setTimelineOpen(savedProject.timelineOpen);
+        else if (restoredTimeline.shots.length) setTimelineOpen(true);
+      }
+      if (typeof savedProject?.timelineHeight === "number") setTimelineHeight(clamp(savedProject.timelineHeight, 176, 420));
     } finally {
       setPersistenceReady(true);
     }
@@ -2948,8 +3070,17 @@ export default function Home() {
 
   useEffect(() => {
     if (!persistenceReady) return;
-    window.localStorage.setItem("poseboard.project.v2", JSON.stringify({ schemaVersion: "4.0", appVersion: "1.0.3", selectedPoseId, editor }));
-  }, [editor, persistenceReady, selectedPoseId]);
+    window.localStorage.setItem("poseboard.project.v3", JSON.stringify({
+      schemaVersion: "5.0",
+      appVersion: "1.0.3",
+      selectedPoseId,
+      editor,
+      videoTimeline: timeline,
+      activeShotId,
+      timelineOpen,
+      timelineHeight,
+    }));
+  }, [activeShotId, editor, persistenceReady, selectedPoseId, timeline, timelineHeight, timelineOpen]);
 
   useEffect(() => {
     if (!persistenceReady) return;
@@ -3059,6 +3190,7 @@ export default function Home() {
         setMobilePanel(null);
         setPromptToPoseOpen(false);
         setPromptOpen(false);
+        setTimelinePromptOpen(false);
         return;
       }
       const target = event.target;
@@ -3497,7 +3629,7 @@ export default function Home() {
 
   const exportProjectJson = () => {
     const project = {
-      schemaVersion: "4.0",
+      schemaVersion: "5.0",
       appVersion: "1.0.3",
       name: projectName,
       updatedAt: new Date().toISOString(),
@@ -3519,6 +3651,7 @@ export default function Home() {
       },
       perspectiveGrid: clonePerspectiveGrid(editor.perspectiveGrid),
       prompt: { platform: promptPlatform, ...generatedPrompt },
+      videoTimeline: { ...timelineLatestRef.current, playhead: playheadRef.current },
     };
     downloadTextFile(`poseboard-${selectedPose.id}.json`, JSON.stringify(project, null, 2), "application/json");
     flash(text("Project JSON exported", "项目 JSON 已导出"));
@@ -3576,11 +3709,9 @@ export default function Home() {
   };
 
   const toggleOrientation = () => {
-    commit((current) => {
-      const ratio: Ratio = current.ratio === "16:9" ? "9:16" : current.ratio === "9:16" ? "16:9" : current.ratio === "3:2" ? "2:3" : current.ratio === "2:3" ? "3:2" : current.ratio === "4:3" ? "3:4" : current.ratio === "3:4" ? "4:3" : "1:1";
-      return { ...current, ratio };
-    });
-    flash(text("Canvas orientation switched", "画幅方向已切换"));
+    const current = editorLatestRef.current.ratio;
+    const ratio: Ratio = current === "16:9" || current === "21:9" ? "9:16" : current === "9:16" ? "16:9" : current === "3:2" ? "2:3" : current === "2:3" ? "3:2" : current === "4:3" ? "3:4" : current === "3:4" || current === "4:5" ? "4:3" : "1:1";
+    changeArtboardRatio(ratio);
   };
 
   const setPerspectiveMode = (mode: PerspectiveGridMode) => {
@@ -3892,6 +4023,712 @@ export default function Home() {
     flash(text("Character deleted · Delete", "角色已删除 · Delete"));
   };
 
+  const syncTimelineHistoryAvailability = () => {
+    setTimelineCanUndo(timelineHistoryRef.current.length > 0);
+    setTimelineCanRedo(timelineFutureRef.current.length > 0);
+  };
+
+  const commitTimeline = (updater: (current: PoseBoardTimeline) => PoseBoardTimeline) => {
+    setTimeline((current) => {
+      const before = clonePoseBoardTimeline(current);
+      const next = updater(clonePoseBoardTimeline(current));
+      if (JSON.stringify(next) === JSON.stringify(current)) return current;
+      timelineHistoryRef.current.push(before);
+      if (timelineHistoryRef.current.length > 60) timelineHistoryRef.current.shift();
+      timelineFutureRef.current = [];
+      next.updatedAt = current.updatedAt + 1;
+      timelineLatestRef.current = next;
+      syncTimelineHistoryAvailability();
+      markSaving();
+      return next;
+    });
+  };
+
+  const undoTimeline = () => {
+    const previous = timelineHistoryRef.current.pop();
+    if (!previous) return;
+    const current = clonePoseBoardTimeline(timelineLatestRef.current);
+    timelineFutureRef.current.push(current);
+    timelineLatestRef.current = previous;
+    setTimeline(previous);
+    setTimelinePlayhead(previous.playhead);
+    syncTimelineHistoryAvailability();
+    markSaving();
+    flash(text("Timeline edit undone", "已撤销时间轴编辑"));
+  };
+
+  const redoTimeline = () => {
+    const next = timelineFutureRef.current.pop();
+    if (!next) return;
+    timelineHistoryRef.current.push(clonePoseBoardTimeline(timelineLatestRef.current));
+    timelineLatestRef.current = next;
+    setTimeline(next);
+    setTimelinePlayhead(next.playhead);
+    syncTimelineHistoryAvailability();
+    markSaving();
+    flash(text("Timeline edit restored", "已重做时间轴编辑"));
+  };
+
+  const captureSceneSnapshot = (promptText = sourcePosePrompt): ShotSceneSnapshot => {
+    const currentEditor = cloneState(editorLatestRef.current);
+    modelStatesRef.current[selectedModelId] = getModelEditState(currentEditor);
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    return {
+      editor: currentEditor,
+      selectedPoseId,
+      selectedModelId,
+      models: modelList.map((model) => ({
+        id: model.id,
+        name: model.name,
+        state: cloneModelEditState(model.id === selectedModelId
+          ? getModelEditState(currentEditor)
+          : modelStatesRef.current[model.id] ?? getModelEditState(initialState)),
+      })),
+      camera: {
+        position: camera ? [camera.position.x, camera.position.y, camera.position.z] : [...presetCameraPosition],
+        target: controls ? [controls.target.x, controls.target.y, controls.target.z] : [...presetCameraTarget],
+        focalLength: currentEditor.focalLength,
+      },
+      canvasImages: cloneCanvasImageLayers(canvasImages),
+      sourcePrompt: promptText,
+      promptPlatform,
+      capturedAt: timelineLatestRef.current.updatedAt + 1,
+    };
+  };
+
+  const buildSnapshotForShotPrompt = (baseSnapshot: ShotSceneSnapshot, promptText: string, ratio: Ratio) => {
+    const snapshot = cloneShotSceneSnapshot(baseSnapshot);
+    const prompt = promptText.toLowerCase();
+    const hasPoseIntent = /低头|抬头|转身|前倾|后仰|疾跑|冲刺|行走|奔跑|站立|坐|蹲|跪|跳|手|腿|肩|头部|look|turn|lean|run|sprint|walk|sit|kneel|jump|arm|hand|leg/.test(prompt);
+    const hasCameraIntent = /特写|近景|中景|远景|全身|俯拍|仰拍|侧面|正面|镜头|机位|焦距|close.?up|medium|wide|long shot|camera|angle|view/.test(prompt);
+    const hasLightingIntent = /灯光|棚拍|逆光|侧光|顶光|蓝橙|夜景|夕阳|柔光|lighting|rim light|night|sunset|soft light/.test(prompt);
+    const result = analyzePromptToPose(promptText);
+    const shotSize: ShotSize = /极近景|脸部特写|close.?up/.test(prompt)
+      ? "close"
+      : /中近景|中景|半身|medium/.test(prompt)
+        ? "medium"
+        : /大远景|远景|wide|long shot/.test(prompt)
+          ? "long"
+          : /全身|full.?body/.test(prompt)
+            ? "full"
+            : snapshot.editor.shotSize;
+    const cameraPreset = cameraPresets[result.cameraPreset];
+    const lightingPreset = lightingPresets[result.lightingPreset];
+    const toHex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
+    const nextEditor = cloneState({
+      ...snapshot.editor,
+      ratio,
+      ...(hasPoseIntent ? {
+        pose: result.pose.enginePoseIndex,
+        mirrored: false,
+        ikTargets: {},
+        semanticModifiers: { ...result.modifiers },
+      } : {}),
+      ...(hasCameraIntent ? {
+        cameraPreset: result.cameraPreset,
+        focalLength: cameraPreset.focalLength,
+        cameraHeight: cameraPreset.target[1],
+        shotSize,
+      } : {}),
+      ...(hasLightingIntent ? {
+        lightingPreset: result.lightingPreset,
+        keyLight: lightingPreset.key,
+        fillLight: lightingPreset.fill,
+        rimLight: lightingPreset.rim,
+        exposure: lightingPreset.exposure,
+        keyColor: toHex(lightingPreset.keyColor),
+        fillColor: toHex(lightingPreset.fillColor),
+        rimColor: toHex(lightingPreset.rimColor),
+        background: lightingPreset.background,
+      } : {}),
+      perspectiveGrid: /三点透视|仰拍|低机位|高楼|three.point/.test(prompt)
+        ? perspectiveDefaultsForMode("three-point", snapshot.editor.perspectiveGrid)
+        : /两点透视|街角|建筑转角|two.point/.test(prompt)
+          ? perspectiveDefaultsForMode("two-point", snapshot.editor.perspectiveGrid)
+          : /一点透视|走廊|道路中央|one.point/.test(prompt)
+            ? perspectiveDefaultsForMode("one-point", snapshot.editor.perspectiveGrid)
+            : snapshot.editor.perspectiveGrid,
+    });
+    snapshot.editor = nextEditor;
+    snapshot.selectedPoseId = hasPoseIntent ? result.pose.id : snapshot.selectedPoseId;
+    snapshot.sourcePrompt = promptText;
+    snapshot.promptPlatform = "seedance";
+    if (hasCameraIntent) {
+      const target = new THREE.Vector3(...cameraPreset.target);
+      const direction = new THREE.Vector3(...cameraPreset.position).sub(target).normalize();
+      const position = target.clone().addScaledVector(direction, shotDistance[shotSize]);
+      snapshot.camera = {
+        position: [position.x, position.y, position.z],
+        target: [...cameraPreset.target],
+        focalLength: cameraPreset.focalLength,
+      };
+    }
+    snapshot.models = snapshot.models.map((model) => model.id === snapshot.selectedModelId
+      ? { ...model, state: cloneModelEditState({ ...model.state, ...getModelEditState(nextEditor) }) }
+      : model);
+    snapshot.capturedAt += 1;
+    return snapshot;
+  };
+
+  const applySceneSnapshot = (snapshotSource: ShotSceneSnapshot, fromPlayback = false) => {
+    const snapshot = cloneShotSceneSnapshot(snapshotSource);
+    applyingShotRef.current = true;
+    const targetIds = new Set(snapshot.models.map((model) => model.id));
+    Object.entries(modelRootsRef.current).forEach(([id, root]) => {
+      if (!targetIds.has(id)) root.visible = false;
+    });
+    snapshot.models.forEach((model) => {
+      let root: THREE.Group | undefined = modelRootsRef.current[model.id];
+      if (!root) {
+        const sequence = Number(model.id.match(/\d+/)?.[0] ?? modelCounterRef.current);
+        const created = createModelInstance(model.state, sequence);
+        root = created?.root;
+      }
+      if (!root) return;
+      const state = cloneModelEditState(model.state);
+      modelStatesRef.current[model.id] = state;
+      root.position.set(...state.position);
+      root.rotation.set(...state.rotation.map(THREE.MathUtils.degToRad) as [number, number, number]);
+      root.scale.setScalar(state.scale / 100);
+      root.visible = state.visible;
+      const rig = modelRigsRef.current[model.id];
+      if (rig) {
+        applyRigPose(rig, state.pose, state.mirrored);
+        applySemanticPoseModifiers(rig, state.semanticModifiers);
+        applyEditorIKTargets(rig, state.ikTargets);
+      }
+    });
+    modelCounterRef.current = Math.max(2, ...snapshot.models.map((model) => Number(model.id.match(/\d+/)?.[0] ?? 0) + 1));
+    setModelList(snapshot.models.map(({ id, name }) => ({ id, name })));
+    const selected = snapshot.models.find((model) => model.id === snapshot.selectedModelId) ?? snapshot.models[0];
+    if (selected) {
+      selectedModelIdRef.current = selected.id;
+      setSelectedModelId(selected.id);
+      modelRootRef.current = modelRootsRef.current[selected.id];
+      deformableMeshesRef.current = modelMeshesRef.current[selected.id] ?? [];
+    }
+    editorLatestRef.current = cloneState(snapshot.editor);
+    setEditor(cloneState(snapshot.editor));
+    setSelectedPoseId(snapshot.selectedPoseId);
+    setCanvasImages(cloneCanvasImageLayers(snapshot.canvasImages));
+    setSelectedCanvasImageId(null);
+    setSourcePosePrompt(snapshot.sourcePrompt);
+    setPromptPlatform(snapshot.promptPlatform);
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (camera && controls) {
+      camera.position.set(...snapshot.camera.position);
+      controls.target.set(...snapshot.camera.target);
+      camera.setFocalLength(snapshot.camera.focalLength);
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+    window.setTimeout(() => { applyingShotRef.current = false; }, 80);
+    if (!fromPlayback) flash(text("Shot scene restored", "已恢复镜头场景"));
+  };
+
+  const applyTimelineShot = (shot: VideoShot<ShotSceneSnapshot>, fromPlayback = false) => {
+    const ratio = editorLatestRef.current.ratio;
+    const snapshot = shot.aspectOverrides[ratio]?.snapshot ?? shot.sceneSnapshot;
+    if (snapshot) applySceneSnapshot(snapshot, fromPlayback);
+    setActiveShotId(shot.id);
+    activeShotIdRef.current = shot.id;
+  };
+
+  const createTimelineFromPrompt = () => {
+    if (!modelInfo.loaded) {
+      flash(text("Wait for the 3D character to finish loading", "请等待 3D 人物加载完成"));
+      return;
+    }
+    const parsed = parseTimelinePrompt(timelinePrompt);
+    if (!parsed.timeline.shots.length) {
+      flash(text("No valid timed shots were found", "没有解析到有效的时间镜头"));
+      return;
+    }
+    const ratio = ratioSize[parsed.timeline.masterAspect as Ratio] ? parsed.timeline.masterAspect as Ratio : editorLatestRef.current.ratio;
+    let inheritedSnapshot = captureSceneSnapshot();
+    const shots = parsed.timeline.shots.map((shot) => {
+      const snapshot = buildSnapshotForShotPrompt(inheritedSnapshot, shot.promptText, ratio);
+      inheritedSnapshot = snapshot;
+      return {
+        ...shot,
+        sceneSnapshot: snapshot,
+        aspectOverrides: {
+          [ratio]: { ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
+        },
+      } satisfies VideoShot<ShotSceneSnapshot>;
+    });
+    const nextTimeline: PoseBoardTimeline = {
+      ...parsed.timeline,
+      masterAspect: ratio,
+      shots,
+    };
+    timelineHistoryRef.current = [];
+    timelineFutureRef.current = [];
+    syncTimelineHistoryAvailability();
+    timelineLatestRef.current = nextTimeline;
+    setTimeline(nextTimeline);
+    setTimelineOpen(true);
+    setTimelinePromptOpen(false);
+    setTimelinePlaying(false);
+    setTimelinePlayhead(0);
+    setActiveShotId(shots[0].id);
+    applySceneSnapshot(shots[0].sceneSnapshot, true);
+    markSaving();
+    flash(parsed.issues.some((issue) => issue.severity === "error")
+      ? text(`Created ${shots.length} valid shots with timing notes`, `已创建 ${shots.length} 个有效镜头，另有时间提示`)
+      : text(`Created ${shots.length} timed shots`, `已创建 ${shots.length} 个时间镜头`));
+  };
+
+  const selectTimelineShot = (shot: VideoShot<ShotSceneSnapshot>) => {
+    setTimelinePlaying(false);
+    setTimelinePlayhead(shot.start);
+    playheadRef.current = shot.start;
+    setTimeline((current) => ({ ...current, playhead: shot.start }));
+    applyTimelineShot(shot);
+  };
+
+  const addBlankTimelineShot = () => {
+    if (!modelInfo.loaded) return;
+    const current = timelineLatestRef.current;
+    const start = current.shots.at(-1)?.end ?? 0;
+    const duration = 3;
+    const end = start + duration;
+    const id = `shot_${current.updatedAt + 1}_${current.shots.length + 1}`;
+    const snapshot = captureSceneSnapshot();
+    const previousColor = current.shots.at(-1)?.color;
+    const color = shotColorForId(id, current.shots.length, previousColor, new Set(current.shots.map((shot) => shot.color)));
+    const nextShot: VideoShot<ShotSceneSnapshot> = {
+      id,
+      index: current.shots.length + 1,
+      start,
+      end,
+      duration,
+      colorToken: `shot-color-${String((current.shots.length % 12) + 1).padStart(2, "0")}`,
+      color,
+      title: text("New shot", "新镜头"),
+      promptText: "",
+      transitionIn: "cut",
+      sceneSnapshot: snapshot,
+      aspectOverrides: {
+        [snapshot.editor.ratio]: { ratio: snapshot.editor.ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
+      },
+      thumbnail: capturePoseThumbnail(rendererRef.current?.domElement),
+      dirty: false,
+    };
+    commitTimeline((timelineValue) => ({
+      ...timelineValue,
+      duration: Math.max(timelineValue.duration, end),
+      shots: [...timelineValue.shots, nextShot],
+    }));
+    setTimelineOpen(true);
+    setActiveShotId(id);
+    setTimelinePlayhead(start);
+    flash(text("New shot captured from the current scene", "已从当前场景新增镜头"));
+  };
+
+  const updateActiveTimelineShot = () => {
+    const id = activeShotIdRef.current;
+    if (!id) return;
+    const snapshot = captureSceneSnapshot(activeTimelineShot?.promptText ?? sourcePosePrompt);
+    const thumbnail = capturePoseThumbnail(rendererRef.current?.domElement);
+    commitTimeline((current) => ({
+      ...current,
+      shots: current.shots.map((shot) => shot.id === id ? {
+        ...shot,
+        sceneSnapshot: snapshot,
+        aspectOverrides: {
+          ...shot.aspectOverrides,
+          [snapshot.editor.ratio]: {
+            ratio: snapshot.editor.ratio,
+            snapshot: cloneShotSceneSnapshot(snapshot),
+            updatedAt: (shot.aspectOverrides[snapshot.editor.ratio]?.updatedAt ?? 0) + 1,
+          },
+        },
+        thumbnail: thumbnail || shot.thumbnail,
+        dirty: false,
+      } : shot),
+    }));
+    flash(text("Current scene saved to this shot", "当前场景已保存到该镜头"));
+  };
+
+  const splitActiveTimelineShot = () => {
+    const current = timelineLatestRef.current;
+    const source = current.shots.find((shot) => shot.id === activeShotIdRef.current)
+      ?? current.shots.find((shot) => timelinePlayhead > shot.start && timelinePlayhead < shot.end);
+    if (!source) return;
+    const frame = 1 / current.fps;
+    const cut = Math.round(timelinePlayhead * current.fps) / current.fps;
+    if (cut <= source.start + frame || cut >= source.end - frame) {
+      flash(text("Move the playhead inside the shot before splitting", "请先把播放头移到镜头内部再切分"));
+      return;
+    }
+    const id = `shot_${current.updatedAt + 1}_${source.index}_b`;
+    const color = shotColorForId(id, source.index, source.color, new Set(current.shots.map((shot) => shot.color)));
+    const second: VideoShot<ShotSceneSnapshot> = {
+      ...source,
+      id,
+      start: cut,
+      duration: source.end - cut,
+      color,
+      colorToken: `shot-color-${String((source.index % 12) + 1).padStart(2, "0")}`,
+      title: `${source.title} B`,
+      sceneSnapshot: source.sceneSnapshot ? cloneShotSceneSnapshot(source.sceneSnapshot) : null,
+      aspectOverrides: Object.fromEntries(Object.entries(source.aspectOverrides).map(([ratio, override]) => [ratio, { ...override, snapshot: cloneShotSceneSnapshot(override.snapshot) }])),
+    };
+    commitTimeline((timelineValue) => {
+      const shots = timelineValue.shots.flatMap((shot) => shot.id === source.id
+        ? [{ ...shot, end: cut, duration: cut - shot.start, title: `${shot.title} A` }, second]
+        : [shot]);
+      shots.forEach((shot, index) => { shot.index = index + 1; });
+      return { ...timelineValue, shots };
+    });
+    setActiveShotId(second.id);
+    flash(text("Shot split at the playhead", "已在播放头位置切分镜头"));
+  };
+
+  const duplicateActiveTimelineShot = () => {
+    const current = timelineLatestRef.current;
+    const sourceIndex = current.shots.findIndex((shot) => shot.id === activeShotIdRef.current);
+    const source = current.shots[sourceIndex];
+    if (!source) return;
+    const id = `shot_${current.updatedAt + 1}_${source.index}_copy`;
+    const duplicated: VideoShot<ShotSceneSnapshot> = {
+      ...source,
+      id,
+      start: source.end,
+      end: source.end + source.duration,
+      title: `${source.title} ${text("Copy", "副本")}`,
+      color: shotColorForId(id, source.index, source.color, new Set(current.shots.map((shot) => shot.color))),
+      sceneSnapshot: source.sceneSnapshot ? cloneShotSceneSnapshot(source.sceneSnapshot) : null,
+      aspectOverrides: Object.fromEntries(Object.entries(source.aspectOverrides).map(([ratio, override]) => [ratio, { ...override, snapshot: cloneShotSceneSnapshot(override.snapshot) }])),
+      dirty: false,
+    };
+    commitTimeline((timelineValue) => {
+      const shots = timelineValue.shots.flatMap((shot, index) => {
+        if (index < sourceIndex) return [shot];
+        if (index === sourceIndex) return [shot, duplicated];
+        return [{ ...shot, start: shot.start + source.duration, end: shot.end + source.duration }];
+      });
+      shots.forEach((shot, index) => { shot.index = index + 1; });
+      return { ...timelineValue, duration: timelineValue.duration + source.duration, shots };
+    });
+    setActiveShotId(id);
+    setTimelinePlayhead(duplicated.start);
+    playheadRef.current = duplicated.start;
+    flash(text("Shot duplicated", "镜头已复制"));
+  };
+
+  const deleteActiveTimelineShot = () => {
+    const id = activeShotIdRef.current;
+    const current = timelineLatestRef.current;
+    const removed = current.shots.find((shot) => shot.id === id);
+    if (!removed) return;
+    if (!window.confirm(text(`Delete Shot ${String(removed.index).padStart(2, "0")}?`, `删除镜头 ${String(removed.index).padStart(2, "0")}？`))) return;
+    const removedIndex = current.shots.findIndex((shot) => shot.id === id);
+    let nextActive: VideoShot<ShotSceneSnapshot> | undefined;
+    commitTimeline((timelineValue) => {
+      const shots = timelineValue.shots
+        .filter((shot) => shot.id !== id)
+        .map((shot) => timelineValue.ripple && shot.start >= removed.end
+          ? { ...shot, start: shot.start - removed.duration, end: shot.end - removed.duration }
+          : shot);
+      shots.forEach((shot, index) => { shot.index = index + 1; });
+      nextActive = shots[Math.min(removedIndex, Math.max(0, shots.length - 1))];
+      return {
+        ...timelineValue,
+        duration: timelineValue.ripple ? Math.max(shots.at(-1)?.end ?? 0.1, timelineValue.duration - removed.duration) : timelineValue.duration,
+        shots,
+      };
+    });
+    if (nextActive) selectTimelineShot(nextActive);
+    else {
+      setActiveShotId(null);
+      setTimelinePlayhead(0);
+    }
+    flash(text("Shot deleted", "镜头已删除"));
+  };
+
+  const scrubTimeline = (time: number) => {
+    setTimelinePlaying(false);
+    const value = clamp(time, 0, timelineLatestRef.current.duration);
+    setTimelinePlayhead(value);
+    playheadRef.current = value;
+    const shot = timelineLatestRef.current.shots.find((item) => value >= item.start && value < item.end)
+      ?? (value === timelineLatestRef.current.duration ? timelineLatestRef.current.shots.at(-1) : undefined);
+    if (shot && shot.id !== activeShotIdRef.current) applyTimelineShot(shot, true);
+  };
+
+  const previousTimelineShot = () => {
+    const shots = timelineLatestRef.current.shots;
+    if (!shots.length) return;
+    const index = Math.max(0, shots.findIndex((shot) => shot.id === activeShotIdRef.current));
+    selectTimelineShot(shots[Math.max(0, index - 1)]);
+  };
+
+  const nextTimelineShot = () => {
+    const shots = timelineLatestRef.current.shots;
+    if (!shots.length) return;
+    const index = Math.max(0, shots.findIndex((shot) => shot.id === activeShotIdRef.current));
+    selectTimelineShot(shots[Math.min(shots.length - 1, index + 1)]);
+  };
+
+  const restartTimeline = () => {
+    const first = timelineLatestRef.current.shots[0];
+    if (first) selectTimelineShot(first);
+  };
+
+  const toggleTimelinePlayback = () => {
+    if (!timelineLatestRef.current.shots.length) return;
+    if (timelinePlaying) {
+      setTimelinePlaying(false);
+      setTimeline((current) => ({ ...current, playhead: playheadRef.current }));
+      return;
+    }
+    const start = playheadRef.current >= timelineLatestRef.current.duration ? 0 : playheadRef.current;
+    if (start !== playheadRef.current) {
+      setTimelinePlayhead(start);
+      playheadRef.current = start;
+    }
+    timelinePlaybackStartRef.current = { clock: readPlaybackClock(), playhead: start, shotId: "" };
+    setTimelinePlaying(true);
+  };
+
+  const toggleTimelineLoop = () => {
+    commitTimeline((current) => !current.loop
+      ? { ...current, loop: true, loopMode: "all" }
+      : current.loopMode === "all" && activeShotIdRef.current
+        ? { ...current, loop: true, loopMode: "shot" }
+        : { ...current, loop: false, loopMode: "all" });
+  };
+
+  const beginTimelineClipDrag = (shotId: string, mode: "move" | "trim-start" | "trim-end", event: React.PointerEvent<HTMLElement>) => {
+    const sourceTimeline = clonePoseBoardTimeline(timelineLatestRef.current);
+    const sourceShot = sourceTimeline.shots.find((shot) => shot.id === shotId);
+    if (!sourceShot) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setTimelinePlaying(false);
+    setActiveShotId(shotId);
+    const startX = event.clientX;
+    timelineContinuousEditRef.current = sourceTimeline;
+    const frame = 1 / sourceTimeline.fps;
+    const snap = (value: number) => Math.round(value * sourceTimeline.fps) / sourceTimeline.fps;
+
+    const move = (pointerEvent: PointerEvent) => {
+      const delta = snap((pointerEvent.clientX - startX) / timelinePixelsPerSecond);
+      const sourceIndex = sourceTimeline.shots.findIndex((shot) => shot.id === shotId);
+      const previous = sourceTimeline.shots[sourceIndex - 1];
+      const next = sourceTimeline.shots[sourceIndex + 1];
+      setTimeline((currentValue) => {
+        const current = clonePoseBoardTimeline(currentValue);
+        const shots = sourceTimeline.shots.map((shot) => ({ ...shot }));
+        const target = shots[sourceIndex];
+        if (mode === "move") {
+          const minStart = previous?.end ?? 0;
+          const maxStart = (next?.start ?? sourceTimeline.duration) - sourceShot.duration;
+          target.start = clamp(snap(sourceShot.start + delta), minStart, Math.max(minStart, maxStart));
+          target.end = target.start + sourceShot.duration;
+        } else if (mode === "trim-start") {
+          target.start = clamp(snap(sourceShot.start + delta), previous?.end ?? 0, sourceShot.end - frame);
+          target.duration = target.end - target.start;
+        } else {
+          const proposedEnd = Math.max(sourceShot.start + frame, snap(sourceShot.end + delta));
+          if (sourceTimeline.ripple) {
+            const endDelta = proposedEnd - sourceShot.end;
+            target.end = proposedEnd;
+            target.duration = target.end - target.start;
+            for (let index = sourceIndex + 1; index < shots.length; index += 1) {
+              shots[index].start = sourceTimeline.shots[index].start + endDelta;
+              shots[index].end = sourceTimeline.shots[index].end + endDelta;
+            }
+            current.duration = Math.max(frame, sourceTimeline.duration + endDelta);
+          } else {
+            target.end = Math.min(proposedEnd, next?.start ?? sourceTimeline.duration);
+            target.duration = target.end - target.start;
+          }
+        }
+        current.shots = shots;
+        current.updatedAt = currentValue.updatedAt;
+        timelineLatestRef.current = current;
+        return current;
+      });
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      const before = timelineContinuousEditRef.current;
+      timelineContinuousEditRef.current = null;
+      if (!before || JSON.stringify(before) === JSON.stringify(timelineLatestRef.current)) return;
+      timelineHistoryRef.current.push(before);
+      timelineFutureRef.current = [];
+      setTimeline((current) => ({ ...current, updatedAt: current.updatedAt + 1 }));
+      syncTimelineHistoryAvailability();
+      markSaving();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  const beginTimelineResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = timelineHeight;
+    const move = (pointerEvent: PointerEvent) => setTimelineHeight(clamp(startHeight - (pointerEvent.clientY - startY), 176, 420));
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      markSaving();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  const fitTimeline = () => {
+    const available = Math.max(420, window.innerWidth - (contextPanelOpen ? 500 : 120));
+    setTimelinePixelsPerSecond(clamp(available / Math.max(timelineLatestRef.current.duration, 1), 24, 160));
+  };
+
+  const exportTimelineJson = () => {
+    const value = { ...timelineLatestRef.current, playhead: playheadRef.current };
+    downloadTextFile(`poseboard-${projectName || "project"}-timeline.json`, JSON.stringify(value, null, 2), "application/json");
+    downloadTextFile(`poseboard-${projectName || "project"}-timed-prompt.txt`, timelinePromptText(value));
+    flash(text("Timeline JSON and timed prompt exported", "时间轴 JSON 与带时间码 Prompt 已导出"));
+  };
+
+  const editTimelineShotText = (shotId: string, promptText: string) => {
+    const value = promptText.trim();
+    if (!value) return;
+    commitTimeline((current) => ({
+      ...current,
+      shots: current.shots.map((shot) => shot.id === shotId ? {
+        ...shot,
+        promptText: value,
+        title: value.replace(/[，,。；;：:]/g, " ").replace(/\s+/g, " ").slice(0, 24),
+        dirty: true,
+      } : shot),
+    }));
+  };
+
+  const changeArtboardRatio = (nextRatio: Ratio) => {
+    const currentRatio = editorLatestRef.current.ratio;
+    if (nextRatio === currentRatio) return;
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
+    if (!shot) {
+      commit((current) => ({ ...current, ratio: nextRatio }));
+      flash(text(`Canvas changed to ${nextRatio}`, `画幅已切换为 ${nextRatio}`));
+      return;
+    }
+    const currentSnapshot = captureSceneSnapshot(shot.promptText);
+    const targetSource = shot.aspectOverrides[nextRatio]?.snapshot ?? shot.sceneSnapshot ?? currentSnapshot;
+    const targetSnapshot = cloneShotSceneSnapshot(targetSource);
+    targetSnapshot.editor.ratio = nextRatio;
+    commitTimeline((current) => ({
+      ...current,
+      shots: current.shots.map((item) => item.id === shot.id ? {
+        ...item,
+        aspectOverrides: {
+          ...item.aspectOverrides,
+          [currentRatio]: {
+            ratio: currentRatio,
+            snapshot: cloneShotSceneSnapshot(currentSnapshot),
+            updatedAt: (item.aspectOverrides[currentRatio]?.updatedAt ?? 0) + 1,
+          },
+        },
+      } : item),
+    }));
+    applySceneSnapshot(targetSnapshot, true);
+    flash(shot.aspectOverrides[nextRatio]
+      ? text(`Restored the ${nextRatio} shot override`, `已恢复该镜头的 ${nextRatio} 画幅版本`)
+      : text(`Created a ${nextRatio} shot view`, `已为该镜头创建 ${nextRatio} 画幅视图`));
+  };
+
+  useEffect(() => {
+    if (!timelinePlaying) return;
+    const tick = (clock: number) => {
+      const current = timelineLatestRef.current;
+      const playback = timelinePlaybackStartRef.current;
+      let nextTime = playback.playhead + (clock - playback.clock) / 1000;
+      const active = current.shots.find((shot) => shot.id === activeShotIdRef.current);
+      if (current.loop && current.loopMode === "shot" && active && nextTime >= active.end) {
+        nextTime = active.start;
+        timelinePlaybackStartRef.current = { clock, playhead: active.start, shotId: "" };
+      } else if (nextTime >= current.duration) {
+        if (current.loop) {
+          nextTime = 0;
+          timelinePlaybackStartRef.current = { clock, playhead: 0, shotId: "" };
+        } else {
+          nextTime = current.duration;
+          playheadRef.current = nextTime;
+          setTimelinePlayhead(nextTime);
+          setTimeline((value) => ({ ...value, playhead: nextTime }));
+          setTimelinePlaying(false);
+          return;
+        }
+      }
+      playheadRef.current = nextTime;
+      setTimelinePlayhead(nextTime);
+      const shot = current.shots.find((item) => nextTime >= item.start && nextTime < item.end)
+        ?? (nextTime === current.duration ? current.shots.at(-1) : undefined);
+      if (shot && playback.shotId !== shot.id) {
+        timelinePlaybackStartRef.current.shotId = shot.id;
+        applyTimelineShot(shot, true);
+      }
+      timelinePlaybackFrameRef.current = window.requestAnimationFrame(tick);
+    };
+    timelinePlaybackFrameRef.current = window.requestAnimationFrame(tick);
+    return () => {
+      if (timelinePlaybackFrameRef.current !== null) window.cancelAnimationFrame(timelinePlaybackFrameRef.current);
+      timelinePlaybackFrameRef.current = null;
+    };
+  // Timeline playback intentionally reads the latest refs so editing the timeline does not restart the high-precision clock.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelinePlaying]);
+
+  useEffect(() => {
+    if (!persistenceReady || timelinePlaying || applyingShotRef.current || !activeShotIdRef.current) return;
+    setTimeline((current) => {
+      const active = current.shots.find((shot) => shot.id === activeShotIdRef.current);
+      if (!active || active.dirty) return current;
+      const next = {
+        ...current,
+        shots: current.shots.map((shot) => shot.id === activeShotIdRef.current ? { ...shot, dirty: true } : shot),
+      };
+      timelineLatestRef.current = next;
+      return next;
+    });
+  }, [cameraRevision, canvasImages, editor, modelList, persistenceReady, selectedPoseId, sourcePosePrompt, timelinePlaying]);
+
+  useEffect(() => {
+    const handleTimelineShortcuts = (event: KeyboardEvent) => {
+      if (!timelineOpen) return;
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.code === "Space") {
+        event.preventDefault();
+        toggleTimelinePlayback();
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const directionValue = event.key === "ArrowLeft" ? -1 : 1;
+        scrubTimeline(playheadRef.current + directionValue * (event.shiftKey ? 1 : 1 / timelineLatestRef.current.fps));
+      } else if (event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        splitActiveTimelineShot();
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        deleteActiveTimelineShot();
+      }
+    };
+    document.addEventListener("keydown", handleTimelineShortcuts);
+    return () => document.removeEventListener("keydown", handleTimelineShortcuts);
+  });
+
   const uploadCanvasImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const availableSlots = Math.max(0, 8 - canvasImages.length);
     const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/")).slice(0, availableSlots);
@@ -3995,10 +4832,10 @@ export default function Home() {
     const handleModelShortcuts = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable)) return;
-      if (promptOpen || promptToPoseOpen || event.repeat) return;
+      if (promptOpen || promptToPoseOpen || timelinePromptOpen || event.repeat) return;
       const copy = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "c";
       const paste = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "v";
-      const remove = !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Delete" || event.key === "Backspace");
+      const remove = !timelineOpen && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Delete" || event.key === "Backspace");
       if (!copy && !paste && !remove) return;
       event.preventDefault();
       if (copy) copySelectedModel();
@@ -4045,6 +4882,7 @@ export default function Home() {
       if (event.key === "Escape") {
         if (exportDialogOpen) setExportDialogOpen(false);
         else if (helpOpen) setHelpOpen(false);
+        else if (timelinePromptOpen) setTimelinePromptOpen(false);
         else if (promptOpen) setPromptOpen(false);
         else if (promptToPoseOpen) setPromptToPoseOpen(false);
         else exitInteractionMode();
@@ -4199,7 +5037,13 @@ export default function Home() {
         perspectiveGrid: { ...value.perspectiveGrid, ...linked, vanishingPoints: linked.vanishingPoints.map((point) => ({ ...point })) },
       }));
     };
-    controls.addEventListener("end", syncLinkedGridToCamera);
+    const handleCameraStart = () => setTimelinePlaying(false);
+    const handleCameraEnd = () => {
+      syncLinkedGridToCamera();
+      setCameraRevision((revision) => revision + 1);
+    };
+    controls.addEventListener("start", handleCameraStart);
+    controls.addEventListener("end", handleCameraEnd);
 
     const loader = new GLTFLoader();
     loader.load(
@@ -4331,7 +5175,8 @@ export default function Home() {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", selectModelFromCanvas);
-      controls.removeEventListener("end", syncLinkedGridToCamera);
+      controls.removeEventListener("start", handleCameraStart);
+      controls.removeEventListener("end", handleCameraEnd);
       transformControls.removeEventListener("mouseDown", handleTransformMouseDown);
       transformControls.removeEventListener("objectChange", handleTransformChange);
       transformControls.removeEventListener("dragging-changed", handleTransformDragging);
@@ -4347,6 +5192,9 @@ export default function Home() {
       fillLightRef.current = null;
       rimLightRef.current = null;
     };
+  // The Three.js scene owns long-lived WebGL resources and is intentionally
+  // created once; live editor state is read through refs inside its callbacks.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -4546,6 +5394,15 @@ export default function Home() {
     setSelectedCanvasImageId(null);
     setSourcePosePrompt("");
     setPromptToPoseResult(null);
+    setTimelinePlaying(false);
+    setTimeline(createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+    setActiveShotId(null);
+    setTimelinePlayhead(0);
+    setTimelineOpen(false);
+    timelineHistoryRef.current = [];
+    timelineFutureRef.current = [];
+    timelineLatestRef.current = createEmptyTimeline<ShotSceneSnapshot>("16:9");
+    playheadRef.current = 0;
     if (cameraRef.current && controlsRef.current) {
       cameraRef.current.position.set(...cameraPresets.commercial.position);
       controlsRef.current.target.set(...cameraPresets.commercial.target);
@@ -4556,7 +5413,7 @@ export default function Home() {
   };
 
   const currentSize = ratioSize[editor.ratio];
-  const zoomWidth = editor.ratio === "9:16" ? zoom * 0.43 : editor.ratio === "2:3" ? zoom * 0.58 : editor.ratio === "3:4" ? zoom * 0.66 : editor.ratio === "1:1" ? zoom * 0.72 : zoom;
+  const zoomWidth = editor.ratio === "9:16" ? zoom * 0.43 : editor.ratio === "2:3" ? zoom * 0.58 : editor.ratio === "3:4" ? zoom * 0.66 : editor.ratio === "4:5" ? zoom * 0.69 : editor.ratio === "1:1" ? zoom * 0.72 : editor.ratio === "21:9" ? zoom * 1.08 : zoom;
   const selectedModel = modelList.find(({ id }) => id === selectedModelId) ?? modelList[0];
   const toolLabels: Record<ActiveTool, string> = {
     pose: text("Pose", "姿势"),
@@ -4578,7 +5435,10 @@ export default function Home() {
   return (
     <SSRProvider>
     <FluentProvider theme={poseBoardTheme} className="fluent-root" applyStylesToPortals={false}>
-    <main className={`editor-app tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${mobilePanel ? "show-context" : ""}`}>
+    <main
+      className={`editor-app tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${timelineOpen ? "timeline-open" : ""} ${mobilePanel ? "show-context" : ""}`}
+      style={{ "--timeline-height": `${timelineHeight}px` } as React.CSSProperties}
+    >
       <header className="topbar">
         <div className="brand-block">
           <span className="brand-mark">P</span>
@@ -4595,9 +5455,10 @@ export default function Home() {
         </div>
 
         <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
-          <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => commit((current) => ({ ...current, ratio: event.target.value as Ratio }))} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "2:3", "3:4", "4:3", "9:16", "16:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
+          <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => changeArtboardRatio(event.target.value as Ratio)} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "4:5", "2:3", "3:4", "4:3", "9:16", "16:9", "21:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
           <ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} title={text("Switch orientation", "切换横竖屏")} />
           <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span className="perspective-grid-label">{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
+          <Button className={`video-timeline-button ${timelineOpen ? "active" : ""}`} appearance="subtle" aria-pressed={timelineOpen} onClick={() => setTimelineOpen((open) => !open)} icon={<FilmStrip size={18} weight={timelineOpen ? "fill" : "regular"} />}><span>{text("Timeline", "时间轴")}</span>{timeline.shots.length > 0 && <small>{timeline.shots.length}</small>}</Button>
           <ToolbarButton className="icon-button mobile-only" appearance="subtle" icon={<SidebarSimple size={19} />} aria-expanded={mobilePanel === "context"} onClick={() => setMobilePanel(mobilePanel === "context" ? null : "context")} aria-label={text("Open tool panel", "打开工具面板")} title={text("Tool panel", "工具面板")} />
         </Toolbar>
 
@@ -4990,6 +5851,41 @@ export default function Home() {
           </div>
         </aside>
 
+        {timelineOpen && <VideoTimelinePanel
+          timeline={timeline}
+          playhead={timelinePlayhead}
+          activeShotId={activeShotId}
+          playing={timelinePlaying}
+          pixelsPerSecond={timelinePixelsPerSecond}
+          height={timelineHeight}
+          isZh={isZh}
+          canUndo={timelineCanUndo}
+          canRedo={timelineCanRedo}
+          onCollapse={() => setTimelineOpen(false)}
+          onOpenPrompt={() => setTimelinePromptOpen(true)}
+          onAddShot={addBlankTimelineShot}
+          onUpdateShot={updateActiveTimelineShot}
+          onSplitShot={splitActiveTimelineShot}
+          onDuplicateShot={duplicateActiveTimelineShot}
+          onDeleteShot={deleteActiveTimelineShot}
+          onTogglePlayback={toggleTimelinePlayback}
+          onPreviousShot={previousTimelineShot}
+          onNextShot={nextTimelineShot}
+          onRestart={restartTimeline}
+          onToggleLoop={toggleTimelineLoop}
+          onToggleRipple={() => commitTimeline((current) => ({ ...current, ripple: !current.ripple }))}
+          onFit={fitTimeline}
+          onZoom={setTimelinePixelsPerSecond}
+          onUndo={undoTimeline}
+          onRedo={redoTimeline}
+          onExport={exportTimelineJson}
+          onSelectShot={selectTimelineShot}
+          onEditShotText={editTimelineShotText}
+          onScrub={scrubTimeline}
+          onClipPointerDown={beginTimelineClipDrag}
+          onResizePointerDown={beginTimelineResize}
+        />}
+
         <ContextActionBar
           label={activeTool === "pose" ? text("Current pose", "当前姿势") : text("Current tool", "当前工具")}
           title={activeTool === "pose" ? poseDisplayName(selectedPose) : toolLabels[activeTool]}
@@ -5006,6 +5902,48 @@ export default function Home() {
         />
       </section>
 
+      {timelinePromptOpen && <div className="prompt-backdrop">
+        <section className="prompt-dialog timeline-prompt-dialog" role="dialog" aria-modal="true" aria-labelledby="timeline-prompt-title">
+          <div className="prompt-heading">
+            <div><span><FilmStrip size={16} weight="fill" /> Shot Timeline</span><h2 id="timeline-prompt-title">{text("Build a timeline from timed shot prompts", "从带时间的分镜提示词创建时间轴")}</h2></div>
+            <button onClick={() => setTimelinePromptOpen(false)} aria-label={text("Close timeline prompt", "关闭时间轴提示词")}><X size={18} /></button>
+          </div>
+          <div className="timeline-prompt-layout">
+            <label className="timeline-prompt-field">
+              <span>{text("Timed shot list", "分镜时间表")}</span>
+              <textarea value={timelinePrompt} onChange={(event) => setTimelinePrompt(event.target.value)} spellCheck={false} />
+              <small>{text("Supports 0-2s, 00:02-00:05, 0到2秒, and duration-only lines. Each line becomes a hard-cut shot.", "支持 0-2s、00:02-00:05、0到2秒和仅时长写法；每行生成一个硬切镜头。")}</small>
+            </label>
+            <aside className="timeline-prompt-preview">
+              <div className="timeline-preview-summary">
+                <span><strong>{timelinePromptPreview.timeline.shots.length}</strong>{text("Shots", "镜头")}</span>
+                <span><strong>{timelinePromptPreview.timeline.duration.toFixed(1)}s</strong>{text("Duration", "总时长")}</span>
+                <span><strong>{timelinePromptPreview.timeline.fps}</strong>FPS</span>
+                <span><strong>{timelinePromptPreview.timeline.masterAspect}</strong>{text("Aspect", "画幅")}</span>
+              </div>
+              <div className="timeline-shot-preview-list">
+                {timelinePromptPreview.timeline.shots.slice(0, 8).map((shot) => <div key={shot.id}>
+                  <i style={{ background: shot.color }} />
+                  <span>SHOT {String(shot.index).padStart(2, "0")}</span>
+                  <time>{formatTimecode(shot.start)} - {formatTimecode(shot.end)}</time>
+                  <p>{shot.promptText}</p>
+                </div>)}
+                {timelinePromptPreview.timeline.shots.length > 8 && <small>+{timelinePromptPreview.timeline.shots.length - 8} {text("more shots", "个镜头")}</small>}
+              </div>
+              {(timelinePromptPreview.issues.length > 0 || timelinePromptPreview.unassigned.length > 0) && <div className="timeline-prompt-notes">
+                {timelinePromptPreview.issues.slice(0, 4).map((issue, index) => <p key={`${issue.code}-${index}`} className={issue.severity}>{issue.message}</p>)}
+                {timelinePromptPreview.unassigned.slice(0, 2).map((line, index) => <p key={`unassigned-${index}`}>{text("Unassigned", "待分配")}：{line}</p>)}
+              </div>}
+            </aside>
+          </div>
+          <div className="prompt-footer">
+            <button onClick={() => setTimelinePrompt(timelinePromptExample)}>{text("Load example", "载入示例")}</button>
+            <button onClick={() => setTimelinePromptOpen(false)}>{text("Cancel", "取消")}</button>
+            <button className="primary" onClick={createTimelineFromPrompt} disabled={!timelinePromptPreview.timeline.shots.length || !modelInfo.loaded}><FilmStrip size={16} weight="fill" />{text("Create timeline", "创建时间轴")}</button>
+          </div>
+        </section>
+      </div>}
+
       {exportDialogOpen && <div className="prompt-backdrop">
         <section className="prompt-dialog export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
           <div className="prompt-heading"><div><span><DownloadSimple size={16} weight="fill" /> PoseBoard Export</span><h2 id="export-title">{text("Export reference", "导出参考图")}</h2></div><button onClick={() => setExportDialogOpen(false)} aria-label={text("Close export", "关闭导出")}><X size={18} /></button></div>
@@ -5015,7 +5953,7 @@ export default function Home() {
             <button onClick={() => { setExportDialogOpen(false); void exportPng("transparent"); }}><span><ImageSquare size={21} /></span><strong>{text("Transparent background", "透明背景图")}</strong><small>{text("PNG with an alpha channel.", "导出带 Alpha 通道的 PNG。")}</small></button>
           </div>
           <div className="export-details"><span>{projectName || text("Untitled Project", "未命名项目")}</span><span>{currentSize[0]} × {currentSize[1]}</span><span>PNG</span></div>
-          <div className="prompt-footer"><button onClick={() => { setExportDialogOpen(false); void exportPng("overlay"); }}>{text("Grid Overlay", "透明网格")}</button><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button></div>
+          <div className="prompt-footer"><button onClick={() => { setExportDialogOpen(false); void exportPng("overlay"); }}>{text("Grid Overlay", "透明网格")}</button><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button><button onClick={exportTimelineJson} disabled={!timeline.shots.length}>{text("Timeline JSON", "时间轴 JSON")}</button></div>
         </section>
       </div>}
 
@@ -5023,7 +5961,7 @@ export default function Home() {
         <section className="prompt-dialog shortcut-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
           <div className="prompt-heading"><div><span><Info size={16} /> PoseBoard Help</span><h2 id="shortcut-title">{text("Shortcuts", "快捷键")}</h2></div><button onClick={() => setHelpOpen(false)} aria-label={text("Close shortcuts", "关闭快捷键")}><X size={18} /></button></div>
           <div className="shortcut-grid">
-            {[["Esc", text("Return to camera browsing", "返回浏览镜头")], ["⌘/Ctrl Z", text("Undo", "撤销")], ["⌘/Ctrl ⇧ Z", text("Redo", "重做")], ["G", text("Toggle perspective grid", "显示或隐藏透视网格")], ["F", text("Fit person", "适配人物")], ["⇧ F", text("Fit artboard", "适配画板")], ["M", text("Mirror current pose", "镜像当前姿势")], ["⌘/Ctrl C", text("Copy character", "复制人物")], ["⌘/Ctrl V", text("Paste character", "粘贴人物")], ["?", text("Open this help", "打开快捷键帮助")]].map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
+            {[["Esc", text("Return to camera browsing", "返回浏览镜头")], ["⌘/Ctrl Z", text("Undo", "撤销")], ["⌘/Ctrl ⇧ Z", text("Redo", "重做")], ["G", text("Toggle perspective grid", "显示或隐藏透视网格")], ["F", text("Fit person", "适配人物")], ["⇧ F", text("Fit artboard", "适配画板")], ["M", text("Mirror current pose", "镜像当前姿势")], ["⌘/Ctrl C", text("Copy character", "复制人物")], ["⌘/Ctrl V", text("Paste character", "粘贴人物")], ["Space", text("Play or pause timeline", "播放或暂停时间轴")], ["← / →", text("Move timeline playhead", "移动时间轴播放头")], ["S", text("Split active shot", "切分当前镜头")], ["Delete", text("Delete active shot", "删除当前镜头")], ["?", text("Open this help", "打开快捷键帮助")]].map(([key, label]) => <div key={key}><kbd>{key}</kbd><span>{label}</span></div>)}
           </div>
           <div className="prompt-footer"><button onClick={() => { resetAll(); setHelpOpen(false); }}><ArrowCounterClockwise size={15} />{text("Reset scene", "重置场景")}</button></div>
         </section>
