@@ -1044,7 +1044,7 @@ button:disabled { cursor: not-allowed; }
 .tool-rail .fui-Button > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 10px; line-height: 1.15; white-space: nowrap; }
 .tool-rail .fui-Button:hover { border-color: var(--border-muted); background: #fff; color: var(--text-primary); }
 .tool-rail .fui-Button.active { border-color: #bed9f8; background: var(--primary-soft); color: var(--primary); }
-.tool-rail .fui-Button.active::before { content: ""; position: absolute; left: -7px; width: 3px; height: 24px; border-radius: 0 3px 3px 0; background: var(--primary); }
+.tool-rail .fui-Button.active::before { display: none; }
 .tool-rail .tool-rail-collapse { min-height: 42px; display: flex; }
 
 .context-panel { grid-area: panel; width: auto; min-width: 0; position: relative; inset: auto; transform: none; border: 0; border-left: 1px solid var(--border-muted); border-radius: 0; background: var(--surface-primary); box-shadow: none; animation: none !important; }
@@ -1311,7 +1311,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .tool-rail button:hover { border: 0; background: var(--surface-secondary); }
 .tool-rail button:focus:not(:focus-visible) { outline: 0; box-shadow: none; }
 .tool-rail button.active { border: 0; background: var(--primary-soft); color: var(--primary); }
-.tool-rail button.active::before { content: ""; position: absolute; left: -4px; width: 3px; height: 32px; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; background: var(--primary); }
+.tool-rail button.active::before { display: none; }
 .tool-rail .tool-rail-collapse { min-height: var(--control-lg); }
 
 .context-panel { grid-area: panel; min-width: 0; border: 0; border-right: 1px solid var(--border-default); border-left: 0; background: var(--surface-primary); overflow: hidden; }
