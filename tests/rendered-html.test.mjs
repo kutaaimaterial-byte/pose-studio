@@ -41,7 +41,7 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /aria-label="Workspace tools"/);
   assert.match(html, /class="tool-rail"/);
   assert.match(html, /class="context-action-bar"/);
-  assert.match(html, /aria-label="项目名称"/);
+  assert.doesNotMatch(html, /aria-label="项目名称"/);
   assert.match(html, /class="export-button-label">导出<\/span>/);
   assert.match(html, /class="language-switch" role="group" aria-label="语言"/);
   assert.match(html, /video-timeline-button/);
