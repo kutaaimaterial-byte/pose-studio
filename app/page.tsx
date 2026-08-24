@@ -432,6 +432,13 @@ const lightingPresets: Record<Exclude<LightingPresetId, "custom">, {
   soft: { label: "柔光人像", labelEn: "Soft Portrait", key: 3.1, fill: 2.2, rim: 1.1, exposure: 1.08, background: "#f1f2f4", keyColor: 0xfff5e9, fillColor: 0xf0f5ff, rimColor: 0xe3e7ff },
 };
 
+const lightingPresetDescriptions: Record<Exclude<LightingPresetId, "custom">, { label: string; labelEn: string }> = {
+  studio: { label: "均匀明亮 · 清晰轮廓", labelEn: "Clean · balanced" },
+  cinematic: { label: "暖主光 · 冷轮廓", labelEn: "Warm key · cool rim" },
+  night: { label: "蓝橙对比 · 夜景氛围", labelEn: "Blue-orange · night" },
+  soft: { label: "大面积柔光 · 低反差", labelEn: "Soft source · low contrast" },
+};
+
 type JointPose = {
   hips: [number, number, number];
   torso: [number, number, number];
@@ -6114,12 +6121,38 @@ export default function Home() {
               </InspectorSection>}
 
             {activeTool === "lighting" && <>
-              <InspectorSection title={text("Lighting Presets", "灯光预设")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
+              <InspectorSection className="lighting-section" title={text("Lighting Presets", "灯光预设")} resetLabel={text("Reset", "重置")} onReset={() => applyLightingPreset("studio")}>
                 <div className="preset-grid lighting-presets">
                   {(Object.entries(lightingPresets) as Array<[Exclude<LightingPresetId, "custom">, (typeof lightingPresets)[Exclude<LightingPresetId, "custom">]]>).map(([id, preset]) => (
-                    <button key={id} className={editor.lightingPreset === id ? "active" : ""} onClick={() => applyLightingPreset(id)}>
-                      <span className="lighting-preset-icon"><Lightbulb size={16} /></span>
-                      <span className="lighting-preset-label">{isZh ? preset.label : preset.labelEn}</span>
+                    <button
+                      key={id}
+                      data-preset={id}
+                      className={editor.lightingPreset === id ? "active" : ""}
+                      aria-pressed={editor.lightingPreset === id}
+                      onClick={() => applyLightingPreset(id)}
+                      style={{
+                        "--lighting-background": preset.background,
+                        "--lighting-key": `#${preset.keyColor.toString(16).padStart(6, "0")}`,
+                        "--lighting-fill": `#${preset.fillColor.toString(16).padStart(6, "0")}`,
+                        "--lighting-rim": `#${preset.rimColor.toString(16).padStart(6, "0")}`,
+                        "--lighting-key-strength": Math.max(.34, preset.key / 6),
+                        "--lighting-fill-strength": Math.max(.22, preset.fill / 6),
+                        "--lighting-rim-strength": Math.max(.28, preset.rim / 6),
+                      } as React.CSSProperties}
+                    >
+                      <span className="lighting-preset-scene" aria-hidden="true">
+                        <i className="lighting-beam lighting-beam-key" />
+                        <i className="lighting-beam lighting-beam-fill" />
+                        <i className="lighting-beam lighting-beam-rim" />
+                        <i className="lighting-source lighting-source-key" />
+                        <i className="lighting-source lighting-source-fill" />
+                        <i className="lighting-source lighting-source-rim" />
+                        <i className="lighting-subject" />
+                      </span>
+                      <span className="lighting-preset-copy">
+                        <strong>{isZh ? preset.label : preset.labelEn}</strong>
+                        <small>{isZh ? lightingPresetDescriptions[id].label : lightingPresetDescriptions[id].labelEn}</small>
+                      </span>
                     </button>
                   ))}
                 </div>
