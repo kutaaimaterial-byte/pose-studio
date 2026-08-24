@@ -5666,7 +5666,7 @@ export default function Home() {
     perspective: text("Perspective", "透视"),
     lighting: text("Lighting", "灯光"),
     prompt: text("Prompt", "提示词"),
-    convert: text("2D to 3D", "2转3"),
+    convert: text("2D to 3D", "平面转三维"),
   };
   const interactionModeLabel: Record<InteractionMode, string> = {
     "camera-browse": text("Browse Camera", "浏览镜头"),
@@ -6187,7 +6187,7 @@ export default function Home() {
 
             {activeTool === "convert" && <div className="convert-context-content">
               <div className="convert-flow" aria-hidden="true"><span>2D</span><ImageSquare size={26} weight="duotone" /><i>→</i><CubeFocus size={28} weight="duotone" /><span>3D</span></div>
-              <div className="convert-intro"><strong>{text("2D character to 3D", "2D 人物转 3D")}</strong><p>{text("Import a clear front or full-body image as the modeling and pose reference for an editable 3D character.", "导入清晰的正面或全身人物图，作为可编辑 3D 角色的建模与姿态参考。")}</p></div>
+              <div className="convert-intro"><strong>{text("2D character to 3D", "平面转三维")}</strong><p>{text("Import a clear front or full-body image as the modeling and pose reference for an editable 3D character.", "导入清晰的正面或全身人物图，作为可编辑 3D 角色的建模与姿态参考。")}</p></div>
               <button className="convert-upload" onClick={() => imageInputRef.current?.click()} disabled={canvasImages.length >= 8}><UploadSimple size={17} weight="bold" /><span>{text("Choose character image", "选择人物图片")}</span></button>
               <small>{text("PNG, JPG or WebP · up to 12 MB", "支持 PNG、JPG、WebP · 最大 12 MB")}</small>
               <div className={`convert-source-status ${canvasImages.length ? "ready" : ""}`}><ImageSquare size={17} /><span>{canvasImages.length ? text(`${canvasImages.length} source image${canvasImages.length > 1 ? "s" : ""} ready`, `已准备 ${canvasImages.length} 张源图片`) : text("No source image yet", "尚未添加源图片")}</span></div>

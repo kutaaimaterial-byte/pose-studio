@@ -152,7 +152,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /useState<Language>\("zh"\)/);
   assert.match(page, /parseTimelinePrompt\(timelinePrompt\)/);
   assert.match(page, /<VideoTimelinePanel/);
-  assert.match(page, /convert: text\("2D to 3D", "2转3"\)/);
+  assert.match(page, /convert: text\("2D to 3D", "平面转三维"\)/);
   assert.match(page, /activeTool === "convert" && <div className="convert-context-content">/);
   assert.doesNotMatch(page, /className="active-tool-card"/);
   assert.doesNotMatch(css, /\.active-tool-card/);
