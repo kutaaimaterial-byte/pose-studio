@@ -36,6 +36,7 @@ export type VideoShot<TSnapshot = unknown> = {
   aspectOverrides: Record<string, TimelineAspectOverride<TSnapshot>>;
   thumbnail: string;
   snapshotLocked: boolean;
+  snapshotVersion: number;
   dirty: boolean;
 };
 
@@ -282,6 +283,7 @@ export function parseTimelinePrompt(prompt: string): TimelineParseResult {
       aspectOverrides: {},
       thumbnail: "",
       snapshotLocked: false,
+      snapshotVersion: 0,
       dirty: false,
     });
     previousEnd = end;
@@ -348,6 +350,7 @@ function validShot<TSnapshot>(value: unknown, index: number, fps: number): Video
     aspectOverrides: raw.aspectOverrides && typeof raw.aspectOverrides === "object" ? raw.aspectOverrides : {},
     thumbnail: typeof raw.thumbnail === "string" ? raw.thumbnail : "",
     snapshotLocked: Boolean(raw.snapshotLocked),
+    snapshotVersion: Number.isFinite(Number(raw.snapshotVersion)) ? Math.max(0, Number(raw.snapshotVersion)) : 0,
     dirty: Boolean(raw.dirty),
   };
 }

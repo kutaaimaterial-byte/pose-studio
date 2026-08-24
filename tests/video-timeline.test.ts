@@ -59,13 +59,16 @@ test("timecode, Chinese ranges, gaps, and overlaps are deterministic", () => {
 test("normalization preserves colors, snapshots, and aspect overrides", () => {
   const parsed = parseTimelinePrompt(samplePrompt).timeline;
   assert.equal(parsed.shots[0].snapshotLocked, false);
+  assert.equal(parsed.shots[0].snapshotVersion, 0);
   parsed.shots[0].sceneSnapshot = { pose: "standing" };
   parsed.shots[0].snapshotLocked = true;
+  parsed.shots[0].snapshotVersion = 2;
   parsed.shots[0].aspectOverrides["9:16"] = { ratio: "9:16", snapshot: { camera: "close" }, updatedAt: 3 };
   const restored = normalizeVideoTimeline<typeof parsed.shots[0]["sceneSnapshot"]>(JSON.parse(JSON.stringify(parsed)));
   assert.equal(restored.shots[0].color, parsed.shots[0].color);
   assert.deepEqual(restored.shots[0].sceneSnapshot, { pose: "standing" });
   assert.equal(restored.shots[0].snapshotLocked, true);
+  assert.equal(restored.shots[0].snapshotVersion, 2);
   assert.deepEqual(restored.shots[0].aspectOverrides["9:16"].snapshot, { camera: "close" });
 });
 

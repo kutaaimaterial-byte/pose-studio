@@ -3099,16 +3099,7 @@ export default function Home() {
       if (typeof workspacePreferences?.contextPanelOpen === "boolean") setContextPanelOpen(workspacePreferences.contextPanelOpen);
       if (typeof workspacePreferences?.cameraLocked === "boolean") setCameraLocked(workspacePreferences.cameraLocked);
       if (savedProject?.videoTimeline) {
-        const normalizedTimeline = normalizeVideoTimeline<ShotSceneSnapshot>(savedProject.videoTimeline, savedProject.editor?.ratio ?? "16:9");
-        // Existing generated timelines already contain a materialized snapshot
-        // per shot. Lock each one during migration so later shot edits cannot
-        // cause another clip to be regenerated from shared working state.
-        const restoredTimeline: PoseBoardTimeline = {
-          ...normalizedTimeline,
-          shots: normalizedTimeline.shots.map((shot) => shot.sceneSnapshot
-            ? { ...shot, snapshotLocked: true }
-            : shot),
-        };
+        const restoredTimeline = normalizeVideoTimeline<ShotSceneSnapshot>(savedProject.videoTimeline, savedProject.editor?.ratio ?? "16:9");
         setTimeline(restoredTimeline);
         timelineLatestRef.current = restoredTimeline;
         const restoredShotId = restoredTimeline.shots.some((shot) => shot.id === savedProject.activeShotId)
@@ -4189,6 +4180,7 @@ export default function Home() {
         // A captured scene is authoritative. Do not regenerate it from the
         // original prompt when the user returns to this shot.
         snapshotLocked: true,
+        snapshotVersion: 2,
         dirty: false,
       } : shot),
     };
@@ -4368,8 +4360,44 @@ export default function Home() {
 
   useEffect(() => {
     if (!modelInfo.loaded || !persistenceReady || restoredTimelineShotRef.current) return;
-    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current)
-      ?? timelineLatestRef.current.shots[0];
+    const currentTimeline = timelineLatestRef.current;
+    let restoredTimeline = currentTimeline;
+    if (currentTimeline.shots.some((shot) => shot.snapshotVersion < 2)) {
+      const baseSnapshot = captureSceneSnapshot();
+      const ratio = ratioSize[currentTimeline.masterAspect as Ratio]
+        ? currentTimeline.masterAspect as Ratio
+        : editorLatestRef.current.ratio;
+      restoredTimeline = {
+        ...currentTimeline,
+        updatedAt: currentTimeline.updatedAt + 1,
+        shots: currentTimeline.shots.map((shot) => {
+          if (shot.snapshotVersion >= 2) return shot;
+          const snapshot = shot.promptText.trim()
+            ? buildSnapshotForShotPrompt(baseSnapshot, shot.promptText, ratio)
+            : shot.sceneSnapshot ?? cloneShotSceneSnapshot(baseSnapshot);
+          return {
+            ...shot,
+            sceneSnapshot: snapshot,
+            aspectOverrides: {
+              ...shot.aspectOverrides,
+              [ratio]: {
+                ratio,
+                snapshot: cloneShotSceneSnapshot(snapshot),
+                updatedAt: (shot.aspectOverrides[ratio]?.updatedAt ?? 0) + 1,
+              },
+            },
+            snapshotLocked: true,
+            snapshotVersion: 2,
+            dirty: false,
+          };
+        }),
+      };
+      timelineLatestRef.current = restoredTimeline;
+      setTimeline(restoredTimeline);
+      markSaving();
+    }
+    const shot = restoredTimeline.shots.find((item) => item.id === activeShotIdRef.current)
+      ?? restoredTimeline.shots[0];
     if (!shot) return;
     restoredTimelineShotRef.current = shot.id;
     applyTimelineShot(shot, true);
@@ -4400,6 +4428,7 @@ export default function Home() {
           [ratio]: { ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
         },
         snapshotLocked: true,
+        snapshotVersion: 2,
       } satisfies VideoShot<ShotSceneSnapshot>;
     });
     const nextTimeline: PoseBoardTimeline = {
@@ -4463,6 +4492,7 @@ export default function Home() {
       },
       thumbnail: capturePoseThumbnail(rendererRef.current?.domElement),
       snapshotLocked: true,
+      snapshotVersion: 2,
       dirty: false,
     };
     commitTimeline((timelineValue) => ({
@@ -4738,15 +4768,33 @@ export default function Home() {
   const editTimelineShotText = (shotId: string, promptText: string) => {
     const value = promptText.trim();
     if (!value) return;
+    const current = timelineLatestRef.current;
+    const shot = current.shots.find((item) => item.id === shotId);
+    if (!shot) return;
+    const ratio = ratioSize[current.masterAspect as Ratio] ? current.masterAspect as Ratio : editorLatestRef.current.ratio;
+    const baseSnapshot = shot.sceneSnapshot ?? captureSceneSnapshot(value);
+    const snapshot = buildSnapshotForShotPrompt(baseSnapshot, value, ratio);
     commitTimeline((current) => ({
       ...current,
       shots: current.shots.map((shot) => shot.id === shotId ? {
         ...shot,
         promptText: value,
         title: value.replace(/[，,。；;：:]/g, " ").replace(/\s+/g, " ").slice(0, 24),
-        dirty: true,
+        sceneSnapshot: snapshot,
+        aspectOverrides: {
+          ...shot.aspectOverrides,
+          [ratio]: {
+            ratio,
+            snapshot: cloneShotSceneSnapshot(snapshot),
+            updatedAt: (shot.aspectOverrides[ratio]?.updatedAt ?? 0) + 1,
+          },
+        },
+        snapshotLocked: true,
+        snapshotVersion: 2,
+        dirty: false,
       } : shot),
     }));
+    if (activeShotIdRef.current === shotId) applySceneSnapshot(snapshot, true);
   };
 
   const changeArtboardRatio = (nextRatio: Ratio) => {
@@ -4767,6 +4815,7 @@ export default function Home() {
       shots: current.shots.map((item) => item.id === shot.id ? {
         ...item,
         snapshotLocked: true,
+        snapshotVersion: 2,
         aspectOverrides: {
           ...item.aspectOverrides,
           [currentRatio]: {

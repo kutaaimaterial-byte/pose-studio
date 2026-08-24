@@ -156,7 +156,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /const baseSnapshot = captureSceneSnapshot\(\);[\s\S]*buildSnapshotForShotPrompt\(baseSnapshot, shot\.promptText, ratio\)/s);
   assert.doesNotMatch(page, /inheritedSnapshot/);
   assert.match(page, /buildSnapshotForShotPrompt\(baseSnapshot, shot\.promptText, ratio\);[\s\S]*snapshotLocked: true,/s);
-  assert.match(page, /shots: normalizedTimeline\.shots\.map\(\(shot\) => shot\.sceneSnapshot\s*\? \{ \.\.\.shot, snapshotLocked: true \}/s);
+  assert.match(page, /currentTimeline\.shots\.some\(\(shot\) => shot\.snapshotVersion < 2\)/);
+  assert.match(page, /buildSnapshotForShotPrompt\(baseSnapshot, shot\.promptText, ratio\)/);
+  assert.match(page, /snapshotLocked: true,\s*snapshotVersion: 2,\s*dirty: false/s);
+  assert.match(page, /const snapshot = buildSnapshotForShotPrompt\(baseSnapshot, value, ratio\);[\s\S]*if \(activeShotIdRef\.current === shotId\) applySceneSnapshot\(snapshot, true\);/s);
   assert.match(page, /const toggleTimelinePlayback = \(\) =>/);
   assert.match(page, /videoTimeline: \{ \.\.\.timelineLatestRef\.current/);
   assert.match(timelinePanel, /ArrowsLeftRight size=\{18\}/);
