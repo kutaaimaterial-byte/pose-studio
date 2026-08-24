@@ -99,6 +99,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
   assert.doesNotMatch(page, /className="brand-edition"/);
+  assert.doesNotMatch(page, /className="canvas-meta"/);
   assert.match(page, /<SSRProvider>/);
   assert.match(page, /<FluentProvider[^>]*applyStylesToPortals=\{false\}/);
   assert.doesNotMatch(page, /<Tooltip/);

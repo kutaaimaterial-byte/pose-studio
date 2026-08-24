@@ -5856,11 +5856,7 @@ export default function Home() {
         </aside>
 
         <section className="canvas-area">
-          <div className="canvas-header">
-            <div className="canvas-meta"><span className={`status-dot ${modelInfo.loaded ? "ready" : ""}`} /><span>{text("Current mode", "当前模式")}：{interactionModeLabel[interactionMode]}</span>{cameraLocked && <em><Lock size={12} weight="fill" /> {text("Camera locked", "镜头已锁定")}</em>}</div>
-          </div>
-
-            <div className="canvas-stage">
+          <div className="canvas-stage">
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
               <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>
                 <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
