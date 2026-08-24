@@ -3099,7 +3099,16 @@ export default function Home() {
       if (typeof workspacePreferences?.contextPanelOpen === "boolean") setContextPanelOpen(workspacePreferences.contextPanelOpen);
       if (typeof workspacePreferences?.cameraLocked === "boolean") setCameraLocked(workspacePreferences.cameraLocked);
       if (savedProject?.videoTimeline) {
-        const restoredTimeline = normalizeVideoTimeline<ShotSceneSnapshot>(savedProject.videoTimeline, savedProject.editor?.ratio ?? "16:9");
+        const normalizedTimeline = normalizeVideoTimeline<ShotSceneSnapshot>(savedProject.videoTimeline, savedProject.editor?.ratio ?? "16:9");
+        // Existing generated timelines already contain a materialized snapshot
+        // per shot. Lock each one during migration so later shot edits cannot
+        // cause another clip to be regenerated from shared working state.
+        const restoredTimeline: PoseBoardTimeline = {
+          ...normalizedTimeline,
+          shots: normalizedTimeline.shots.map((shot) => shot.sceneSnapshot
+            ? { ...shot, snapshotLocked: true }
+            : shot),
+        };
         setTimeline(restoredTimeline);
         timelineLatestRef.current = restoredTimeline;
         const restoredShotId = restoredTimeline.shots.some((shot) => shot.id === savedProject.activeShotId)
@@ -4153,18 +4162,19 @@ export default function Home() {
     };
   };
 
-  const persistActiveTimelineShotScene = (includeThumbnail = false) => {
-    const id = activeShotIdRef.current;
-    if (!id || !modelInfo.loaded || applyingShotRef.current) return false;
+  const persistTimelineShotScene = (shotId: string, includeThumbnail = false) => {
+    // A scene capture is only valid for the shot that is still active. This
+    // prevents a delayed autosave from writing one shot's pose into another.
+    if (!shotId || activeShotIdRef.current !== shotId || !modelInfo.loaded || applyingShotRef.current) return false;
     const current = timelineLatestRef.current;
-    const active = current.shots.find((shot) => shot.id === id);
+    const active = current.shots.find((shot) => shot.id === shotId);
     if (!active) return false;
     const snapshot = captureSceneSnapshot(active.promptText || sourcePosePrompt);
     const thumbnail = includeThumbnail ? capturePoseThumbnail(rendererRef.current?.domElement) : "";
     const next: PoseBoardTimeline = {
       ...current,
       updatedAt: current.updatedAt + 1,
-      shots: current.shots.map((shot) => shot.id === id ? {
+      shots: current.shots.map((shot) => shot.id === shotId ? {
         ...shot,
         sceneSnapshot: snapshot,
         aspectOverrides: {
@@ -4186,6 +4196,11 @@ export default function Home() {
     setTimeline(next);
     markSaving();
     return true;
+  };
+
+  const persistActiveTimelineShotScene = (includeThumbnail = false) => {
+    const activeShotId = activeShotIdRef.current;
+    return activeShotId ? persistTimelineShotScene(activeShotId, includeThumbnail) : false;
   };
 
   const buildSnapshotForShotPrompt = (baseSnapshot: ShotSceneSnapshot, promptText: string, ratio: Ratio) => {
@@ -4373,16 +4388,18 @@ export default function Home() {
       return;
     }
     const ratio = ratioSize[parsed.timeline.masterAspect as Ratio] ? parsed.timeline.masterAspect as Ratio : editorLatestRef.current.ratio;
-    let inheritedSnapshot = captureSceneSnapshot();
+    // Every shot starts from the same neutral scene snapshot. Actions must be
+    // isolated per clip instead of inheriting edits from the previous clip.
+    const baseSnapshot = captureSceneSnapshot();
     const shots = parsed.timeline.shots.map((shot) => {
-      const snapshot = buildSnapshotForShotPrompt(inheritedSnapshot, shot.promptText, ratio);
-      inheritedSnapshot = snapshot;
+      const snapshot = buildSnapshotForShotPrompt(baseSnapshot, shot.promptText, ratio);
       return {
         ...shot,
         sceneSnapshot: snapshot,
         aspectOverrides: {
           [ratio]: { ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
         },
+        snapshotLocked: true,
       } satisfies VideoShot<ShotSceneSnapshot>;
     });
     const nextTimeline: PoseBoardTimeline = {
@@ -4410,8 +4427,9 @@ export default function Home() {
     setTimelinePlaying(false);
     setTimelinePlayhead(shot.start);
     playheadRef.current = shot.start;
-    const isCurrentShot = activeShotIdRef.current === shot.id;
-    persistActiveTimelineShotScene();
+    const outgoingShotId = activeShotIdRef.current;
+    const isCurrentShot = outgoingShotId === shot.id;
+    if (outgoingShotId) persistTimelineShotScene(outgoingShotId);
     setTimeline((current) => ({ ...current, playhead: shot.start }));
     if (isCurrentShot) return;
     const target = timelineLatestRef.current.shots.find((item) => item.id === shot.id) ?? shot;
@@ -4819,7 +4837,8 @@ export default function Home() {
       timelineLatestRef.current = next;
       return next;
     });
-    const saveTimer = window.setTimeout(() => persistActiveTimelineShotScene(), 180);
+    const scheduledShotId = activeShotIdRef.current;
+    const saveTimer = window.setTimeout(() => persistTimelineShotScene(scheduledShotId), 180);
     return () => window.clearTimeout(saveTimer);
   // Scene edits are debounced into the active shot; keeping the capture helper
   // outside dependencies avoids restarting this effect for unrelated renders.
