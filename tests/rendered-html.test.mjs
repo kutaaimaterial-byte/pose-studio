@@ -165,6 +165,14 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /interactionMode === "ik-edit" && poseControlsVisible && modelInfo\.hasSkeleton && editor\.visible/);
   assert.match(css, /\.selection-header\.without-visibility\s*\{[^}]*grid-template-columns:/s);
   assert.doesNotMatch(page, /aria-label=\{editor\.visible \? text\("Hide model"/);
+  assert.match(css, /--motion-fast:\s*160ms/);
+  assert.match(css, /@media \(hover: hover\)/);
+  assert.match(css, /button:not\(:disabled\), \[role="button"\]:not\(\[aria-disabled="true"\]\)/);
+  assert.match(css, /\.pose-card:focus-within \.pose-card-actions button/);
+  assert.match(css, /@keyframes dialog-enter-refined/);
+  assert.match(css, /@keyframes popover-enter/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?--motion-instant:\s*1ms/s);
+  assert.doesNotMatch(css, /transition:\s*all/);
   assert.match(page, /const applySceneSnapshot = \(snapshotSource: ShotSceneSnapshot/);
   assert.match(page, /function keepModelInCameraFrame\(\s*root: THREE\.Group/s);
   assert.match(page, /const frameFill: Record<ShotSize, number> = \{ close: 2\.35, medium: 1\.35, full: 0\.86, long: 0\.46 \}/);
