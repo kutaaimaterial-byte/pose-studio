@@ -1493,6 +1493,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .artboard-label { min-height: var(--control-xs); height: var(--control-xs); display: inline-flex; align-items: center; gap: 6px; top: -36px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: rgba(255, 255, 255, .92); color: var(--text-secondary); font-size: var(--font-meta); font-weight: 500; }
 .zoom-control { right: var(--space-4); bottom: var(--space-4); height: var(--control-lg); padding: var(--space-1); gap: 2px; border-radius: var(--radius-lg); box-shadow: 0 4px 12px rgba(16, 24, 40, .08); }
 .zoom-control button { min-width: var(--control-sm); height: var(--control-sm); border-radius: var(--radius-md); }
+.zoom-control .zoom-value {
+  width: 56px;
+  min-width: 56px;
+  padding-inline: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .control-point { width: 20px; height: 20px; }
 .control-point::before { width: 32px; height: 32px; }
 
