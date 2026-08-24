@@ -64,7 +64,6 @@ export type TimelineParseResult = {
 
 const DEFAULT_DURATION = 15;
 const DEFAULT_FPS = 24;
-const MAX_DURATION = 600;
 const MAX_SHOTS = 100;
 const EPSILON = 0.0001;
 
@@ -142,7 +141,7 @@ function metadataFromPrompt(prompt: string) {
   };
 }
 
-const explicitRangePattern = /^(?:镜头\s*\d+\s*[:：、.\-—]\s*)?(?:第\s*)?(\d+(?::\d{1,2}(?:\.\d+)?)?(?:\.\d+)?)\s*(?:秒)?\s*(?:-|–|—|~|～|至|到)\s*(\d+(?::\d{1,2}(?:\.\d+)?)?(?:\.\d+)?)\s*(?:秒|s|seconds?)?\s*[:：\-—]?\s*(.+)$/i;
+const explicitRangePattern = /^(?:镜头\s*\d+\s*[:：、.\-—]\s*)?(?:第\s*)?(\d+(?::\d{1,2}){0,2}(?:\.\d+)?)\s*(?:秒)?\s*(?:-|–|—|~|～|至|到)\s*(\d+(?::\d{1,2}){0,2}(?:\.\d+)?)\s*(?:秒|s|seconds?)?\s*[:：\-—]?\s*(.+)$/i;
 const durationOnlyPattern = /^(?:镜头|shot)\s*(\d+)?\s*[（(]\s*(\d+(?:\.\d+)?)\s*(?:秒|s|seconds?)\s*[）)]\s*[:：\-—]?\s*(.+)$/i;
 const durationSentencePattern = /^(?:持续|时长|duration)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*(?:秒|s|seconds?)\s*[:：\-—]?\s*(.+)$/i;
 
@@ -227,7 +226,7 @@ export function parseTimelinePrompt(prompt: string): TimelineParseResult {
   candidates.slice(0, MAX_SHOTS).forEach((candidate, candidateIndex) => {
     const start = roundTime(candidate.start, metadata.fps);
     const end = roundTime(candidate.end, metadata.fps);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > MAX_DURATION + EPSILON) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
       issues.push({
         id: `invalid-${candidate.line}-${candidateIndex}`,
         code: "invalid-time",
@@ -324,7 +323,7 @@ export function parseTimelinePrompt(prompt: string): TimelineParseResult {
 
 function clampDuration(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_DURATION;
-  return Math.min(MAX_DURATION, Math.max(0.1, value));
+  return Math.max(0.1, value);
 }
 
 function validShot<TSnapshot>(value: unknown, index: number, fps: number): VideoShot<TSnapshot> | null {
@@ -385,10 +384,13 @@ export function normalizeVideoTimeline<TSnapshot = unknown>(value: unknown, fall
 
 export function formatTimecode(value: number, includeFrames = false, fps = DEFAULT_FPS) {
   const safe = Math.max(0, value);
-  const minutes = Math.floor(safe / 60);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor(safe / 60) % 60;
   const seconds = Math.floor(safe % 60);
   const frames = Math.floor((safe - Math.floor(safe)) * fps + EPSILON);
-  const base = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const base = hours > 0
+    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   return includeFrames ? `${base}:${String(frames).padStart(2, "0")}` : base;
 }
 

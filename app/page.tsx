@@ -4691,8 +4691,10 @@ export default function Home() {
         const target = shots[sourceIndex];
         if (mode === "move") {
           const minStart = previous?.end ?? 0;
-          const maxStart = (next?.start ?? sourceTimeline.duration) - sourceShot.duration;
-          target.start = clamp(snap(sourceShot.start + delta), minStart, Math.max(minStart, maxStart));
+          const proposedStart = Math.max(minStart, snap(sourceShot.start + delta));
+          target.start = next
+            ? Math.min(proposedStart, Math.max(minStart, next.start - sourceShot.duration))
+            : proposedStart;
           target.end = target.start + sourceShot.duration;
         } else if (mode === "trim-start") {
           target.start = clamp(snap(sourceShot.start + delta), previous?.end ?? 0, sourceShot.end - frame);
@@ -4709,11 +4711,12 @@ export default function Home() {
             }
             current.duration = Math.max(frame, sourceTimeline.duration + endDelta);
           } else {
-            target.end = Math.min(proposedEnd, next?.start ?? sourceTimeline.duration);
+            target.end = next ? Math.min(proposedEnd, next.start) : proposedEnd;
             target.duration = target.end - target.start;
           }
         }
         current.shots = shots;
+        current.duration = Math.max(current.duration, shots.at(-1)?.end ?? frame);
         current.updatedAt = currentValue.updatedAt;
         timelineLatestRef.current = current;
         return current;

@@ -167,6 +167,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(timelinePanel, /const pointerOffset = event\.clientX - handle\.getBoundingClientRect\(\)\.left/);
   assert.match(timelinePanel, /handle\.style\.left = `\$\{timeFromClientX\(pendingClientX\) \* pixelsPerSecond\}px`/);
   assert.match(timelinePanel, /onScrub\(timeFromClientX\(pendingClientX\), true\)/);
+  assert.match(timelinePanel, /Math\.ceil\(timeline\.duration \/ 2000 \/ baseStep\) \* baseStep/);
+  assert.match(page, /target\.start = next\s*\? Math\.min\(proposedStart/);
+  assert.match(page, /target\.end = next \? Math\.min\(proposedEnd, next\.start\) : proposedEnd/);
+  assert.match(page, /current\.duration = Math\.max\(current\.duration, shots\.at\(-1\)\?\.end \?\? frame\)/);
   assert.doesNotMatch(timelinePanel, /\{text\("Ripple", "联动"\)\}|\{text\("Split", "切分"\)\}|\{text\("Delete", "删除"\)\}|\{text\("Fit", "适配"\)\}/);
   assert.match(layout, /AI Character Studio \| PoseBoard 3D Studio/);
 });

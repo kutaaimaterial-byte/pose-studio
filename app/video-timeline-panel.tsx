@@ -109,7 +109,10 @@ export function VideoTimelinePanel<TSnapshot>({
   const contentRef = useRef<HTMLDivElement>(null);
   const text = (english: string, chinese: string) => isZh ? chinese : english;
   const trackWidth = Math.max(760, timeline.duration * pixelsPerSecond);
-  const majorStep = rulerStep(pixelsPerSecond);
+  const baseStep = rulerStep(pixelsPerSecond);
+  // Keep the ruler light even for hour-long or day-long projects. The timeline
+  // itself remains unbounded; only the number of rendered labels is capped.
+  const majorStep = Math.max(baseStep, Math.ceil(timeline.duration / 2000 / baseStep) * baseStep);
   const ticks = useMemo(() => {
     const values: number[] = [];
     for (let time = 0; time <= timeline.duration + 0.001; time += majorStep) values.push(Number(time.toFixed(3)));

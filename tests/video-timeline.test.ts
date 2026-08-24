@@ -56,6 +56,16 @@ test("timecode, Chinese ranges, gaps, and overlaps are deterministic", () => {
   assert.deepEqual(result.unassigned, ["发生重叠", "这段没有时间"]);
 });
 
+test("timeline duration is not capped and supports hour timecodes", () => {
+  const result = parseTimelinePrompt(`总时长7200秒，画面16:9，24fps。
+00:00:00-01:30:00：长时间镜头
+01:30:00-02:00:00：收尾镜头`);
+  assert.equal(result.timeline.duration, 7200);
+  assert.equal(result.timeline.shots.length, 2);
+  assert.equal(result.timeline.shots[1].end, 7200);
+  assert.equal(formatTimecode(5400), "01:30:00");
+});
+
 test("normalization preserves colors, snapshots, and aspect overrides", () => {
   const parsed = parseTimelinePrompt(samplePrompt).timeline;
   assert.equal(parsed.shots[0].snapshotLocked, false);
