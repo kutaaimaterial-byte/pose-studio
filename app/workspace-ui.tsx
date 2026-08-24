@@ -6,13 +6,14 @@ import {
   Camera,
   Copy,
   Cube,
+  CubeFocus,
   Lightbulb,
   Perspective,
   SidebarSimple,
   Sparkle,
 } from "@phosphor-icons/react";
 
-export type ActiveTool = "pose" | "model" | "camera" | "perspective" | "lighting" | "prompt";
+export type ActiveTool = "pose" | "model" | "camera" | "perspective" | "lighting" | "prompt" | "convert";
 export type InteractionMode = "camera-browse" | "model-transform" | "ik-edit" | "perspective-edit";
 
 const toolIcons = {
@@ -22,6 +23,7 @@ const toolIcons = {
   perspective: Perspective,
   lighting: Lightbulb,
   prompt: Copy,
+  convert: CubeFocus,
 } as const;
 
 export function ToolRail({

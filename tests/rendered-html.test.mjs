@@ -116,6 +116,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.doesNotMatch(page, /activateTool\(/);
   assert.doesNotMatch(workspaceUi, /<Tooltip/);
   assert.match(workspaceUi, /<button\s+type="button"\s+key=\{tool\}/s);
+  assert.match(workspaceUi, /export type ActiveTool = [^;]*\| "convert"/);
+  assert.match(workspaceUi, /convert: CubeFocus/);
   assert.match(page, /\{ikControlDefinitions\.map\(\(\{ id: control, label, labelEn, kind, group \}\)/);
   assert.doesNotMatch(page, /ikControlDefinitions\.filter/);
   assert.match(page, /const IK_DRAG_SENSITIVITY = 100 \/ 60/);
@@ -135,6 +137,9 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /useState<Language>\("zh"\)/);
   assert.match(page, /parseTimelinePrompt\(timelinePrompt\)/);
   assert.match(page, /<VideoTimelinePanel/);
+  assert.match(page, /convert: text\("2D to 3D", "2转3"\)/);
+  assert.match(page, /activeTool === "convert" && <div className="convert-context-content">/);
+  assert.match(css, /\.convert-flow\s*\{[^}]*min-height:\s*116px;[^}]*border:\s*1px solid var\(--border-default\)/s);
   assert.match(page, /className=\{`icon-button topbar-quick-action \$\{promptOpen \? "active" : ""\}`\}/);
   assert.match(page, /aria-label=\{text\("Plan", "计划"\)\}/);
   assert.match(page, /const applySceneSnapshot = \(snapshotSource: ShotSceneSnapshot/);

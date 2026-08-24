@@ -27,6 +27,7 @@ import {
   CalendarDots,
   Copy,
   Cube,
+  CubeFocus,
   DownloadSimple,
   Eye,
   EyeSlash,
@@ -5623,6 +5624,7 @@ export default function Home() {
     perspective: text("Perspective", "透视"),
     lighting: text("Lighting", "灯光"),
     prompt: text("Prompt", "提示词"),
+    convert: text("2D to 3D", "2转3"),
   };
   const interactionModeLabel: Record<InteractionMode, string> = {
     "camera-browse": text("Browse Camera", "浏览镜头"),
@@ -5630,7 +5632,7 @@ export default function Home() {
     "ik-edit": text("Fine-tune Pose", "微调姿势"),
     "perspective-edit": text("Edit Perspective", "编辑透视"),
   };
-  const nextTool: Record<ActiveTool, ActiveTool> = { pose: "camera", model: "pose", camera: "perspective", perspective: "lighting", lighting: "prompt", prompt: "pose" };
+  const nextTool: Record<ActiveTool, ActiveTool> = { pose: "camera", model: "pose", camera: "perspective", perspective: "lighting", lighting: "prompt", prompt: "convert", convert: "pose" };
   const goToNextTool = () => changeActiveTool(nextTool[activeTool]);
 
   return (
@@ -5874,8 +5876,8 @@ export default function Home() {
 
         <aside className="panel inspector-panel context-panel" aria-label={text(`${toolLabels[activeTool]} controls`, `${toolLabels[activeTool]}控制`)}>
           <div className="selection-header">
-            <span className="cube-icon">{activeTool === "model" ? <Cube size={19} weight="duotone" /> : activeTool === "camera" ? <Camera size={19} /> : activeTool === "perspective" ? <Perspective size={19} /> : activeTool === "lighting" ? <Lightbulb size={19} /> : <Copy size={19} />}</span>
-            <div><strong>{toolLabels[activeTool]}</strong><small>{activeTool === "model" ? modelDisplayName(selectedModel) : interactionModeLabel[interactionMode]}</small></div>
+            <span className="cube-icon">{activeTool === "model" ? <Cube size={19} weight="duotone" /> : activeTool === "camera" ? <Camera size={19} /> : activeTool === "perspective" ? <Perspective size={19} /> : activeTool === "lighting" ? <Lightbulb size={19} /> : activeTool === "convert" ? <CubeFocus size={19} /> : <Copy size={19} />}</span>
+            <div><strong>{toolLabels[activeTool]}</strong><small>{activeTool === "model" ? modelDisplayName(selectedModel) : activeTool === "convert" ? text("Image to editable character", "图像转可编辑人物") : interactionModeLabel[interactionMode]}</small></div>
             <button className={editor.visible ? "visible" : ""} onClick={() => { commit((current) => ({ ...current, visible: !current.visible })); flash(editor.visible ? text("Model hidden", "模型已隐藏") : text("Model shown", "模型已显示")); }} aria-label={editor.visible ? text("Hide model", "隐藏模型") : text("Show model", "显示模型")}>{editor.visible ? <Eye size={18} /> : <EyeSlash size={18} />}</button>
             <button className="add-model-button" onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "折叠面板")} title={text("Collapse panel", "折叠面板")}><SidebarSimple size={18} weight="fill" /></button>
           </div>
@@ -6051,6 +6053,14 @@ export default function Home() {
               <label><span>English Prompt</span><textarea readOnly value={generatedPrompt.english} /><button onClick={() => copyPrompt(generatedPrompt.english)}><Copy size={15} />Copy English</button></label>
               <div className="prompt-context-actions"><button onClick={exportProjectJson}>{text("Project JSON", "项目 JSON")}</button><button className="primary" onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}>{text("Copy all", "复制全部")}</button></div>
             </div>}
+
+            {activeTool === "convert" && <div className="convert-context-content">
+              <div className="convert-flow" aria-hidden="true"><span>2D</span><ImageSquare size={26} weight="duotone" /><i>→</i><CubeFocus size={28} weight="duotone" /><span>3D</span></div>
+              <div className="convert-intro"><strong>{text("2D character to 3D", "2D 人物转 3D")}</strong><p>{text("Import a clear front or full-body image as the modeling and pose reference for an editable 3D character.", "导入清晰的正面或全身人物图，作为可编辑 3D 角色的建模与姿态参考。")}</p></div>
+              <button className="convert-upload" onClick={() => imageInputRef.current?.click()} disabled={canvasImages.length >= 8}><UploadSimple size={17} weight="bold" /><span>{text("Choose character image", "选择人物图片")}</span></button>
+              <small>{text("PNG, JPG or WebP · up to 12 MB", "支持 PNG、JPG、WebP · 最大 12 MB")}</small>
+              <div className={`convert-source-status ${canvasImages.length ? "ready" : ""}`}><ImageSquare size={17} /><span>{canvasImages.length ? text(`${canvasImages.length} source image${canvasImages.length > 1 ? "s" : ""} ready`, `已准备 ${canvasImages.length} 张源图片`) : text("No source image yet", "尚未添加源图片")}</span></div>
+            </div>}
           </div>
         </aside>
 
@@ -6100,6 +6110,7 @@ export default function Home() {
             {activeTool === "perspective" && <><button onClick={togglePerspectiveGrid}><Perspective size={16} /></button><button onClick={() => setInteractionMode(interactionMode === "perspective-edit" ? "camera-browse" : "perspective-edit")} className={interactionMode === "perspective-edit" ? "active" : ""}><ArrowsOutCardinal size={16} /></button></>}
             {activeTool === "lighting" && <button onClick={() => applyLightingPreset("studio")}><ArrowCounterClockwise size={16} /></button>}
             {activeTool === "prompt" && <button onClick={() => copyPrompt(`${generatedPrompt.chinese}\n\n${generatedPrompt.english}`)}><Copy size={16} /> {text("Copy", "复制")}</button>}
+            {activeTool === "convert" && <button onClick={() => imageInputRef.current?.click()} disabled={canvasImages.length >= 8}><UploadSimple size={16} /> {text("Import", "导入")}</button>}
           </>}
           nextLabel={text(`Next: ${toolLabels[nextTool[activeTool]]}`, `下一步：${toolLabels[nextTool[activeTool]]}`)}
           onNext={goToNextTool}

@@ -1609,6 +1609,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .prompt-context-actions button.primary:hover { background: #dceeff; color: var(--primary-hover); }
 .prompt-context-content textarea { min-height: 160px; border-radius: var(--radius-md); font-size: var(--font-body); line-height: 20px; }
 
+.convert-context-content { display: grid; gap: var(--space-3); padding: var(--space-4); }
+.convert-flow { min-height: 116px; display: flex; align-items: center; justify-content: center; gap: var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-secondary); color: var(--text-secondary); }
+.convert-flow > span { min-width: 28px; height: 22px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--surface-primary); color: var(--text-primary); font: 600 10px/1 var(--mono); }
+.convert-flow > i { color: var(--text-tertiary); font-size: 18px; font-style: normal; }
+.convert-flow svg:last-of-type { color: var(--primary); }
+.convert-intro { display: grid; gap: var(--space-1); }
+.convert-intro strong { color: var(--text-primary); font-size: var(--font-section); font-weight: 600; }
+.convert-intro p { margin: 0; color: var(--text-secondary); font-size: var(--font-label); line-height: 20px; }
+.convert-upload { height: var(--control-lg); display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); border: 0; border-radius: var(--radius-md); background: var(--primary); color: #fff; font-size: var(--font-label); font-weight: 600; }
+.convert-upload:hover { background: var(--primary-hover); }
+.convert-context-content > small { color: var(--text-tertiary); font-size: var(--font-meta); text-align: center; }
+.convert-source-status { min-height: var(--control-lg); display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-radius: var(--radius-md); background: var(--surface-secondary); color: var(--text-secondary); font-size: var(--font-label); }
+.convert-source-status.ready { background: #eef9f3; color: var(--success); }
+
 .prompt-backdrop { background: rgba(16, 24, 40, .28); backdrop-filter: none; }
 .prompt-dialog { border-radius: var(--radius-modal); box-shadow: 0 16px 48px rgba(16, 24, 40, .16); }
 .prompt-heading { min-height: 56px; }
