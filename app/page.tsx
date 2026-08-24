@@ -5719,7 +5719,6 @@ export default function Home() {
             <span className="brand-name">PoseBoard</span>
             <input value={projectName} onChange={(event) => { setProjectName(event.target.value); markSaving(); }} aria-label={text("Project name", "项目名称")} />
           </div>
-          <span className="brand-edition">V1.0.3</span>
           <div className="language-switch" role="group" aria-label={text("Language", "语言")}>
             <button className={language === "en" ? "active" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
             <button className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} onClick={() => changeLanguage("zh")}>中文</button>

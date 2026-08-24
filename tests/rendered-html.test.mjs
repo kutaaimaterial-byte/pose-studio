@@ -34,7 +34,7 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /class="intro-loader/);
   assert.match(html, />正在准备 3D 工作区<\/p>/);
   assert.match(html, />PoseBoard<\/span>/);
-  assert.match(html, />V1\.0\.3<\/span>/);
+  assert.doesNotMatch(html, />V1\.0\.3<\/span>/);
   assert.match(html, />姿势预设库<\/h2>/);
   assert.match(html, /152<!-- --> poses/);
   assert.match(html, /aria-label="Pose Library"/);
@@ -98,7 +98,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
-  assert.match(page, /className="brand-edition">V1\.0\.3/);
+  assert.doesNotMatch(page, /className="brand-edition"/);
   assert.match(page, /<SSRProvider>/);
   assert.match(page, /<FluentProvider[^>]*applyStylesToPortals=\{false\}/);
   assert.doesNotMatch(page, /<Tooltip/);
