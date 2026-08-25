@@ -2,6 +2,7 @@ export type AnimationInterpolation = "hold" | "linear" | "ease-in-out";
 export type Vec3Tuple = [number, number, number];
 export type QuaternionTuple = [number, number, number, number];
 export type BoneQuaternionSnapshot = Record<string, QuaternionTuple>;
+export type BonePositionSnapshot = Record<string, Vec3Tuple>;
 
 export type PoseAnimationKeyframe = {
   id: string;
@@ -10,6 +11,8 @@ export type PoseAnimationKeyframe = {
   poseId: string;
   poseIndex: number;
   bones: BoneQuaternionSnapshot;
+  bonePositions?: BonePositionSnapshot;
+  rigPosition?: Vec3Tuple;
 };
 
 export type RootAnimationKeyframe = {
@@ -54,6 +57,7 @@ export type MotionLibraryItem = {
 
 export type AnimationTimeline = {
   schemaVersion: "3.3";
+  motionRevision: 1 | 2;
   fps: number;
   autoKey: boolean;
   interpolation: AnimationInterpolation;
@@ -63,7 +67,7 @@ export type AnimationTimeline = {
 };
 
 export type EvaluatedAnimation = {
-  pose?: Pick<PoseAnimationKeyframe, "poseId" | "poseIndex" | "bones">;
+  pose?: Pick<PoseAnimationKeyframe, "poseId" | "poseIndex" | "bones" | "bonePositions" | "rigPosition">;
   root?: Pick<RootAnimationKeyframe, "position" | "rotation" | "scale">;
   camera?: Pick<CameraAnimationKeyframe, "position" | "target" | "focalLength">;
 };
@@ -164,8 +168,26 @@ function evaluatePose(track: Extract<AnimationTrack, { kind: "pose" }>, time: nu
     const after = pair.after.bones[name] ?? before;
     if (before && after) bones[name] = slerpQuaternion(before, after, pair.amount);
   });
+  const bonePositions: BonePositionSnapshot = {};
+  const positionNames = new Set([
+    ...Object.keys(pair.before.bonePositions ?? {}),
+    ...Object.keys(pair.after.bonePositions ?? {}),
+  ]);
+  positionNames.forEach((name) => {
+    const before = pair.before.bonePositions?.[name] ?? pair.after.bonePositions?.[name];
+    const after = pair.after.bonePositions?.[name] ?? before;
+    if (before && after) bonePositions[name] = lerpVec3(before, after, pair.amount);
+  });
   const selected = pair.amount < 0.5 ? pair.before : pair.after;
-  return { poseId: selected.poseId, poseIndex: selected.poseIndex, bones };
+  const beforeRig = pair.before.rigPosition ?? pair.after.rigPosition;
+  const afterRig = pair.after.rigPosition ?? beforeRig;
+  return {
+    poseId: selected.poseId,
+    poseIndex: selected.poseIndex,
+    bones,
+    bonePositions: Object.keys(bonePositions).length ? bonePositions : undefined,
+    rigPosition: beforeRig && afterRig ? lerpVec3(beforeRig, afterRig, pair.amount) : undefined,
+  };
 }
 
 export function evaluateAnimationShot(shot: AnimationShot | undefined, localTime: number): EvaluatedAnimation {
@@ -212,6 +234,7 @@ function emptyAnimationShot(shotId: string, duration: number): AnimationShot {
 export function createAnimationTimeline(shots: Array<{ id: string; duration: number }>, fps = 24): AnimationTimeline {
   return {
     schemaVersion: "3.3",
+    motionRevision: 2,
     fps: Math.max(1, fps),
     autoKey: false,
     interpolation: "ease-in-out",
@@ -228,6 +251,7 @@ export function normalizeAnimationTimeline(source: unknown, shots: Array<{ id: s
   base.autoKey = Boolean(value.autoKey);
   base.interpolation = value.interpolation === "hold" || value.interpolation === "linear" ? value.interpolation : "ease-in-out";
   base.updatedAt = Number.isFinite(value.updatedAt) ? Number(value.updatedAt) : 0;
+  base.motionRevision = value.motionRevision === 2 ? 2 : 1;
   base.shots = shots.map((shot) => {
     const stored = storedShots.find((item) => item?.shotId === shot.id);
     if (!stored || !Array.isArray(stored.tracks)) return emptyAnimationShot(shot.id, shot.duration);

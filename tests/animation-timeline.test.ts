@@ -25,8 +25,8 @@ const shot: AnimationShot = {
       name: "Pose",
       enabled: true,
       keyframes: [
-        { id: "p0", time: 0, interpolation: "linear", poseId: "a", poseIndex: 0, bones: { arm: [0, 0, 0, 1] } },
-        { id: "p1", time: 2, interpolation: "linear", poseId: "b", poseIndex: 1, bones: { arm: [0, 0, 1, 0] } },
+        { id: "p0", time: 0, interpolation: "linear", poseId: "a", poseIndex: 0, bones: { arm: [0, 0, 0, 1] }, bonePositions: { hips: [0, 1, 0] }, rigPosition: [0, 0, 0] },
+        { id: "p1", time: 2, interpolation: "linear", poseId: "b", poseIndex: 1, bones: { arm: [0, 0, 1, 0] }, bonePositions: { hips: [0, 0.5, 0] }, rigPosition: [0, -0.2, 0] },
       ],
     },
     {
@@ -61,6 +61,9 @@ test("V3.3 evaluator uses the same deterministic local clock for scrub and playb
   assert.deepEqual(value.root?.rotation, [0, 45, 0]);
   assert.equal(value.root?.scale, 110);
   assert.deepEqual(value.camera?.position, [0, 2.5, 10]);
+  const poseMidpoint = evaluateAnimationShot(shot, 1).pose;
+  assert.deepEqual(poseMidpoint?.bonePositions?.hips, [0, 0.75, 0]);
+  assert.deepEqual(poseMidpoint?.rigPosition, [0, -0.1, 0]);
 });
 
 test("bone tracks use normalized quaternion slerp", () => {

@@ -118,6 +118,7 @@ import {
   snapAnimationTime,
   upsertAnimationKeyframe,
   type AnimationInterpolation,
+  type AnimationTrack,
   type AnimationTimeline,
   type BoneQuaternionSnapshot,
   type CameraAnimationKeyframe,
@@ -4486,11 +4487,35 @@ export default function Home() {
     ]));
   };
 
-  const capturePoseBoneSnapshot = (poseIndex: number) => {
+  const captureRigPoseState = (rig: RigBinding) => ({
+    bones: captureRigBoneSnapshot(rig),
+    bonePositions: Object.fromEntries([...rig.bonesByName.entries()].map(([name, bone]) => [
+      name,
+      [bone.position.x, bone.position.y, bone.position.z] as [number, number, number],
+    ])),
+    rigPosition: [rig.root.position.x, rig.root.position.y, rig.root.position.z] as [number, number, number],
+  });
+
+  const capturePoseRigState = (
+    poseIndex: number,
+    mirrored = false,
+    boneDeltas: Partial<Record<HumanoidBoneName, [number, number, number]>> = {},
+  ) => {
     const rig = modelRigsRef.current[selectedModelIdRef.current];
-    if (!rig) return {};
-    applyRigPose(rig, poseIndex, false);
-    const snapshot = captureRigBoneSnapshot(rig);
+    if (!rig) return { bones: {}, bonePositions: {}, rigPosition: [0, 0, 0] as [number, number, number] };
+    applyRigPose(rig, poseIndex, mirrored);
+    Object.entries(boneDeltas).forEach(([boneName, rotation]) => {
+      const bone = rig.humanoidBones[boneName as HumanoidBoneName];
+      if (!bone || !rotation) return;
+      bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(
+        THREE.MathUtils.degToRad(rotation[0]),
+        THREE.MathUtils.degToRad(rotation[1]),
+        THREE.MathUtils.degToRad(rotation[2]),
+        "XYZ",
+      )));
+    });
+    rig.root.updateMatrixWorld(true);
+    const snapshot = captureRigPoseState(rig);
     const current = editorLatestRef.current;
     applyRigPose(rig, current.pose, current.mirrored);
     applySemanticPoseModifiers(rig, current.semanticModifiers);
@@ -4511,6 +4536,10 @@ export default function Home() {
       else Object.entries(value.pose.bones).forEach(([name, quaternion]) => {
         rig.bonesByName.get(name)?.quaternion.set(...quaternion);
       });
+      Object.entries(value.pose.bonePositions ?? {}).forEach(([name, position]) => {
+        rig.bonesByName.get(name)?.position.set(...position);
+      });
+      if (value.pose.rigPosition) rig.root.position.set(...value.pose.rigPosition);
       rig.root.updateMatrixWorld(true);
     }
     if (value.root && root) {
@@ -4530,9 +4559,97 @@ export default function Home() {
     }
   };
 
+  const buildMotionPoseFrames = (
+    motionId: "idle" | "walk" | "run" | "wave" | "kneel",
+    shotId: string,
+    duration: number,
+    fps: number,
+    interpolation: AnimationInterpolation,
+    idPrefix: string = motionId,
+  ) => {
+    const poseByName = (name: string) => poseItems.find((pose) => pose.name === name) ?? defaultPose;
+    const natural = poseByName("自然站立");
+    const walk = poseByName("自然行走");
+    const run = poseByName("全力冲刺");
+    const raised = poseByName("单手举起");
+    const halfSquat = poseByName("半蹲");
+    const kneel = poseByName("单膝跪地");
+    const frame = (
+      suffix: string,
+      time: number,
+      pose: PoseItem,
+      mirrored = false,
+      boneDeltas: Partial<Record<HumanoidBoneName, [number, number, number]>> = {},
+      frameInterpolation = interpolation,
+    ): PoseAnimationKeyframe => ({
+      id: `${idPrefix}_${suffix}_${shotId}`,
+      time: snapAnimationTime(time, fps),
+      interpolation: frameInterpolation,
+      poseId: pose.id,
+      poseIndex: pose.enginePoseIndex,
+      ...capturePoseRigState(pose.enginePoseIndex, mirrored, boneDeltas),
+    });
+    if (motionId === "wave") return [
+      frame("start", 0, natural),
+      frame("raise", duration * 0.42, raised),
+      frame("wave_a", duration * 0.56, raised, false, { LeftLowerArm: [0, 0, -18], LeftHand: [0, 0, -22], RightLowerArm: [0, 0, 18], RightHand: [0, 0, 22] }),
+      frame("wave_b", duration * 0.68, raised, false, { LeftLowerArm: [0, 0, 16], LeftHand: [0, 0, 22], RightLowerArm: [0, 0, -16], RightHand: [0, 0, -22] }),
+      frame("wave_c", duration * 0.8, raised, false, { LeftLowerArm: [0, 0, -14], LeftHand: [0, 0, -18], RightLowerArm: [0, 0, 14], RightHand: [0, 0, 18] }),
+      frame("end", duration, natural),
+    ];
+    if (motionId === "kneel") return [
+      frame("start", 0, natural),
+      frame("lower", duration * 0.45, halfSquat),
+      frame("settle", duration * 0.82, kneel),
+      frame("end", duration, kneel),
+    ];
+    if (motionId === "idle") return [
+      frame("start", 0, natural, false, {}, "linear"),
+      frame("inhale", duration * 0.25, natural, false, { Chest: [-2.5, 0, 0], LeftShoulder: [-1, 0, -2], RightShoulder: [-1, 0, 2] }, "linear"),
+      frame("exhale", duration * 0.75, natural, false, { Chest: [1.5, 0, 0], Head: [0.8, 0, 0] }, "linear"),
+      frame("end", duration, natural, false, {}, "linear"),
+    ];
+    const cyclePose = motionId === "run" ? run : walk;
+    const stride = motionId === "run" ? 0.42 : 0.72;
+    const frames: PoseAnimationKeyframe[] = [];
+    let step = 0;
+    for (let time = 0; time < duration - 0.001; time += stride) {
+      frames.push(frame(`step_${step}`, time, cyclePose, step % 2 === 1, {}, "linear"));
+      step += 1;
+    }
+    frames.push(frame("loop", duration, cyclePose, false, {}, "linear"));
+    return frames;
+  };
+
   useEffect(() => {
     if (!modelInfo.loaded || !persistenceReady || restoredTimelineShotRef.current) return;
     const currentTimeline = timelineLatestRef.current;
+    const currentAnimationTimeline = animationTimelineLatestRef.current;
+    if (currentAnimationTimeline.motionRevision !== 2) {
+      const migratedAnimationTimeline: AnimationTimeline = {
+        ...currentAnimationTimeline,
+        motionRevision: 2,
+        updatedAt: currentAnimationTimeline.updatedAt + 1,
+        shots: currentAnimationTimeline.shots.map((animationShot) => {
+          const videoShot = currentTimeline.shots.find((item) => item.id === animationShot.shotId);
+          const poseTrack = animationShot.tracks.find((track) => track.kind === "pose");
+          const keyIds = poseTrack?.keyframes.map((keyframe) => keyframe.id).join(" ") ?? "";
+          const detectedPreset = (["idle", "walk", "run", "wave", "kneel"] as const).find((motion) => keyIds.includes(`${motion}_`));
+          const motionId = inferMotionFromPrompt(videoShot?.promptText ?? "") ?? detectedPreset ?? null;
+          if (!motionId) return animationShot;
+          const generatedTrack = (track: AnimationTrack) => track.keyframes.some((keyframe) => keyframe.id.startsWith("prompt_") || keyframe.id.startsWith(`${motionId}_`));
+          return {
+            ...animationShot,
+            tracks: animationShot.tracks.map((track): AnimationTrack => track.kind === "pose"
+              ? { ...track, keyframes: buildMotionPoseFrames(motionId, animationShot.shotId, animationShot.duration, currentAnimationTimeline.fps, currentAnimationTimeline.interpolation) }
+              : generatedTrack(track) ? { ...track, keyframes: track.keyframes.slice(0, 1) } as AnimationTrack : track),
+          };
+        }),
+      };
+      animationTimelineLatestRef.current = migratedAnimationTimeline;
+      setAnimationTimeline(migratedAnimationTimeline);
+      markSaving();
+    }
     let restoredTimeline = currentTimeline;
     if (currentTimeline.shots.some((shot) => shot.snapshotVersion < 2)) {
       const baseSnapshot = captureSceneSnapshot();
@@ -4621,25 +4738,14 @@ export default function Home() {
         const snapshot = shot.sceneSnapshot!;
         const selectedModel = snapshot.models.find((model) => model.id === snapshot.selectedModelId) ?? snapshot.models[0];
         const motionId = inferMotionFromPrompt(shot.promptText);
-        const natural = poseItems.find((pose) => pose.name === "自然站立") ?? defaultPose;
-        const targetName = motionId === "wave" ? "单手举起" : motionId === "kneel" ? "单膝跪地" : motionId === "run" ? "全力冲刺" : motionId === "walk" ? "自然行走" : "自然站立";
-        const target = poseItems.find((pose) => pose.name === targetName) ?? natural;
         const interpolation: AnimationInterpolation = "ease-in-out";
-        const makePoseFrame = (suffix: string, time: number, pose: PoseItem): PoseAnimationKeyframe => ({
-          id: `prompt_${shot.id}_${suffix}`,
-          time: snapAnimationTime(time, nextTimeline.fps),
-          interpolation,
-          poseId: pose.id,
-          poseIndex: pose.enginePoseIndex,
-          bones: capturePoseBoneSnapshot(pose.enginePoseIndex),
-        });
-        const poseFrames = motionId === "wave"
-          ? [makePoseFrame("start", 0, natural), makePoseFrame("raise", shot.duration / 2, target), makePoseFrame("end", shot.duration, natural)]
-          : motionId === "kneel"
-            ? [makePoseFrame("start", 0, natural), makePoseFrame("end", shot.duration, target)]
-            : [makePoseFrame("start", 0, target), ...(motionId ? [makePoseFrame("end", shot.duration, target)] : [])];
         const rootState = selectedModel?.state ?? getModelEditState(snapshot.editor);
-        const travel = motionId === "run" ? 5 * shot.duration / 6 : motionId === "walk" ? 0.6 * shot.duration : 0;
+        const staticPose = poseItems.find((pose) => pose.enginePoseIndex === rootState.pose) ?? defaultPose;
+        const poseFrames = motionId
+          ? buildMotionPoseFrames(motionId, shot.id, shot.duration, nextTimeline.fps, interpolation, `prompt_${motionId}`)
+          : [{ id: `prompt_${shot.id}_pose`, time: 0, interpolation, poseId: staticPose.id, poseIndex: staticPose.enginePoseIndex, ...capturePoseRigState(staticPose.enginePoseIndex, rootState.mirrored) }];
+        const rootMotionRequested = /根运动|角色向前移动|人物向前移动|向前位移|root\s*motion|move\s*forward/i.test(shot.promptText);
+        const travel = rootMotionRequested ? motionId === "run" ? 5 * shot.duration / 6 : motionId === "walk" ? 0.6 * shot.duration : 0 : 0;
         const rootFrames: RootAnimationKeyframe[] = [
           { id: `prompt_${shot.id}_root_start`, time: 0, interpolation, position: [...rootState.position], rotation: [...rootState.rotation], scale: rootState.scale },
           ...(travel ? [{ id: `prompt_${shot.id}_root_end`, time: shot.duration, interpolation: "linear" as const, position: [rootState.position[0], rootState.position[1], rootState.position[2] - travel] as [number, number, number], rotation: [...rootState.rotation] as [number, number, number], scale: rootState.scale }] : []),
@@ -4647,7 +4753,7 @@ export default function Home() {
         const cameraStart = new THREE.Vector3(...snapshot.camera.position);
         const cameraTarget = new THREE.Vector3(...snapshot.camera.target);
         const cameraEnd = cameraStart.clone();
-        if (motionId === "run" || /后拉|拉远|dolly\s*out|pull\s*back/i.test(shot.promptText)) cameraEnd.add(cameraStart.clone().sub(cameraTarget).normalize().multiplyScalar(3.2));
+        if (/镜头.{0,6}(?:后拉|拉远)|dolly\s*out|pull\s*back/i.test(shot.promptText)) cameraEnd.add(cameraStart.clone().sub(cameraTarget).normalize().multiplyScalar(3.2));
         const cameraFrames: CameraAnimationKeyframe[] = [
           { id: `prompt_${shot.id}_camera_start`, time: 0, interpolation, position: [...snapshot.camera.position], target: [...snapshot.camera.target], focalLength: snapshot.camera.focalLength },
           ...(cameraEnd.distanceTo(cameraStart) > 0.001 ? [{ id: `prompt_${shot.id}_camera_end`, time: shot.duration, interpolation, position: [cameraEnd.x, cameraEnd.y, cameraEnd.z] as [number, number, number], target: [cameraTarget.x, cameraTarget.y, cameraTarget.z - travel * 0.45] as [number, number, number], focalLength: snapshot.camera.focalLength }] : []),
@@ -4851,7 +4957,7 @@ export default function Home() {
       interpolation,
       poseId: selectedPoseId,
       poseIndex: editorLatestRef.current.pose,
-      bones: captureRigBoneSnapshot(rig),
+      ...captureRigPoseState(rig),
     };
     const rootFrame: RootAnimationKeyframe = {
       id: `root_${token}`,
@@ -4891,37 +4997,16 @@ export default function Home() {
     const controls = controlsRef.current;
     if (!shot || !root || !camera || !controls) return;
     const duration = motionId === "wave" ? 5 : motionId === "kneel" ? 4 : motionId === "run" ? 6 : motionId === "walk" ? 4 : 3;
-    const natural = poseItems.find((pose) => pose.name === "自然站立") ?? defaultPose;
-    const target = poseItems.find((pose) => pose.name === (motionId === "wave" ? "单手举起" : motionId === "kneel" ? "单膝跪地" : motionId === "run" ? "全力冲刺" : motionId === "walk" ? "自然行走" : "自然站立")) ?? natural;
     const fps = animationTimelineLatestRef.current.fps;
     const interpolation = animationTimelineLatestRef.current.interpolation;
-    const poseFrame = (id: string, time: number, pose: PoseItem): PoseAnimationKeyframe => ({
-      id: `${motionId}_${id}_${shot.id}`,
-      time: snapAnimationTime(time, fps),
-      interpolation,
-      poseId: pose.id,
-      poseIndex: pose.enginePoseIndex,
-      bones: capturePoseBoneSnapshot(pose.enginePoseIndex),
-    });
-    const poseFrames = motionId === "wave"
-      ? [poseFrame("start", 0, natural), poseFrame("raise", 2.5, target), poseFrame("end", 5, natural)]
-      : motionId === "kneel"
-        ? [poseFrame("start", 0, natural), poseFrame("kneel", 4, target)]
-        : motionId === "idle"
-          ? [poseFrame("start", 0, natural), poseFrame("end", 3, natural)]
-          : [poseFrame("start", 0, target), poseFrame("cycle", duration / 2, target), poseFrame("end", duration, target)];
+    const poseFrames = buildMotionPoseFrames(motionId, shot.id, duration, fps, interpolation);
     const startPosition: [number, number, number] = [root.position.x, root.position.y, root.position.z];
-    const travel = motionId === "run" ? 5 : motionId === "walk" ? 2.4 : 0;
     const rootFrames: RootAnimationKeyframe[] = [
       { id: `${motionId}_root_start_${shot.id}`, time: 0, interpolation, position: startPosition, rotation: [root.rotation.x, root.rotation.y, root.rotation.z].map(THREE.MathUtils.radToDeg) as [number, number, number], scale: root.scale.x * 100 },
-      { id: `${motionId}_root_end_${shot.id}`, time: duration, interpolation: motionId === "run" || motionId === "walk" ? "linear" : interpolation, position: [startPosition[0], startPosition[1], startPosition[2] - travel], rotation: [root.rotation.x, root.rotation.y, root.rotation.z].map(THREE.MathUtils.radToDeg) as [number, number, number], scale: root.scale.x * 100 },
     ];
     const startCamera: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
-    const direction = camera.position.clone().sub(controls.target).normalize();
-    const endCamera = camera.position.clone().addScaledVector(direction, motionId === "run" ? 3.2 : 0);
     const cameraFrames: CameraAnimationKeyframe[] = [
       { id: `${motionId}_camera_start_${shot.id}`, time: 0, interpolation, position: startCamera, target: [controls.target.x, controls.target.y, controls.target.z], focalLength: camera.getFocalLength() },
-      { id: `${motionId}_camera_end_${shot.id}`, time: duration, interpolation, position: [endCamera.x, endCamera.y, endCamera.z], target: [controls.target.x, controls.target.y, controls.target.z - travel * 0.45], focalLength: camera.getFocalLength() },
     ];
     const durationDelta = duration - shot.duration;
     commitTimeline((timelineValue) => ({
@@ -4946,7 +5031,7 @@ export default function Home() {
     }));
     setTimelineOpen(true);
     scrubTimeline(shot.start, true);
-    flash(text(`${motionId.toUpperCase()} motion loaded`, `已载入${motionId === "wave" ? "5 秒抬手" : motionId === "kneel" ? "4 秒单膝跪" : motionId === "run" ? "6 秒奔跑与镜头后拉" : motionId === "walk" ? "行走" : "待机"}动画`));
+    flash(text(`${motionId.toUpperCase()} skeletal motion loaded`, `已载入${motionId === "wave" ? "5 秒抬手挥动" : motionId === "kneel" ? "4 秒单膝跪" : motionId === "run" ? "6 秒原地奔跑步态" : motionId === "walk" ? "原地行走步态" : "待机呼吸"}骨骼动画`));
   };
 
   const scrubTimeline = (time: number, applyShot = true) => {
