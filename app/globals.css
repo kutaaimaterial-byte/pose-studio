@@ -1820,7 +1820,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .timeline-header-actions button.active { background: var(--primary-soft); color: var(--primary); }
 .timeline-header-actions .auto-key-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
 .timeline-header-actions button.active .auto-key-dot { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
-.timeline-motion-select { width: 142px; height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: #fff; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.timeline-motion-select, .timeline-camera-motion-select { width: 132px; height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: #fff; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.timeline-camera-motion-select { border-color: color-mix(in srgb, var(--primary) 38%, var(--border-default)); background: color-mix(in srgb, var(--primary-soft) 48%, #fff); }
 
 .timeline-workspace { min-width: 0; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); background: #f8fafc; }
 .timeline-controls { min-height: 0; display: grid; align-content: center; gap: 7px; padding: var(--space-2) var(--space-3); border-right: 1px solid var(--border-default); background: #fff; }
@@ -1865,6 +1866,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .clip-copy strong i { width: 5px; height: 5px; border-radius: 50%; background: var(--warning); }
 .clip-copy small { overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
 .clip-copy small b { color: var(--primary); font-weight: 700; }
+.clip-copy small b.camera-motion-name { color: #0f8a72; }
 .timeline-clip > em { color: var(--text-tertiary); font: 500 10px/14px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .clip-trim { width: 6px; position: absolute; z-index: 2; inset-block: 0; cursor: ew-resize; }
 .clip-trim-start { left: 0; }

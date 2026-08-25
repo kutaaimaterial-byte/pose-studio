@@ -111,8 +111,10 @@ import {
 import { VideoTimelinePanel } from "./video-timeline-panel";
 import {
   animationLocalTime,
+  cameraMotionLibrary as cameraMotionPresets,
   createAnimationTimeline,
   evaluateAnimationShot,
+  inferCameraMotionFromPrompt,
   inferMotionFromPrompt,
   motionLibrary as motionPresets,
   normalizeAnimationTimeline,
@@ -123,6 +125,7 @@ import {
   type AnimationTimeline,
   type BoneQuaternionSnapshot,
   type CameraAnimationKeyframe,
+  type CameraMotionId,
   type MotionId,
   type PoseAnimationKeyframe,
   type RootAnimationKeyframe,
@@ -4677,6 +4680,66 @@ export default function Home() {
     return frames;
   };
 
+  const buildCameraMotionFrames = (
+    cameraMotionId: CameraMotionId,
+    shotId: string,
+    duration: number,
+    fps: number,
+    interpolation: AnimationInterpolation,
+    source: ShotCameraSnapshot,
+  ): CameraAnimationKeyframe[] => {
+    const startPosition = new THREE.Vector3(...source.position);
+    const startTarget = new THREE.Vector3(...source.target);
+    const offset = startPosition.clone().sub(startTarget);
+    const distance = Math.max(1, offset.length());
+    const forward = startTarget.clone().sub(startPosition).normalize();
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const frame = (suffix: string, time: number, position: THREE.Vector3, target: THREE.Vector3, focalLength = source.focalLength): CameraAnimationKeyframe => ({
+      id: `camera_${cameraMotionId}_${suffix}_${shotId}`,
+      time: snapAnimationTime(time, fps),
+      interpolation,
+      position: [position.x, position.y, position.z],
+      target: [target.x, target.y, target.z],
+      focalLength,
+    });
+    if (cameraMotionId === "handheld") {
+      const amplitude = Math.min(0.16, distance * 0.018);
+      return [
+        frame("start", 0, startPosition, startTarget),
+        frame("shake_a", duration * 0.24, startPosition.clone().addScaledVector(right, amplitude).add(new THREE.Vector3(0, amplitude * 0.45, 0)), startTarget.clone().addScaledVector(right, amplitude * 0.35)),
+        frame("shake_b", duration * 0.48, startPosition.clone().addScaledVector(right, -amplitude * 0.8).add(new THREE.Vector3(0, -amplitude * 0.25, 0)), startTarget.clone().add(new THREE.Vector3(0, amplitude * 0.25, 0))),
+        frame("shake_c", duration * 0.72, startPosition.clone().addScaledVector(right, amplitude * 0.55).add(new THREE.Vector3(0, amplitude * 0.18, 0)), startTarget.clone().addScaledVector(right, -amplitude * 0.2)),
+        frame("end", duration, startPosition, startTarget),
+      ];
+    }
+    let endPosition = startPosition.clone();
+    let endTarget = startTarget.clone();
+    if (cameraMotionId === "push-in") endPosition.lerp(startTarget, 0.34);
+    if (cameraMotionId === "pull-out") endPosition.add(offset.clone().normalize().multiplyScalar(distance * 0.38));
+    if (cameraMotionId === "truck-left" || cameraMotionId === "truck-right") {
+      const amount = distance * 0.28 * (cameraMotionId === "truck-left" ? -1 : 1);
+      endPosition.addScaledVector(right, amount);
+      endTarget.addScaledVector(right, amount);
+    }
+    if (cameraMotionId === "orbit-left" || cameraMotionId === "orbit-right") {
+      const angle = THREE.MathUtils.degToRad(cameraMotionId === "orbit-left" ? -32 : 32);
+      endPosition = startTarget.clone().add(offset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle));
+    }
+    if (cameraMotionId === "crane-up" || cameraMotionId === "crane-down") {
+      const amount = distance * 0.24 * (cameraMotionId === "crane-up" ? 1 : -1);
+      endPosition.y += amount;
+      endTarget.y += amount * 0.55;
+    }
+    if (cameraMotionId === "pan-left" || cameraMotionId === "pan-right") {
+      const angle = THREE.MathUtils.degToRad(cameraMotionId === "pan-left" ? 18 : -18);
+      endTarget = startPosition.clone().add(startTarget.clone().sub(startPosition).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle));
+    }
+    return [
+      frame("start", 0, startPosition, startTarget),
+      frame("end", duration, endPosition, endTarget),
+    ];
+  };
+
   useEffect(() => {
     if (!modelInfo.loaded || !persistenceReady || restoredTimelineShotRef.current) return;
     const currentTimeline = timelineLatestRef.current;
@@ -4795,6 +4858,7 @@ export default function Home() {
         const snapshot = shot.sceneSnapshot!;
         const selectedModel = snapshot.models.find((model) => model.id === snapshot.selectedModelId) ?? snapshot.models[0];
         const motionId = inferMotionFromPrompt(shot.promptText);
+        const cameraMotionId = inferCameraMotionFromPrompt(shot.promptText);
         const interpolation: AnimationInterpolation = "ease-in-out";
         const rootState = selectedModel?.state ?? getModelEditState(snapshot.editor);
         const staticPose = poseItems.find((pose) => pose.enginePoseIndex === rootState.pose) ?? defaultPose;
@@ -4807,17 +4871,13 @@ export default function Home() {
           { id: `prompt_${shot.id}_root_start`, time: 0, interpolation, position: [...rootState.position], rotation: [...rootState.rotation], scale: rootState.scale },
           ...(travel ? [{ id: `prompt_${shot.id}_root_end`, time: shot.duration, interpolation: "linear" as const, position: [rootState.position[0], rootState.position[1], rootState.position[2] - travel] as [number, number, number], rotation: [...rootState.rotation] as [number, number, number], scale: rootState.scale }] : []),
         ];
-        const cameraStart = new THREE.Vector3(...snapshot.camera.position);
-        const cameraTarget = new THREE.Vector3(...snapshot.camera.target);
-        const cameraEnd = cameraStart.clone();
-        if (/镜头.{0,6}(?:后拉|拉远)|dolly\s*out|pull\s*back/i.test(shot.promptText)) cameraEnd.add(cameraStart.clone().sub(cameraTarget).normalize().multiplyScalar(3.2));
-        const cameraFrames: CameraAnimationKeyframe[] = [
-          { id: `prompt_${shot.id}_camera_start`, time: 0, interpolation, position: [...snapshot.camera.position], target: [...snapshot.camera.target], focalLength: snapshot.camera.focalLength },
-          ...(cameraEnd.distanceTo(cameraStart) > 0.001 ? [{ id: `prompt_${shot.id}_camera_end`, time: shot.duration, interpolation, position: [cameraEnd.x, cameraEnd.y, cameraEnd.z] as [number, number, number], target: [cameraTarget.x, cameraTarget.y, cameraTarget.z - travel * 0.45] as [number, number, number], focalLength: snapshot.camera.focalLength }] : []),
-        ];
+        const cameraFrames: CameraAnimationKeyframe[] = cameraMotionId
+          ? buildCameraMotionFrames(cameraMotionId, shot.id, shot.duration, nextTimeline.fps, interpolation, snapshot.camera)
+          : [{ id: `prompt_${shot.id}_camera_start`, time: 0, interpolation, position: [...snapshot.camera.position], target: [...snapshot.camera.target], focalLength: snapshot.camera.focalLength }];
         return {
           ...animationShot,
           motionId,
+          cameraMotionId,
           loop: motionId === "idle" || motionId === "walk" || motionId === "run",
           tracks: animationShot.tracks.map((track) => track.kind === "pose"
             ? { ...track, keyframes: poseFrames }
@@ -5038,6 +5098,7 @@ export default function Home() {
       shots: timelineValue.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
         ...animationShot,
         motionId: null,
+        cameraMotionId: null,
         tracks: animationShot.tracks.map((track) => track.kind === "pose"
           ? { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, poseFrame, timelineValue.fps) }
           : track.kind === "root"
@@ -5052,9 +5113,7 @@ export default function Home() {
   const loadMotionPreset = (motionId: MotionId) => {
     const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
     const root = modelRootsRef.current[selectedModelIdRef.current];
-    const camera = cameraRef.current;
-    const controls = controlsRef.current;
-    if (!shot || !root || !camera || !controls) return;
+    if (!shot || !root) return;
     const motion = motionPresets.find((item) => item.id === motionId);
     const duration = motion?.defaultDuration ?? 4;
     const fps = animationTimelineLatestRef.current.fps;
@@ -5063,10 +5122,6 @@ export default function Home() {
     const startPosition: [number, number, number] = [root.position.x, root.position.y, root.position.z];
     const rootFrames: RootAnimationKeyframe[] = [
       { id: `${motionId}_root_start_${shot.id}`, time: 0, interpolation, position: startPosition, rotation: [root.rotation.x, root.rotation.y, root.rotation.z].map(THREE.MathUtils.radToDeg) as [number, number, number], scale: root.scale.x * 100 },
-    ];
-    const startCamera: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
-    const cameraFrames: CameraAnimationKeyframe[] = [
-      { id: `${motionId}_camera_start_${shot.id}`, time: 0, interpolation, position: startCamera, target: [controls.target.x, controls.target.y, controls.target.z], focalLength: camera.getFocalLength() },
     ];
     const durationDelta = duration - shot.duration;
     commitTimeline((timelineValue) => ({
@@ -5087,7 +5142,7 @@ export default function Home() {
           ? { ...track, keyframes: poseFrames }
           : track.kind === "root"
             ? { ...track, keyframes: rootFrames }
-            : { ...track, keyframes: cameraFrames }),
+            : track),
       }),
     }));
     setTimelineOpen(true);
@@ -5104,11 +5159,52 @@ export default function Home() {
         ...animationShot,
         motionId: null,
         loop: false,
-        tracks: animationShot.tracks.map((track) => ({ ...track, keyframes: [] }) as AnimationTrack),
+        tracks: animationShot.tracks.map((track) => track.kind === "camera" ? track : ({ ...track, keyframes: [] }) as AnimationTrack),
       }),
     }));
     applyTimelineShot(shot, true);
     flash(text("Motion cleared from this clip", "已清空当前片段的动作"));
+  };
+
+  const loadCameraMotionPreset = (cameraMotionId: CameraMotionId) => {
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
+    if (!shot) return;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const source: ShotCameraSnapshot = shot.sceneSnapshot?.camera ?? {
+      position: camera ? [camera.position.x, camera.position.y, camera.position.z] : [0, 2, 8],
+      target: controls ? [controls.target.x, controls.target.y, controls.target.z] : [0, 1, 0],
+      focalLength: camera?.getFocalLength() ?? 50,
+    };
+    const timelineValue = animationTimelineLatestRef.current;
+    const cameraFrames = buildCameraMotionFrames(cameraMotionId, shot.id, shot.duration, timelineValue.fps, timelineValue.interpolation, source);
+    commitAnimationTimeline((current) => ({
+      ...current,
+      shots: current.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
+        ...animationShot,
+        cameraMotionId,
+        tracks: animationShot.tracks.map((track) => track.kind === "camera" ? { ...track, keyframes: cameraFrames } : track),
+      }),
+    }));
+    setTimelineOpen(true);
+    scrubTimeline(shot.start, true);
+    const preset = cameraMotionPresets.find((item) => item.id === cameraMotionId);
+    flash(text(`${preset?.nameEn ?? cameraMotionId} loaded for this clip`, `当前片段已载入「${preset?.name ?? cameraMotionId}」`));
+  };
+
+  const clearCameraMotionPreset = () => {
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
+    if (!shot) return;
+    commitAnimationTimeline((current) => ({
+      ...current,
+      shots: current.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
+        ...animationShot,
+        cameraMotionId: null,
+        tracks: animationShot.tracks.map((track) => track.kind === "camera" ? { ...track, keyframes: [] } : track),
+      }),
+    }));
+    applyTimelineShot(shot, true);
+    flash(text("Camera motion cleared from this clip", "已清空当前片段的镜头运动"));
   };
 
   const scrubTimeline = (time: number, applyShot = true) => {
@@ -6708,6 +6804,8 @@ export default function Home() {
           onSetInterpolation={(interpolation: AnimationInterpolation) => commitAnimationTimeline((current) => ({ ...current, interpolation }))}
           onLoadMotion={loadMotionPreset}
           onClearMotion={clearMotionPreset}
+          onLoadCameraMotion={loadCameraMotionPreset}
+          onClearCameraMotion={clearCameraMotionPreset}
         />}
 
         <ContextActionBar

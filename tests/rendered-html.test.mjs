@@ -230,9 +230,14 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /if \(value\.pose\.rigPosition\) rig\.root\.position\.set/);
   assert.match(page, /motionRevision: 2/);
   assert.match(page, /motionId,\s*loop: motionId === "idle"/s);
+  assert.match(page, /const buildCameraMotionFrames = \(/);
+  assert.match(page, /track\.kind === "camera" \? \{ \.\.\.track, keyframes: cameraFrames \} : track/);
+  assert.match(page, /track\.kind === "camera" \? track : \(\{ \.\.\.track, keyframes: \[\] \}\) as AnimationTrack/);
   assert.match(page, /animationShot\.shotId !== shot\.id \? animationShot : \{[\s\S]*?motionId,/s);
   assert.doesNotMatch(page, /motionId === "run" \? 3\.2 : 0/);
   assert.match(timelinePanel, /value=\{activeAnimationShot\?\.motionId \?\? ""\}/);
+  assert.match(timelinePanel, /value=\{activeAnimationShot\?\.cameraMotionId \?\? ""\}/);
+  assert.match(timelinePanel, /animationTimeline\.cameraMotionLibrary\.map/);
   assert.match(timelinePanel, /clipMotion\.name/);
   assert.match(timelinePanel, /ArrowsLeftRight size=\{18\}/);
   assert.match(timelinePanel, /requestAnimationFrame\(applyPendingScrub\)/);

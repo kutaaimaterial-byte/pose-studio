@@ -52,6 +52,19 @@ export type MotionId =
   | "salute"
   | "stretch";
 
+export type CameraMotionId =
+  | "push-in"
+  | "pull-out"
+  | "pan-left"
+  | "pan-right"
+  | "truck-left"
+  | "truck-right"
+  | "orbit-left"
+  | "orbit-right"
+  | "crane-up"
+  | "crane-down"
+  | "handheld";
+
 export type AnimationShot = {
   id: string;
   shotId: string;
@@ -59,6 +72,7 @@ export type AnimationShot = {
   speed: number;
   loop: boolean;
   motionId: MotionId | null;
+  cameraMotionId: CameraMotionId | null;
   tracks: AnimationTrack[];
 };
 
@@ -70,6 +84,13 @@ export type MotionLibraryItem = {
   defaultDuration: number;
 };
 
+export type CameraMotionLibraryItem = {
+  id: CameraMotionId;
+  name: string;
+  nameEn: string;
+  category: "dolly" | "pan" | "truck" | "orbit" | "crane" | "style";
+};
+
 export type AnimationTimeline = {
   schemaVersion: "3.3";
   motionRevision: 1 | 2;
@@ -78,6 +99,7 @@ export type AnimationTimeline = {
   interpolation: AnimationInterpolation;
   shots: AnimationShot[];
   motionLibrary: MotionLibraryItem[];
+  cameraMotionLibrary: CameraMotionLibraryItem[];
   updatedAt: number;
 };
 
@@ -102,6 +124,20 @@ export const motionLibrary: MotionLibraryItem[] = [
   { id: "stretch", name: "双臂伸展", nameEn: "Stretch", category: "gesture", defaultDuration: 4 },
 ];
 
+export const cameraMotionLibrary: CameraMotionLibraryItem[] = [
+  { id: "push-in", name: "镜头推进", nameEn: "Push In", category: "dolly" },
+  { id: "pull-out", name: "镜头拉远", nameEn: "Pull Out", category: "dolly" },
+  { id: "pan-left", name: "向左摇镜", nameEn: "Pan Left", category: "pan" },
+  { id: "pan-right", name: "向右摇镜", nameEn: "Pan Right", category: "pan" },
+  { id: "truck-left", name: "向左横移", nameEn: "Truck Left", category: "truck" },
+  { id: "truck-right", name: "向右横移", nameEn: "Truck Right", category: "truck" },
+  { id: "orbit-left", name: "向左环绕", nameEn: "Orbit Left", category: "orbit" },
+  { id: "orbit-right", name: "向右环绕", nameEn: "Orbit Right", category: "orbit" },
+  { id: "crane-up", name: "镜头升高", nameEn: "Crane Up", category: "crane" },
+  { id: "crane-down", name: "镜头降低", nameEn: "Crane Down", category: "crane" },
+  { id: "handheld", name: "手持跟拍", nameEn: "Handheld", category: "style" },
+];
+
 export function inferMotionFromPrompt(prompt: string): MotionLibraryItem["id"] | null {
   const value = prompt.toLowerCase();
   if (/敬礼|军礼|salute/.test(value)) return "salute";
@@ -116,6 +152,22 @@ export function inferMotionFromPrompt(prompt: string): MotionLibraryItem["id"] |
   if (/疾跑|冲刺|奔跑|跑步|run|sprint/.test(value)) return "run";
   if (/行走|走路|迈步|walk/.test(value)) return "walk";
   if (/待机|呼吸|静止|稳定|idle|breath|still/.test(value)) return "idle";
+  return null;
+}
+
+export function inferCameraMotionFromPrompt(prompt: string): CameraMotionId | null {
+  const value = prompt.toLowerCase();
+  if (/手持|跟拍|晃动|handheld|follow\s*cam/.test(value)) return "handheld";
+  if (/向左环绕|左环绕|orbit\s*left/.test(value)) return "orbit-left";
+  if (/向右环绕|右环绕|orbit\s*right/.test(value)) return "orbit-right";
+  if (/镜头.{0,6}(?:升高|上升|升起)|crane\s*up|boom\s*up/.test(value)) return "crane-up";
+  if (/镜头.{0,6}(?:降低|下降|下沉)|crane\s*down|boom\s*down/.test(value)) return "crane-down";
+  if (/镜头.{0,6}(?:左移|向左横移)|truck\s*left|dolly\s*left/.test(value)) return "truck-left";
+  if (/镜头.{0,6}(?:右移|向右横移)|truck\s*right|dolly\s*right/.test(value)) return "truck-right";
+  if (/镜头.{0,6}(?:左摇|向左摇)|pan\s*left/.test(value)) return "pan-left";
+  if (/镜头.{0,6}(?:右摇|向右摇)|pan\s*right/.test(value)) return "pan-right";
+  if (/镜头.{0,6}(?:后拉|拉远|拉开)|dolly\s*out|pull\s*back|zoom\s*out/.test(value)) return "pull-out";
+  if (/镜头.{0,6}(?:推进|推近|靠近)|dolly\s*in|push\s*in|zoom\s*in/.test(value)) return "push-in";
   return null;
 }
 
@@ -253,6 +305,7 @@ function emptyAnimationShot(shotId: string, duration: number): AnimationShot {
     speed: 1,
     loop: false,
     motionId: null,
+    cameraMotionId: null,
     tracks: [
       { id: `pose_${shotId}`, kind: "pose", name: "Pose", enabled: true, keyframes: [] },
       { id: `root_${shotId}`, kind: "root", name: "Root Transform", enabled: true, keyframes: [] },
@@ -270,6 +323,7 @@ export function createAnimationTimeline(shots: Array<{ id: string; duration: num
     interpolation: "ease-in-out",
     shots: shots.map((shot) => emptyAnimationShot(shot.id, shot.duration)),
     motionLibrary: motionLibrary.map((motion) => ({ ...motion })),
+    cameraMotionLibrary: cameraMotionLibrary.map((motion) => ({ ...motion })),
     updatedAt: 0,
   };
 }
@@ -287,8 +341,10 @@ export function normalizeAnimationTimeline(source: unknown, shots: Array<{ id: s
     if (!stored || !Array.isArray(stored.tracks)) return emptyAnimationShot(shot.id, shot.duration);
     const fallback = emptyAnimationShot(shot.id, shot.duration);
     const storedMotionId = motionLibrary.some((motion) => motion.id === stored.motionId) ? stored.motionId as MotionId : null;
+    const storedCameraMotionId = cameraMotionLibrary.some((motion) => motion.id === stored.cameraMotionId) ? stored.cameraMotionId as CameraMotionId : null;
     const generatedKeyIds = stored.tracks.flatMap((track) => Array.isArray(track.keyframes) ? track.keyframes.map((keyframe) => keyframe.id) : []).join(" ");
     const inferredMotionId = storedMotionId ?? motionLibrary.find((motion) => generatedKeyIds.includes(`${motion.id}_`))?.id ?? null;
+    const inferredCameraMotionId = storedCameraMotionId ?? cameraMotionLibrary.find((motion) => generatedKeyIds.includes(`camera_${motion.id}_`))?.id ?? null;
     return {
       ...fallback,
       ...stored,
@@ -297,6 +353,7 @@ export function normalizeAnimationTimeline(source: unknown, shots: Array<{ id: s
       duration: shot.duration,
       speed: Math.max(0.01, Number(stored.speed) || 1),
       motionId: inferredMotionId,
+      cameraMotionId: inferredCameraMotionId,
       tracks: fallback.tracks.map((track) => {
         const found = stored.tracks.find((candidate) => candidate.kind === track.kind);
         if (!found || !Array.isArray(found.keyframes)) return track;

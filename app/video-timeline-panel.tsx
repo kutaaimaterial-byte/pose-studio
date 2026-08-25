@@ -23,7 +23,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 
-import { type AnimationInterpolation, type AnimationTimeline, type MotionId } from "./animation-timeline";
+import { type AnimationInterpolation, type AnimationTimeline, type CameraMotionId, type MotionId } from "./animation-timeline";
 import { formatTimecode, type VideoShot, type VideoTimeline } from "./video-timeline";
 
 type ClipDragMode = "move" | "trim-start" | "trim-end";
@@ -69,6 +69,8 @@ type VideoTimelinePanelProps<TSnapshot> = {
   onSetInterpolation: (value: AnimationInterpolation) => void;
   onLoadMotion: (motionId: MotionId) => void;
   onClearMotion: () => void;
+  onLoadCameraMotion: (cameraMotionId: CameraMotionId) => void;
+  onClearCameraMotion: () => void;
 };
 
 function rulerStep(pixelsPerSecond: number) {
@@ -119,6 +121,8 @@ export function VideoTimelinePanel<TSnapshot>({
   onSetInterpolation,
   onLoadMotion,
   onClearMotion,
+  onLoadCameraMotion,
+  onClearCameraMotion,
 }: VideoTimelinePanelProps<TSnapshot>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -140,6 +144,10 @@ export function VideoTimelinePanel<TSnapshot>({
     const motionId = animationTimeline.shots.find((shot) => shot.shotId === shotId)?.motionId;
     return animationTimeline.motionLibrary.find((motion) => motion.id === motionId) ?? null;
   };
+  const cameraMotionForShot = (shotId: string) => {
+    const cameraMotionId = animationTimeline.shots.find((shot) => shot.shotId === shotId)?.cameraMotionId;
+    return animationTimeline.cameraMotionLibrary.find((motion) => motion.id === cameraMotionId) ?? null;
+  };
   const errors = timeline.issues.filter((issue) => issue.severity === "error");
 
   const scrubFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -156,7 +164,7 @@ export function VideoTimelinePanel<TSnapshot>({
       <header className="timeline-header">
         <div className="timeline-heading">
           <span className="timeline-heading-icon"><FilmStrip size={17} weight="fill" /></span>
-          <div><strong>{text("Animation Sequencer", "动画时间轴")}</strong><small>V3.3 · {timeline.shots.length} Shots · {text("One motion per clip", "每片段独立动作")} · {timeline.fps} FPS</small></div>
+          <div><strong>{text("Animation Sequencer", "动画时间轴")}</strong><small>V3.3 · {timeline.shots.length} Shots · {text("Independent character + camera motion", "人物与镜头独立运动")} · {timeline.fps} FPS</small></div>
         </div>
         <div className="timeline-header-actions">
           <select className="timeline-motion-select" value={activeAnimationShot?.motionId ?? ""} onChange={(event) => {
@@ -166,6 +174,14 @@ export function VideoTimelinePanel<TSnapshot>({
           }} disabled={!activeShot} aria-label={text("Motion library", "动作库")}>
             <option value="">{text("No motion", "未分配动作")}</option>
             {animationTimeline.motionLibrary.map((motion) => <option key={motion.id} value={motion.id}>{isZh ? motion.name : motion.nameEn}</option>)}
+          </select>
+          <select className="timeline-camera-motion-select" value={activeAnimationShot?.cameraMotionId ?? ""} onChange={(event) => {
+            const value = event.target.value as CameraMotionId | "";
+            if (value) onLoadCameraMotion(value);
+            else onClearCameraMotion();
+          }} disabled={!activeShot} aria-label={text("Camera motion library", "镜头运动库")}>
+            <option value="">{text("No camera move", "未分配镜头运动")}</option>
+            {animationTimeline.cameraMotionLibrary.map((motion) => <option key={motion.id} value={motion.id}>{isZh ? motion.name : motion.nameEn}</option>)}
           </select>
           <button className={animationTimeline.autoKey ? "active" : ""} onClick={onToggleAutoKey} title={text("Automatically key edited values", "自动记录编辑值")}><i className="auto-key-dot" />Auto Key</button>
           <button onClick={onAddKeyframe} disabled={!activeShot}><Plus size={15} />{text("Keyframe", "关键帧")}</button>
@@ -229,6 +245,7 @@ export function VideoTimelinePanel<TSnapshot>({
               <div className="timeline-track shot-track">
                 {timeline.shots.map((shot) => {
                   const clipMotion = motionForShot(shot.id);
+                  const clipCameraMotion = cameraMotionForShot(shot.id);
                   return (
                   <button
                     key={shot.id}
@@ -241,7 +258,7 @@ export function VideoTimelinePanel<TSnapshot>({
                   >
                     <span className="clip-trim clip-trim-start" onPointerDown={(event) => { event.stopPropagation(); onClipPointerDown(shot.id, "trim-start", event); }} />
                     <span className="clip-color" />
-                    <span className="clip-copy"><strong>SHOT {String(shot.index).padStart(2, "0")}{shot.dirty && <i />}</strong><small>{shot.title}{clipMotion && <b> · {isZh ? clipMotion.name : clipMotion.nameEn}</b>}</small></span>
+                    <span className="clip-copy"><strong>SHOT {String(shot.index).padStart(2, "0")}{shot.dirty && <i />}</strong><small>{shot.title}{clipMotion && <b> · {isZh ? clipMotion.name : clipMotion.nameEn}</b>}{clipCameraMotion && <b className="camera-motion-name"> · {isZh ? clipCameraMotion.name : clipCameraMotion.nameEn}</b>}</small></span>
                     <em>{shot.duration.toFixed(1)}s</em>
                     <span className="clip-trim clip-trim-end" onPointerDown={(event) => { event.stopPropagation(); onClipPointerDown(shot.id, "trim-end", event); }} />
                   </button>

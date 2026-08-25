@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   animationLocalTime,
+  cameraMotionLibrary,
   createAnimationTimeline,
   evaluateAnimationShot,
   inferMotionFromPrompt,
+  inferCameraMotionFromPrompt,
   motionLibrary,
   normalizeAnimationTimeline,
   slerpQuaternion,
@@ -20,6 +22,7 @@ const shot: AnimationShot = {
   speed: 1,
   loop: false,
   motionId: "walk",
+  cameraMotionId: "push-in",
   tracks: [
     {
       id: "pose_shot_1",
@@ -86,6 +89,7 @@ test("normalization migrates shot metadata without losing stored keys", () => {
   assert.equal(restored.shots[0].duration, 8);
   assert.equal(restored.shots[0].tracks[0].keyframes.length, 2);
   assert.equal(restored.shots[0].motionId, "walk");
+  assert.equal(restored.shots[0].cameraMotionId, "push-in");
   assert.equal(restored.shots[1].tracks.length, 3);
   assert.equal(restored.shots[1].motionId, null);
 });
@@ -93,6 +97,15 @@ test("normalization migrates shot metadata without losing stored keys", () => {
 test("motion library provides a broad set of unique clip motions", () => {
   assert.ok(motionLibrary.length >= 12);
   assert.equal(new Set(motionLibrary.map((motion) => motion.id)).size, motionLibrary.length);
+});
+
+test("camera motion library provides independent cinematic moves", () => {
+  assert.ok(cameraMotionLibrary.length >= 10);
+  assert.equal(new Set(cameraMotionLibrary.map((motion) => motion.id)).size, cameraMotionLibrary.length);
+  assert.equal(inferCameraMotionFromPrompt("镜头缓慢推进人物面部"), "push-in");
+  assert.equal(inferCameraMotionFromPrompt("镜头向左横移"), "truck-left");
+  assert.equal(inferCameraMotionFromPrompt("手持跟拍角色奔跑"), "handheld");
+  assert.equal(inferCameraMotionFromPrompt("人物挥手"), null);
 });
 
 test("Prompt To Animation maps timed actions deterministically", () => {
