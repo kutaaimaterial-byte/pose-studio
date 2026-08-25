@@ -38,17 +38,32 @@ export type AnimationTrack =
   | { id: string; kind: "root"; name: string; enabled: boolean; keyframes: RootAnimationKeyframe[] }
   | { id: string; kind: "camera"; name: string; enabled: boolean; keyframes: CameraAnimationKeyframe[] };
 
+export type MotionId =
+  | "idle"
+  | "walk"
+  | "run"
+  | "wave"
+  | "kneel"
+  | "jump"
+  | "squat"
+  | "sit"
+  | "turn"
+  | "look-back"
+  | "salute"
+  | "stretch";
+
 export type AnimationShot = {
   id: string;
   shotId: string;
   duration: number;
   speed: number;
   loop: boolean;
+  motionId: MotionId | null;
   tracks: AnimationTrack[];
 };
 
 export type MotionLibraryItem = {
-  id: "idle" | "walk" | "run" | "wave" | "kneel";
+  id: MotionId;
   name: string;
   nameEn: string;
   category: "loop" | "gesture" | "transition";
@@ -78,10 +93,24 @@ export const motionLibrary: MotionLibraryItem[] = [
   { id: "run", name: "向前奔跑", nameEn: "Run", category: "loop", defaultDuration: 6 },
   { id: "wave", name: "抬手挥动", nameEn: "Wave", category: "gesture", defaultDuration: 5 },
   { id: "kneel", name: "站立到单膝跪", nameEn: "Kneel", category: "transition", defaultDuration: 4 },
+  { id: "jump", name: "原地起跳", nameEn: "Jump", category: "transition", defaultDuration: 3 },
+  { id: "squat", name: "下蹲起身", nameEn: "Squat", category: "transition", defaultDuration: 4 },
+  { id: "sit", name: "站立到坐姿", nameEn: "Sit Down", category: "transition", defaultDuration: 4 },
+  { id: "turn", name: "转身回头", nameEn: "Turn Around", category: "transition", defaultDuration: 4 },
+  { id: "look-back", name: "侧身回眸", nameEn: "Look Back", category: "gesture", defaultDuration: 3 },
+  { id: "salute", name: "抬手敬礼", nameEn: "Salute", category: "gesture", defaultDuration: 4 },
+  { id: "stretch", name: "双臂伸展", nameEn: "Stretch", category: "gesture", defaultDuration: 4 },
 ];
 
 export function inferMotionFromPrompt(prompt: string): MotionLibraryItem["id"] | null {
   const value = prompt.toLowerCase();
+  if (/敬礼|军礼|salute/.test(value)) return "salute";
+  if (/回眸|回头看|侧身回头|look\s*back/.test(value)) return "look-back";
+  if (/转身|转过去|turn\s*around|turning/.test(value)) return "turn";
+  if (/伸展|伸懒腰|张开双臂|stretch/.test(value)) return "stretch";
+  if (/坐下|坐姿|正坐|sit\s*down|seated/.test(value)) return "sit";
+  if (/深蹲|半蹲|下蹲|蹲下|squat/.test(value)) return "squat";
+  if (/起跳|跳跃|跳起|落地|jump|leap/.test(value)) return "jump";
   if (/单膝|跪下|跪地|kneel/.test(value)) return "kneel";
   if (/抬手|举手|挥手|wave|raise.+hand/.test(value)) return "wave";
   if (/疾跑|冲刺|奔跑|跑步|run|sprint/.test(value)) return "run";
@@ -223,6 +252,7 @@ function emptyAnimationShot(shotId: string, duration: number): AnimationShot {
     duration: Math.max(1 / 120, duration),
     speed: 1,
     loop: false,
+    motionId: null,
     tracks: [
       { id: `pose_${shotId}`, kind: "pose", name: "Pose", enabled: true, keyframes: [] },
       { id: `root_${shotId}`, kind: "root", name: "Root Transform", enabled: true, keyframes: [] },
@@ -256,6 +286,9 @@ export function normalizeAnimationTimeline(source: unknown, shots: Array<{ id: s
     const stored = storedShots.find((item) => item?.shotId === shot.id);
     if (!stored || !Array.isArray(stored.tracks)) return emptyAnimationShot(shot.id, shot.duration);
     const fallback = emptyAnimationShot(shot.id, shot.duration);
+    const storedMotionId = motionLibrary.some((motion) => motion.id === stored.motionId) ? stored.motionId as MotionId : null;
+    const generatedKeyIds = stored.tracks.flatMap((track) => Array.isArray(track.keyframes) ? track.keyframes.map((keyframe) => keyframe.id) : []).join(" ");
+    const inferredMotionId = storedMotionId ?? motionLibrary.find((motion) => generatedKeyIds.includes(`${motion.id}_`))?.id ?? null;
     return {
       ...fallback,
       ...stored,
@@ -263,6 +296,7 @@ export function normalizeAnimationTimeline(source: unknown, shots: Array<{ id: s
       shotId: shot.id,
       duration: shot.duration,
       speed: Math.max(0.01, Number(stored.speed) || 1),
+      motionId: inferredMotionId,
       tracks: fallback.tracks.map((track) => {
         const found = stored.tracks.find((candidate) => candidate.kind === track.kind);
         if (!found || !Array.isArray(found.keyframes)) return track;

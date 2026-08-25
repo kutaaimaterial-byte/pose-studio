@@ -229,7 +229,11 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /bonePositions: Object\.fromEntries/);
   assert.match(page, /if \(value\.pose\.rigPosition\) rig\.root\.position\.set/);
   assert.match(page, /motionRevision: 2/);
+  assert.match(page, /motionId,\s*loop: motionId === "idle"/s);
+  assert.match(page, /animationShot\.shotId !== shot\.id \? animationShot : \{[\s\S]*?motionId,/s);
   assert.doesNotMatch(page, /motionId === "run" \? 3\.2 : 0/);
+  assert.match(timelinePanel, /value=\{activeAnimationShot\?\.motionId \?\? ""\}/);
+  assert.match(timelinePanel, /clipMotion\.name/);
   assert.match(timelinePanel, /ArrowsLeftRight size=\{18\}/);
   assert.match(timelinePanel, /requestAnimationFrame\(applyPendingScrub\)/);
   assert.match(timelinePanel, /const pointerOffset = event\.clientX - handle\.getBoundingClientRect\(\)\.left/);

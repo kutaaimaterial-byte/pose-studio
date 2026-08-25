@@ -114,6 +114,7 @@ import {
   createAnimationTimeline,
   evaluateAnimationShot,
   inferMotionFromPrompt,
+  motionLibrary as motionPresets,
   normalizeAnimationTimeline,
   snapAnimationTime,
   upsertAnimationKeyframe,
@@ -122,6 +123,7 @@ import {
   type AnimationTimeline,
   type BoneQuaternionSnapshot,
   type CameraAnimationKeyframe,
+  type MotionId,
   type PoseAnimationKeyframe,
   type RootAnimationKeyframe,
 } from "./animation-timeline";
@@ -4560,7 +4562,7 @@ export default function Home() {
   };
 
   const buildMotionPoseFrames = (
-    motionId: "idle" | "walk" | "run" | "wave" | "kneel",
+    motionId: MotionId,
     shotId: string,
     duration: number,
     fps: number,
@@ -4574,6 +4576,14 @@ export default function Home() {
     const raised = poseByName("单手举起");
     const halfSquat = poseByName("半蹲");
     const kneel = poseByName("单膝跪地");
+    const jump = poseByName("原地起跳");
+    const landing = poseByName("落地缓冲");
+    const squat = poseByName("自然蹲姿");
+    const sit = poseByName("自然正坐");
+    const side = poseByName("侧身站立");
+    const backTurn = poseByName("背身回头");
+    const lookBack = poseByName("侧身回眸");
+    const openArms = poseByName("双臂张开");
     const frame = (
       suffix: string,
       time: number,
@@ -4609,6 +4619,52 @@ export default function Home() {
       frame("exhale", duration * 0.75, natural, false, { Chest: [1.5, 0, 0], Head: [0.8, 0, 0] }, "linear"),
       frame("end", duration, natural, false, {}, "linear"),
     ];
+    if (motionId === "jump") return [
+      frame("start", 0, natural),
+      frame("prepare", duration * 0.22, halfSquat),
+      frame("air", duration * 0.48, jump),
+      frame("land", duration * 0.74, landing),
+      frame("end", duration, natural),
+    ];
+    if (motionId === "squat") return [
+      frame("start", 0, natural),
+      frame("lower", duration * 0.3, halfSquat),
+      frame("hold", duration * 0.58, squat),
+      frame("rise", duration * 0.82, halfSquat),
+      frame("end", duration, natural),
+    ];
+    if (motionId === "sit") return [
+      frame("start", 0, natural),
+      frame("lower", duration * 0.42, halfSquat),
+      frame("settle", duration * 0.76, sit),
+      frame("end", duration, sit),
+    ];
+    if (motionId === "turn") return [
+      frame("start", 0, natural),
+      frame("side", duration * 0.38, side),
+      frame("back", duration * 0.74, backTurn),
+      frame("end", duration, backTurn),
+    ];
+    if (motionId === "look-back") return [
+      frame("start", 0, natural),
+      frame("glance", duration * 0.46, lookBack),
+      frame("hold", duration * 0.72, lookBack),
+      frame("end", duration, natural),
+    ];
+    if (motionId === "salute") return [
+      frame("start", 0, natural),
+      frame("raise", duration * 0.34, raised, false, { RightLowerArm: [-12, 0, -28], RightHand: [0, 0, -10] }),
+      frame("hold", duration * 0.64, raised, false, { RightLowerArm: [-18, 0, -34], RightHand: [0, 0, -14] }),
+      frame("lower", duration * 0.82, raised),
+      frame("end", duration, natural),
+    ];
+    if (motionId === "stretch") return [
+      frame("start", 0, natural),
+      frame("open", duration * 0.36, openArms),
+      frame("extend", duration * 0.62, openArms, false, { Chest: [-4, 0, 0], LeftShoulder: [-4, 0, -6], RightShoulder: [-4, 0, 6] }),
+      frame("release", duration * 0.82, openArms),
+      frame("end", duration, natural),
+    ];
     const cyclePose = motionId === "run" ? run : walk;
     const stride = motionId === "run" ? 0.42 : 0.72;
     const frames: PoseAnimationKeyframe[] = [];
@@ -4634,12 +4690,13 @@ export default function Home() {
           const videoShot = currentTimeline.shots.find((item) => item.id === animationShot.shotId);
           const poseTrack = animationShot.tracks.find((track) => track.kind === "pose");
           const keyIds = poseTrack?.keyframes.map((keyframe) => keyframe.id).join(" ") ?? "";
-          const detectedPreset = (["idle", "walk", "run", "wave", "kneel"] as const).find((motion) => keyIds.includes(`${motion}_`));
+          const detectedPreset = motionPresets.find((motion) => keyIds.includes(`${motion.id}_`))?.id;
           const motionId = inferMotionFromPrompt(videoShot?.promptText ?? "") ?? detectedPreset ?? null;
           if (!motionId) return animationShot;
           const generatedTrack = (track: AnimationTrack) => track.keyframes.some((keyframe) => keyframe.id.startsWith("prompt_") || keyframe.id.startsWith(`${motionId}_`));
           return {
             ...animationShot,
+            motionId,
             tracks: animationShot.tracks.map((track): AnimationTrack => track.kind === "pose"
               ? { ...track, keyframes: buildMotionPoseFrames(motionId, animationShot.shotId, animationShot.duration, currentAnimationTimeline.fps, currentAnimationTimeline.interpolation) }
               : generatedTrack(track) ? { ...track, keyframes: track.keyframes.slice(0, 1) } as AnimationTrack : track),
@@ -4760,6 +4817,7 @@ export default function Home() {
         ];
         return {
           ...animationShot,
+          motionId,
           loop: motionId === "idle" || motionId === "walk" || motionId === "run",
           tracks: animationShot.tracks.map((track) => track.kind === "pose"
             ? { ...track, keyframes: poseFrames }
@@ -4979,6 +5037,7 @@ export default function Home() {
       ...timelineValue,
       shots: timelineValue.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
         ...animationShot,
+        motionId: null,
         tracks: animationShot.tracks.map((track) => track.kind === "pose"
           ? { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, poseFrame, timelineValue.fps) }
           : track.kind === "root"
@@ -4990,13 +5049,14 @@ export default function Home() {
     return true;
   };
 
-  const loadMotionPreset = (motionId: "idle" | "walk" | "run" | "wave" | "kneel") => {
+  const loadMotionPreset = (motionId: MotionId) => {
     const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
     const root = modelRootsRef.current[selectedModelIdRef.current];
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (!shot || !root || !camera || !controls) return;
-    const duration = motionId === "wave" ? 5 : motionId === "kneel" ? 4 : motionId === "run" ? 6 : motionId === "walk" ? 4 : 3;
+    const motion = motionPresets.find((item) => item.id === motionId);
+    const duration = motion?.defaultDuration ?? 4;
     const fps = animationTimelineLatestRef.current.fps;
     const interpolation = animationTimelineLatestRef.current.interpolation;
     const poseFrames = buildMotionPoseFrames(motionId, shot.id, duration, fps, interpolation);
@@ -5021,6 +5081,7 @@ export default function Home() {
       shots: timelineValue.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
         ...animationShot,
         duration,
+        motionId,
         loop: motionId === "idle" || motionId === "walk" || motionId === "run",
         tracks: animationShot.tracks.map((track) => track.kind === "pose"
           ? { ...track, keyframes: poseFrames }
@@ -5031,7 +5092,23 @@ export default function Home() {
     }));
     setTimelineOpen(true);
     scrubTimeline(shot.start, true);
-    flash(text(`${motionId.toUpperCase()} skeletal motion loaded`, `已载入${motionId === "wave" ? "5 秒抬手挥动" : motionId === "kneel" ? "4 秒单膝跪" : motionId === "run" ? "6 秒原地奔跑步态" : motionId === "walk" ? "原地行走步态" : "待机呼吸"}骨骼动画`));
+    flash(text(`${motion?.nameEn ?? motionId} loaded for this clip`, `当前片段已载入「${motion?.name ?? motionId}」骨骼动作`));
+  };
+
+  const clearMotionPreset = () => {
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
+    if (!shot) return;
+    commitAnimationTimeline((timelineValue) => ({
+      ...timelineValue,
+      shots: timelineValue.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
+        ...animationShot,
+        motionId: null,
+        loop: false,
+        tracks: animationShot.tracks.map((track) => ({ ...track, keyframes: [] }) as AnimationTrack),
+      }),
+    }));
+    applyTimelineShot(shot, true);
+    flash(text("Motion cleared from this clip", "已清空当前片段的动作"));
   };
 
   const scrubTimeline = (time: number, applyShot = true) => {
@@ -6630,6 +6707,7 @@ export default function Home() {
           onStepFrame={(directionValue) => scrubTimeline(playheadRef.current + directionValue / timelineLatestRef.current.fps, true)}
           onSetInterpolation={(interpolation: AnimationInterpolation) => commitAnimationTimeline((current) => ({ ...current, interpolation }))}
           onLoadMotion={loadMotionPreset}
+          onClearMotion={clearMotionPreset}
         />}
 
         <ContextActionBar

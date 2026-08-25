@@ -6,6 +6,7 @@ import {
   createAnimationTimeline,
   evaluateAnimationShot,
   inferMotionFromPrompt,
+  motionLibrary,
   normalizeAnimationTimeline,
   slerpQuaternion,
   snapAnimationTime,
@@ -18,6 +19,7 @@ const shot: AnimationShot = {
   duration: 6,
   speed: 1,
   loop: false,
+  motionId: "walk",
   tracks: [
     {
       id: "pose_shot_1",
@@ -83,12 +85,22 @@ test("normalization migrates shot metadata without losing stored keys", () => {
   assert.equal(restored.schemaVersion, "3.3");
   assert.equal(restored.shots[0].duration, 8);
   assert.equal(restored.shots[0].tracks[0].keyframes.length, 2);
+  assert.equal(restored.shots[0].motionId, "walk");
   assert.equal(restored.shots[1].tracks.length, 3);
+  assert.equal(restored.shots[1].motionId, null);
+});
+
+test("motion library provides a broad set of unique clip motions", () => {
+  assert.ok(motionLibrary.length >= 12);
+  assert.equal(new Set(motionLibrary.map((motion) => motion.id)).size, motionLibrary.length);
 });
 
 test("Prompt To Animation maps timed actions deterministically", () => {
   assert.equal(inferMotionFromPrompt("2-5秒：角色慢慢抬起右手并挥手"), "wave");
   assert.equal(inferMotionFromPrompt("角色从站立过渡到单膝跪地"), "kneel");
   assert.equal(inferMotionFromPrompt("向前疾跑冲刺，镜头后拉"), "run");
+  assert.equal(inferMotionFromPrompt("角色原地起跳后落地"), "jump");
+  assert.equal(inferMotionFromPrompt("转身并回头看向观众"), "look-back");
+  assert.equal(inferMotionFromPrompt("抬手敬礼"), "salute");
   assert.equal(inferMotionFromPrompt("只有镜头特写"), null);
 });
