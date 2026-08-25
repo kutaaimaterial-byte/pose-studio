@@ -207,8 +207,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /const selectedShot = timelineLatestRef\.current\.shots\.find\(\(shot\) => shot\.id === shotId\);[\s\S]*if \(activeShotIdRef\.current !== shotId\) selectTimelineShot\(selectedShot\);[\s\S]*const sourceTimeline = clonePoseBoardTimeline\(timelineLatestRef\.current\);/s);
   const timelineClipDragBlock = page.match(/const beginTimelineClipDrag = \([\s\S]*?const startX = event\.clientX;/)?.[0] ?? "";
   assert.doesNotMatch(timelineClipDragBlock, /setActiveShotId\(shotId\)/);
-  assert.match(page, /if \(applyShot && shot && shot\.id !== activeShotIdRef\.current\) \{/);
-  assert.doesNotMatch(page, /if \(applyShot && shot && shot\.id !== activeShotIdRef\.current\) \{\s*persistActiveTimelineShotScene\(\);/s);
+  assert.match(page, /if \(shot\) \{[\s\S]*if \(applyShot && shot\.id !== activeShotIdRef\.current\) applyTimelineShot\(target, true\);[\s\S]*applyAnimationAtTime\(target, value\);/s);
+  assert.doesNotMatch(page, /if \(applyShot && shot\.id !== activeShotIdRef\.current\) persistActiveTimelineShotScene\(\);/s);
   assert.match(page, /onScrubStart=\{\(\) => persistActiveTimelineShotScene\(\)\}/);
   assert.match(page, /const scheduledShotId = activeShotIdRef\.current;\s*const saveTimer = window\.setTimeout\(\(\) => persistTimelineShotScene\(scheduledShotId\), 180\)/s);
   assert.match(page, /const baseSnapshot = captureSceneSnapshot\(\);[\s\S]*buildSnapshotForShotPrompt\(baseSnapshot, shot\.promptText, ratio\)/s);
@@ -219,11 +219,12 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /snapshotLocked: true,\s*snapshotVersion: 2,\s*dirty: false/s);
   assert.match(page, /const snapshot = buildSnapshotForShotPrompt\(baseSnapshot, value, ratio\);[\s\S]*if \(activeShotIdRef\.current === shotId\) applySceneSnapshot\(snapshot, true\);/s);
   assert.match(page, /const toggleTimelinePlayback = \(\) =>/);
-  assert.match(page, /const tick = \(\) => \{\s*\/\/ Read the clock inside the timer[\s\S]*?const clock = readPlaybackClock\(\);/s);
+  assert.match(page, /const tick = \(\) => \{[\s\S]*?const clock = readPlaybackClock\(\);/s);
   assert.match(page, /timelineLatestRef\.current = \{ \.\.\.current, playhead: nextTime \};\s*setTimelinePlayhead\(nextTime\);/s);
-  assert.match(page, /window\.setInterval\(tick, 1000 \/ 30\)/);
-  assert.match(page, /window\.clearInterval\(timelinePlaybackTimerRef\.current\)/);
+  assert.match(page, /timelinePlaybackTimerRef\.current = window\.requestAnimationFrame\(tick\)/);
+  assert.match(page, /window\.cancelAnimationFrame\(timelinePlaybackTimerRef\.current\)/);
   assert.match(page, /videoTimeline: \{ \.\.\.timelineLatestRef\.current/);
+  assert.match(page, /animationTimeline: animationTimelineLatestRef\.current/);
   assert.match(timelinePanel, /ArrowsLeftRight size=\{18\}/);
   assert.match(timelinePanel, /requestAnimationFrame\(applyPendingScrub\)/);
   assert.match(timelinePanel, /const pointerOffset = event\.clientX - handle\.getBoundingClientRect\(\)\.left/);

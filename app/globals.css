@@ -1817,6 +1817,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .timeline-header-actions button:first-child { background: var(--primary-soft); color: var(--primary); }
 .timeline-header-actions button i { width: 5px; height: 5px; border-radius: 50%; background: var(--warning); }
 .timeline-header-actions .icon-only { width: 30px; padding: 0; }
+.timeline-header-actions button.active { background: var(--primary-soft); color: var(--primary); }
+.timeline-header-actions .auto-key-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
+.timeline-header-actions button.active .auto-key-dot { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
+.timeline-motion-select { width: 112px; height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: #fff; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
 
 .timeline-workspace { min-width: 0; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr); background: #f8fafc; }
 .timeline-controls { min-height: 0; display: grid; align-content: center; gap: 7px; padding: var(--space-2) var(--space-3); border-right: 1px solid var(--border-default); background: #fff; }
@@ -1831,7 +1835,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .timeline-time strong { color: var(--text-primary); font-size: 12px; }
 .timeline-zoom { border-top: 1px solid var(--border-default); padding-top: 5px; }
 
-.timeline-scroll { min-width: 0; min-height: 0; position: relative; overflow: auto hidden; background: #f7f9fc; overscroll-behavior: contain; }
+.timeline-scroll { min-width: 0; min-height: 0; position: relative; overflow: auto; background: #f7f9fc; overscroll-behavior: contain; }
 .timeline-content { min-height: 100%; position: relative; padding-top: 31px; user-select: none; }
 .timeline-ruler { height: 28px; position: absolute; inset: 0 0 auto; border-bottom: 1px solid var(--border-default); background: #fff; }
 .timeline-ruler i { height: 9px; position: absolute; bottom: 0; border-left: 1px solid var(--border-strong); font-style: normal; }
@@ -1839,6 +1843,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .timeline-track-label { width: 84px; height: 24px; display: flex; align-items: center; justify-content: space-between; position: absolute; z-index: 2; top: 36px; left: 8px; padding: 0 7px; border-radius: var(--radius-sm); background: rgba(255,255,255,.92); color: var(--text-secondary); font-size: 9px; font-weight: 700; letter-spacing: .05em; }
 .timeline-track-label small { color: var(--text-tertiary); font-size: 9px; font-weight: 500; letter-spacing: 0; }
 .timeline-track { height: calc(100% - 39px); min-height: 74px; position: relative; margin-top: 7px; border-block: 1px solid var(--border-default); background: #f3f6fa; }
+.animation-sequencer .timeline-content { min-height: 176px; }
+.animation-sequencer .timeline-track { height: 54px; min-height: 54px; }
+.animation-sequencer .timeline-clip { height: 40px; top: 6px; }
+.animation-sequencer .clip-color { height: 27px; }
+.animation-track-stack { height: 78px; position: relative; border-bottom: 1px solid var(--border-default); background: #f8fafc; }
+.animation-track-row { height: 26px; position: relative; border-bottom: 1px solid #e9edf3; }
+.animation-track-row:last-child { border-bottom: 0; }
+.animation-track-name { width: 80px; height: 20px; display: flex; align-items: center; position: sticky; z-index: 3; left: 8px; top: 3px; padding-inline: 7px; border-radius: var(--radius-sm); background: rgba(255,255,255,.92); color: var(--text-tertiary); font-size: 9px; font-weight: 750; letter-spacing: .05em; }
+.animation-keyframe { width: 10px; height: 10px; position: absolute; z-index: 2; top: 8px; padding: 0; border: 2px solid #fff; border-radius: 2px; background: var(--primary); box-shadow: 0 0 0 1px #176bc5; transform: translateX(-5px) rotate(45deg); }
+.track-root .animation-keyframe { background: #9b63e8; box-shadow: 0 0 0 1px #7140b8; }
+.track-camera .animation-keyframe { background: #e5872f; box-shadow: 0 0 0 1px #b96818; }
+.animation-keyframe:hover { transform: translateX(-5px) rotate(45deg) scale(1.25); }
 .timeline-clip { height: 54px; min-width: 34px; display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; align-items: center; gap: 7px; position: absolute; top: 12px; padding: 0 9px 0 5px; border: 1px solid color-mix(in srgb, var(--shot-color) 52%, white); border-radius: var(--radius-md); background: color-mix(in srgb, var(--shot-color) 14%, white); color: var(--text-primary); text-align: left; overflow: hidden; cursor: grab; touch-action: none; box-shadow: none; }
 .timeline-clip:hover { border-color: var(--shot-color); }
 .timeline-clip.selected { border-color: var(--shot-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--shot-color) 25%, transparent); }
@@ -1866,6 +1882,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .timeline-status.has-error { border-color: #f0c4c6; background: #fff5f5; color: var(--danger); }
 .timeline-status small { margin-left: auto; }
 .timeline-footer-stack { min-width: 0; display: grid; }
+.timeline-sequencer-footer { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 190px; }
+.timeline-interpolation { height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-top: 1px solid var(--border-default); border-left: 1px solid var(--border-default); background: #fff; color: var(--text-tertiary); font-size: 10px; }
+.timeline-interpolation select { min-width: 0; height: 24px; flex: 1; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: #fff; color: var(--text-secondary); font-size: 10px; }
 .timeline-shot-editor { min-width: 0; height: 32px; display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-top: 1px solid var(--border-default); background: #fff; }
 .timeline-shot-editor > span { color: var(--primary); font-size: 10px; font-weight: 800; letter-spacing: .04em; }
 .timeline-shot-editor input { min-width: 0; height: 24px; padding: 0 var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); font-size: 11px; }

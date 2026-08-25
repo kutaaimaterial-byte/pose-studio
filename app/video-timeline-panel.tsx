@@ -23,12 +23,14 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 
+import { type AnimationInterpolation, type AnimationTimeline } from "./animation-timeline";
 import { formatTimecode, type VideoShot, type VideoTimeline } from "./video-timeline";
 
 type ClipDragMode = "move" | "trim-start" | "trim-end";
 
 type VideoTimelinePanelProps<TSnapshot> = {
   timeline: VideoTimeline<TSnapshot>;
+  animationTimeline: AnimationTimeline;
   playhead: number;
   activeShotId: string | null;
   playing: boolean;
@@ -61,6 +63,11 @@ type VideoTimelinePanelProps<TSnapshot> = {
   onScrub: (time: number, applyShot?: boolean) => void;
   onClipPointerDown: (shotId: string, mode: ClipDragMode, event: React.PointerEvent<HTMLElement>) => void;
   onResizePointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onToggleAutoKey: () => void;
+  onAddKeyframe: () => void;
+  onStepFrame: (direction: -1 | 1) => void;
+  onSetInterpolation: (value: AnimationInterpolation) => void;
+  onLoadMotion: (motionId: "idle" | "walk" | "run" | "wave" | "kneel") => void;
 };
 
 function rulerStep(pixelsPerSecond: number) {
@@ -72,6 +79,7 @@ function rulerStep(pixelsPerSecond: number) {
 
 export function VideoTimelinePanel<TSnapshot>({
   timeline,
+  animationTimeline,
   playhead,
   activeShotId,
   playing,
@@ -104,6 +112,11 @@ export function VideoTimelinePanel<TSnapshot>({
   onScrub,
   onClipPointerDown,
   onResizePointerDown,
+  onToggleAutoKey,
+  onAddKeyframe,
+  onStepFrame,
+  onSetInterpolation,
+  onLoadMotion,
 }: VideoTimelinePanelProps<TSnapshot>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -119,6 +132,8 @@ export function VideoTimelinePanel<TSnapshot>({
     return values;
   }, [majorStep, timeline.duration]);
   const activeShot = timeline.shots.find((shot) => shot.id === activeShotId) ?? null;
+  const activeShotStart = activeShot?.start ?? 0;
+  const activeAnimationShot = animationTimeline.shots.find((shot) => shot.shotId === activeShotId) ?? null;
   const errors = timeline.issues.filter((issue) => issue.severity === "error");
 
   const scrubFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -130,14 +145,24 @@ export function VideoTimelinePanel<TSnapshot>({
   };
 
   return (
-    <section className="video-timeline-panel" style={{ height }} aria-label={text("Video shot timeline", "视频切镜时间轴")}>
+    <section className="video-timeline-panel animation-sequencer" style={{ height }} aria-label={text("3D animation sequencer", "3D 动画时间轴")}>
       <button className="timeline-resize-handle" onPointerDown={onResizePointerDown} aria-label={text("Resize timeline", "调整时间轴高度")} />
       <header className="timeline-header">
         <div className="timeline-heading">
           <span className="timeline-heading-icon"><FilmStrip size={17} weight="fill" /></span>
-          <div><strong>{text("Shot Timeline", "分镜时间轴")}</strong><small>{timeline.shots.length} Shots · {timeline.fps} FPS · {timeline.masterAspect}</small></div>
+          <div><strong>{text("Animation Sequencer", "动画时间轴")}</strong><small>V3.3 · {timeline.shots.length} Shots · {timeline.fps} FPS · {timeline.masterAspect}</small></div>
         </div>
         <div className="timeline-header-actions">
+          <select className="timeline-motion-select" defaultValue="" onChange={(event) => {
+            const value = event.target.value as "idle" | "walk" | "run" | "wave" | "kneel";
+            if (value) onLoadMotion(value);
+            event.currentTarget.value = "";
+          }} disabled={!activeShot} aria-label={text("Motion library", "动作库")}>
+            <option value="">{text("Motion library", "动作库")}</option>
+            {animationTimeline.motionLibrary.map((motion) => <option key={motion.id} value={motion.id}>{isZh ? motion.name : motion.nameEn}</option>)}
+          </select>
+          <button className={animationTimeline.autoKey ? "active" : ""} onClick={onToggleAutoKey} title={text("Automatically key edited values", "自动记录编辑值")}><i className="auto-key-dot" />Auto Key</button>
+          <button onClick={onAddKeyframe} disabled={!activeShot}><Plus size={15} />{text("Keyframe", "关键帧")}</button>
           <button onClick={onOpenPrompt}><Plus size={15} />{text("From prompt", "解析分镜")}</button>
           <button onClick={onAddShot}><Plus size={15} />{text("Add shot", "新增镜头")}</button>
           <button onClick={onUpdateShot} disabled={!activeShot}><FloppyDisk size={15} />{text("Update shot", "更新镜头")}{activeShot?.dirty && <i />}</button>
@@ -153,13 +178,15 @@ export function VideoTimelinePanel<TSnapshot>({
         <aside className="timeline-controls">
           <div className="timeline-transport">
             <button onClick={onRestart} disabled={!timeline.shots.length} title={text("Back to start", "回到开头")} aria-label={text("Back to start", "回到开头")}><SkipBack size={18} weight="fill" /></button>
-            <button onClick={onPreviousShot} disabled={!timeline.shots.length} title={text("Previous shot", "上一镜头")} aria-label={text("Previous shot", "上一镜头")}><SkipBack size={18} /></button>
+            <button onClick={() => onStepFrame(-1)} disabled={!timeline.shots.length} title={text("Previous frame", "上一帧")} aria-label={text("Previous frame", "上一帧")}><SkipBack size={18} /></button>
             <button className="timeline-play" onClick={onTogglePlayback} disabled={!timeline.shots.length} title={text("Play or pause · Space", "播放或暂停 · Space")} aria-label={text("Play or pause", "播放或暂停")}>{playing ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}</button>
-            <button onClick={onNextShot} disabled={!timeline.shots.length} title={text("Next shot", "下一镜头")} aria-label={text("Next shot", "下一镜头")}><SkipForward size={18} /></button>
+            <button onClick={() => onStepFrame(1)} disabled={!timeline.shots.length} title={text("Next frame", "下一帧")} aria-label={text("Next frame", "下一帧")}><SkipForward size={18} /></button>
             <button className={timeline.loop ? "active timeline-loop" : "timeline-loop"} onClick={onToggleLoop} title={text("Cycle loop: all, shot, off", "循环模式：全部、单镜头、关闭")} aria-label={text("Cycle loop mode", "切换循环模式")}><Repeat size={18} />{timeline.loop && <small>{timeline.loopMode === "shot" ? "S" : "A"}</small>}</button>
           </div>
           <div className="timeline-time"><strong>{formatTimecode(playhead, true, timeline.fps)}</strong><span>/ {formatTimecode(timeline.duration, true, timeline.fps)}</span></div>
           <div className="timeline-mode-row">
+            <button onClick={onPreviousShot} disabled={!timeline.shots.length} title={text("Previous shot", "上一镜头")}><SkipBack size={18} /></button>
+            <button onClick={onNextShot} disabled={!timeline.shots.length} title={text("Next shot", "下一镜头")}><SkipForward size={18} /></button>
             <button className={timeline.ripple ? "active" : ""} onClick={onToggleRipple} title={text("Toggle ripple editing", "切换联动编辑")} aria-label={text("Toggle ripple editing", "切换联动编辑")}><ArrowsLeftRight size={18} /></button>
             <button onClick={onSplitShot} disabled={!activeShot} title={text("Split shot", "切分镜头")} aria-label={text("Split shot", "切分镜头")}><Scissors size={18} /></button>
             <button onClick={onDuplicateShot} disabled={!activeShot} title={text("Duplicate shot", "复制镜头")} aria-label={text("Duplicate shot", "复制镜头")}><Copy size={18} /></button>
@@ -193,7 +220,7 @@ export function VideoTimelinePanel<TSnapshot>({
                 {ticks.map((time) => <i key={time} style={{ left: time * pixelsPerSecond }}><span>{formatTimecode(time)}</span></i>)}
               </div>
               <div className="timeline-track-label"><span>{text("SHOT TRACK", "镜头轨")}</span><small>{text("Hard cuts", "硬切")}</small></div>
-              <div className="timeline-track">
+              <div className="timeline-track shot-track">
                 {timeline.shots.map((shot) => (
                   <button
                     key={shot.id}
@@ -212,6 +239,19 @@ export function VideoTimelinePanel<TSnapshot>({
                   </button>
                 ))}
               </div>
+              {activeAnimationShot && activeShot && <div className="animation-track-stack">
+                {activeAnimationShot.tracks.map((track) => <div className={`animation-track-row track-${track.kind}`} key={track.id}>
+                  <span className="animation-track-name">{track.kind === "pose" ? text("POSE", "姿态") : track.kind === "root" ? text("ROOT", "根运动") : text("CAMERA", "相机")}</span>
+                  {track.keyframes.map((keyframe) => <button
+                    key={keyframe.id}
+                    className="animation-keyframe"
+                    style={{ left: (activeShotStart + keyframe.time) * pixelsPerSecond }}
+                    onClick={(event) => { event.stopPropagation(); onScrub(activeShotStart + keyframe.time, true); }}
+                    title={`${track.name} · ${formatTimecode(keyframe.time, true, timeline.fps)} · ${keyframe.interpolation}`}
+                    aria-label={`${track.name} ${formatTimecode(keyframe.time, true, timeline.fps)}`}
+                  />)}
+                </div>)}
+              </div>}
               <button
                 className="timeline-playhead"
                 style={{ left: playhead * pixelsPerSecond }}
@@ -261,11 +301,14 @@ export function VideoTimelinePanel<TSnapshot>({
       </div>
 
       <div className="timeline-footer-stack">
-        {activeShot && <label className="timeline-shot-editor" key={activeShot.id}>
+        {activeShot && <div className="timeline-sequencer-footer" key={activeShot.id}>
+          <label className="timeline-shot-editor">
           <span>SHOT {String(activeShot.index).padStart(2, "0")}</span>
           <input defaultValue={activeShot.promptText} onBlur={(event) => onEditShotText(activeShot.id, event.target.value)} aria-label={text("Selected shot prompt", "当前镜头提示词")} />
           <time>{formatTimecode(activeShot.start)} - {formatTimecode(activeShot.end)}</time>
-        </label>}
+          </label>
+          <label className="timeline-interpolation"><span>{text("Interpolation", "插值")}</span><select value={animationTimeline.interpolation} onChange={(event) => onSetInterpolation(event.target.value as AnimationInterpolation)}><option value="hold">Hold</option><option value="linear">Linear</option><option value="ease-in-out">Ease In-Out</option></select></label>
+        </div>}
         {(timeline.issues.length > 0 || timeline.unassigned.length > 0) && (
           <footer className={`timeline-status ${errors.length ? "has-error" : ""}`}>
             <WarningCircle size={15} weight="fill" />

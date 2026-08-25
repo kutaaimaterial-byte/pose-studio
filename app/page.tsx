@@ -110,6 +110,21 @@ import {
 } from "./workspace-ui";
 import { VideoTimelinePanel } from "./video-timeline-panel";
 import {
+  animationLocalTime,
+  createAnimationTimeline,
+  evaluateAnimationShot,
+  inferMotionFromPrompt,
+  normalizeAnimationTimeline,
+  snapAnimationTime,
+  upsertAnimationKeyframe,
+  type AnimationInterpolation,
+  type AnimationTimeline,
+  type BoneQuaternionSnapshot,
+  type CameraAnimationKeyframe,
+  type PoseAnimationKeyframe,
+  type RootAnimationKeyframe,
+} from "./animation-timeline";
+import {
   createEmptyTimeline,
   formatTimecode,
   normalizeVideoTimeline,
@@ -2812,6 +2827,9 @@ export default function Home() {
   const interactionModeRef = useRef<InteractionMode>("ik-edit");
   const cameraLockedRef = useRef(false);
   const timelineLatestRef = useRef<PoseBoardTimeline>(createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+  const animationTimelineLatestRef = useRef<AnimationTimeline>(createAnimationTimeline([], 24));
+  const animationHistoryRef = useRef<AnimationTimeline[]>([]);
+  const animationFutureRef = useRef<AnimationTimeline[]>([]);
   const timelineHistoryRef = useRef<PoseBoardTimeline[]>([]);
   const timelineFutureRef = useRef<PoseBoardTimeline[]>([]);
   const timelineContinuousEditRef = useRef<PoseBoardTimeline | null>(null);
@@ -2872,6 +2890,7 @@ export default function Home() {
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
   const [modelInfo, setModelInfo] = useState({ loaded: false, hasSkeleton: false, label: "正在加载 GLB…" });
   const [timeline, setTimeline] = useState<PoseBoardTimeline>(() => createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+  const [animationTimeline, setAnimationTimeline] = useState<AnimationTimeline>(() => createAnimationTimeline([], 24));
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelinePromptOpen, setTimelinePromptOpen] = useState(false);
   const [timelinePrompt, setTimelinePrompt] = useState(timelinePromptExample);
@@ -2879,7 +2898,7 @@ export default function Home() {
   const [timelinePlayhead, setTimelinePlayhead] = useState(0);
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [timelinePixelsPerSecond, setTimelinePixelsPerSecond] = useState(64);
-  const [timelineHeight, setTimelineHeight] = useState(236);
+  const [timelineHeight, setTimelineHeight] = useState(324);
   const [timelineCanUndo, setTimelineCanUndo] = useState(false);
   const [timelineCanRedo, setTimelineCanRedo] = useState(false);
   const [cameraRevision, setCameraRevision] = useState(0);
@@ -3009,6 +3028,19 @@ export default function Home() {
   }, [timeline]);
 
   useEffect(() => {
+    animationTimelineLatestRef.current = animationTimeline;
+  }, [animationTimeline]);
+
+  useEffect(() => {
+    setAnimationTimeline((current) => {
+      const next = normalizeAnimationTimeline(current, timeline.shots, timeline.fps);
+      if (JSON.stringify(next) === JSON.stringify(current)) return current;
+      animationTimelineLatestRef.current = next;
+      return next;
+    });
+  }, [timeline.fps, timeline.shots]);
+
+  useEffect(() => {
     playheadRef.current = timelinePlayhead;
   }, [timelinePlayhead]);
 
@@ -3102,6 +3134,7 @@ export default function Home() {
         editor?: Partial<EditorState>;
         selectedPoseId?: string;
         videoTimeline?: unknown;
+        animationTimeline?: unknown;
         activeShotId?: string | null;
         timelineOpen?: boolean;
         timelineHeight?: number;
@@ -3143,8 +3176,11 @@ export default function Home() {
       if (typeof workspacePreferences?.cameraLocked === "boolean") setCameraLocked(workspacePreferences.cameraLocked);
       if (savedProject?.videoTimeline) {
         const restoredTimeline = normalizeVideoTimeline<ShotSceneSnapshot>(savedProject.videoTimeline, savedProject.editor?.ratio ?? "16:9");
+        const restoredAnimationTimeline = normalizeAnimationTimeline(savedProject.animationTimeline, restoredTimeline.shots, restoredTimeline.fps);
         setTimeline(restoredTimeline);
         timelineLatestRef.current = restoredTimeline;
+        setAnimationTimeline(restoredAnimationTimeline);
+        animationTimelineLatestRef.current = restoredAnimationTimeline;
         const restoredShotId = restoredTimeline.shots.some((shot) => shot.id === savedProject.activeShotId)
           ? savedProject.activeShotId ?? null
           : restoredTimeline.shots[0]?.id ?? null;
@@ -3170,16 +3206,17 @@ export default function Home() {
   useEffect(() => {
     if (!persistenceReady) return;
     window.localStorage.setItem("poseboard.project.v3", JSON.stringify({
-      schemaVersion: "5.0",
-      appVersion: "1.0.3",
+      schemaVersion: "6.0",
+      appVersion: "3.3.0",
       selectedPoseId,
       editor,
       videoTimeline: timeline,
+      animationTimeline,
       activeShotId,
       timelineOpen,
       timelineHeight,
     }));
-  }, [activeShotId, editor, persistenceReady, selectedPoseId, timeline, timelineHeight, timelineOpen]);
+  }, [activeShotId, animationTimeline, editor, persistenceReady, selectedPoseId, timeline, timelineHeight, timelineOpen]);
 
   useEffect(() => {
     if (!persistenceReady) return;
@@ -3729,8 +3766,8 @@ export default function Home() {
 
   const exportProjectJson = () => {
     const project = {
-      schemaVersion: "5.0",
-      appVersion: "1.0.3",
+      schemaVersion: "6.0",
+      appVersion: "3.3.0",
       name: projectName,
       updatedAt: new Date().toISOString(),
       pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers },
@@ -3752,6 +3789,7 @@ export default function Home() {
       perspectiveGrid: clonePerspectiveGrid(editor.perspectiveGrid),
       prompt: { platform: promptPlatform, ...generatedPrompt },
       videoTimeline: { ...timelineLatestRef.current, playhead: playheadRef.current },
+      animationTimeline: animationTimelineLatestRef.current,
     };
     downloadTextFile(`poseboard-${selectedPose.id}.json`, JSON.stringify(project, null, 2), "application/json");
     flash(text("Project JSON exported", "项目 JSON 已导出"));
@@ -4126,8 +4164,24 @@ export default function Home() {
   };
 
   const syncTimelineHistoryAvailability = () => {
-    setTimelineCanUndo(timelineHistoryRef.current.length > 0);
-    setTimelineCanRedo(timelineFutureRef.current.length > 0);
+    setTimelineCanUndo(timelineHistoryRef.current.length > 0 || animationHistoryRef.current.length > 0);
+    setTimelineCanRedo(timelineFutureRef.current.length > 0 || animationFutureRef.current.length > 0);
+  };
+
+  const commitAnimationTimeline = (updater: (current: AnimationTimeline) => AnimationTimeline) => {
+    setAnimationTimeline((current) => {
+      const before = structuredClone(current);
+      const next = updater(structuredClone(current));
+      if (JSON.stringify(next) === JSON.stringify(current)) return current;
+      animationHistoryRef.current.push(before);
+      if (animationHistoryRef.current.length > 60) animationHistoryRef.current.shift();
+      animationFutureRef.current = [];
+      next.updatedAt = current.updatedAt + 1;
+      animationTimelineLatestRef.current = next;
+      syncTimelineHistoryAvailability();
+      markSaving();
+      return next;
+    });
   };
 
   const commitTimeline = (updater: (current: PoseBoardTimeline) => PoseBoardTimeline) => {
@@ -4147,6 +4201,16 @@ export default function Home() {
   };
 
   const undoTimeline = () => {
+    const previousAnimation = animationHistoryRef.current.pop();
+    if (previousAnimation) {
+      animationFutureRef.current.push(structuredClone(animationTimelineLatestRef.current));
+      animationTimelineLatestRef.current = previousAnimation;
+      setAnimationTimeline(previousAnimation);
+      syncTimelineHistoryAvailability();
+      markSaving();
+      flash(text("Animation edit undone", "已撤销动画编辑"));
+      return;
+    }
     const previous = timelineHistoryRef.current.pop();
     if (!previous) return;
     const current = clonePoseBoardTimeline(timelineLatestRef.current);
@@ -4160,6 +4224,16 @@ export default function Home() {
   };
 
   const redoTimeline = () => {
+    const nextAnimation = animationFutureRef.current.pop();
+    if (nextAnimation) {
+      animationHistoryRef.current.push(structuredClone(animationTimelineLatestRef.current));
+      animationTimelineLatestRef.current = nextAnimation;
+      setAnimationTimeline(nextAnimation);
+      syncTimelineHistoryAvailability();
+      markSaving();
+      flash(text("Animation edit restored", "已重做动画编辑"));
+      return;
+    }
     const next = timelineFutureRef.current.pop();
     if (!next) return;
     timelineHistoryRef.current.push(clonePoseBoardTimeline(timelineLatestRef.current));
@@ -4404,6 +4478,58 @@ export default function Home() {
     activeShotIdRef.current = shot.id;
   };
 
+  const captureRigBoneSnapshot = (rig: RigBinding | null | undefined): BoneQuaternionSnapshot => {
+    if (!rig) return {};
+    return Object.fromEntries([...rig.bonesByName.entries()].map(([name, bone]) => [
+      name,
+      [bone.quaternion.x, bone.quaternion.y, bone.quaternion.z, bone.quaternion.w],
+    ]));
+  };
+
+  const capturePoseBoneSnapshot = (poseIndex: number) => {
+    const rig = modelRigsRef.current[selectedModelIdRef.current];
+    if (!rig) return {};
+    applyRigPose(rig, poseIndex, false);
+    const snapshot = captureRigBoneSnapshot(rig);
+    const current = editorLatestRef.current;
+    applyRigPose(rig, current.pose, current.mirrored);
+    applySemanticPoseModifiers(rig, current.semanticModifiers);
+    applyEditorIKTargets(rig, current.ikTargets);
+    return snapshot;
+  };
+
+  const applyAnimationAtTime = (shot: VideoShot<ShotSceneSnapshot>, globalTime: number) => {
+    const animationShot = animationTimelineLatestRef.current.shots.find((item) => item.shotId === shot.id);
+    if (!animationShot || animationShot.tracks.every((track) => track.keyframes.length === 0)) return;
+    const localTime = animationLocalTime(globalTime, shot.start, animationShot.duration, animationShot.speed);
+    const value = evaluateAnimationShot(animationShot, localTime);
+    const modelId = selectedModelIdRef.current;
+    const rig = modelRigsRef.current[modelId];
+    const root = modelRootsRef.current[modelId];
+    if (value.pose && rig) {
+      if (!Object.keys(value.pose.bones).length) applyRigPose(rig, value.pose.poseIndex, false);
+      else Object.entries(value.pose.bones).forEach(([name, quaternion]) => {
+        rig.bonesByName.get(name)?.quaternion.set(...quaternion);
+      });
+      rig.root.updateMatrixWorld(true);
+    }
+    if (value.root && root) {
+      root.position.set(...value.root.position);
+      root.rotation.set(...value.root.rotation.map(THREE.MathUtils.degToRad) as [number, number, number]);
+      root.scale.setScalar(value.root.scale / 100);
+      root.updateMatrixWorld(true);
+    }
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (value.camera && camera && controls) {
+      camera.position.set(...value.camera.position);
+      controls.target.set(...value.camera.target);
+      camera.setFocalLength(value.camera.focalLength);
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+  };
+
   useEffect(() => {
     if (!modelInfo.loaded || !persistenceReady || restoredTimelineShotRef.current) return;
     const currentTimeline = timelineLatestRef.current;
@@ -4487,6 +4613,58 @@ export default function Home() {
     syncTimelineHistoryAvailability();
     timelineLatestRef.current = nextTimeline;
     setTimeline(nextTimeline);
+    const emptyAnimationTimeline = createAnimationTimeline(shots, nextTimeline.fps);
+    const nextAnimationTimeline: AnimationTimeline = {
+      ...emptyAnimationTimeline,
+      shots: emptyAnimationTimeline.shots.map((animationShot) => {
+        const shot = shots.find((item) => item.id === animationShot.shotId)!;
+        const snapshot = shot.sceneSnapshot!;
+        const selectedModel = snapshot.models.find((model) => model.id === snapshot.selectedModelId) ?? snapshot.models[0];
+        const motionId = inferMotionFromPrompt(shot.promptText);
+        const natural = poseItems.find((pose) => pose.name === "自然站立") ?? defaultPose;
+        const targetName = motionId === "wave" ? "单手举起" : motionId === "kneel" ? "单膝跪地" : motionId === "run" ? "全力冲刺" : motionId === "walk" ? "自然行走" : "自然站立";
+        const target = poseItems.find((pose) => pose.name === targetName) ?? natural;
+        const interpolation: AnimationInterpolation = "ease-in-out";
+        const makePoseFrame = (suffix: string, time: number, pose: PoseItem): PoseAnimationKeyframe => ({
+          id: `prompt_${shot.id}_${suffix}`,
+          time: snapAnimationTime(time, nextTimeline.fps),
+          interpolation,
+          poseId: pose.id,
+          poseIndex: pose.enginePoseIndex,
+          bones: capturePoseBoneSnapshot(pose.enginePoseIndex),
+        });
+        const poseFrames = motionId === "wave"
+          ? [makePoseFrame("start", 0, natural), makePoseFrame("raise", shot.duration / 2, target), makePoseFrame("end", shot.duration, natural)]
+          : motionId === "kneel"
+            ? [makePoseFrame("start", 0, natural), makePoseFrame("end", shot.duration, target)]
+            : [makePoseFrame("start", 0, target), ...(motionId ? [makePoseFrame("end", shot.duration, target)] : [])];
+        const rootState = selectedModel?.state ?? getModelEditState(snapshot.editor);
+        const travel = motionId === "run" ? 5 * shot.duration / 6 : motionId === "walk" ? 0.6 * shot.duration : 0;
+        const rootFrames: RootAnimationKeyframe[] = [
+          { id: `prompt_${shot.id}_root_start`, time: 0, interpolation, position: [...rootState.position], rotation: [...rootState.rotation], scale: rootState.scale },
+          ...(travel ? [{ id: `prompt_${shot.id}_root_end`, time: shot.duration, interpolation: "linear" as const, position: [rootState.position[0], rootState.position[1], rootState.position[2] - travel] as [number, number, number], rotation: [...rootState.rotation] as [number, number, number], scale: rootState.scale }] : []),
+        ];
+        const cameraStart = new THREE.Vector3(...snapshot.camera.position);
+        const cameraTarget = new THREE.Vector3(...snapshot.camera.target);
+        const cameraEnd = cameraStart.clone();
+        if (motionId === "run" || /后拉|拉远|dolly\s*out|pull\s*back/i.test(shot.promptText)) cameraEnd.add(cameraStart.clone().sub(cameraTarget).normalize().multiplyScalar(3.2));
+        const cameraFrames: CameraAnimationKeyframe[] = [
+          { id: `prompt_${shot.id}_camera_start`, time: 0, interpolation, position: [...snapshot.camera.position], target: [...snapshot.camera.target], focalLength: snapshot.camera.focalLength },
+          ...(cameraEnd.distanceTo(cameraStart) > 0.001 ? [{ id: `prompt_${shot.id}_camera_end`, time: shot.duration, interpolation, position: [cameraEnd.x, cameraEnd.y, cameraEnd.z] as [number, number, number], target: [cameraTarget.x, cameraTarget.y, cameraTarget.z - travel * 0.45] as [number, number, number], focalLength: snapshot.camera.focalLength }] : []),
+        ];
+        return {
+          ...animationShot,
+          loop: motionId === "idle" || motionId === "walk" || motionId === "run",
+          tracks: animationShot.tracks.map((track) => track.kind === "pose"
+            ? { ...track, keyframes: poseFrames }
+            : track.kind === "root"
+              ? { ...track, keyframes: rootFrames }
+              : { ...track, keyframes: cameraFrames }),
+        };
+      }),
+    };
+    animationTimelineLatestRef.current = nextAnimationTimeline;
+    setAnimationTimeline(nextAnimationTimeline);
     setTimelineOpen(true);
     setTimelinePromptOpen(false);
     setTimelinePlaying(false);
@@ -4656,6 +4834,121 @@ export default function Home() {
     flash(text("Shot deleted", "镜头已删除"));
   };
 
+  const recordAnimationKeyframe = (showMessage = true) => {
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
+    const rig = modelRigsRef.current[selectedModelIdRef.current];
+    const root = modelRootsRef.current[selectedModelIdRef.current];
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!shot || !rig || !root || !camera || !controls) return false;
+    const currentAnimation = animationTimelineLatestRef.current;
+    const localTime = snapAnimationTime(playheadRef.current - shot.start, currentAnimation.fps);
+    const interpolation = currentAnimation.interpolation;
+    const token = `${shot.id}_${Math.round(localTime * currentAnimation.fps)}`;
+    const poseFrame: PoseAnimationKeyframe = {
+      id: `pose_${token}`,
+      time: localTime,
+      interpolation,
+      poseId: selectedPoseId,
+      poseIndex: editorLatestRef.current.pose,
+      bones: captureRigBoneSnapshot(rig),
+    };
+    const rootFrame: RootAnimationKeyframe = {
+      id: `root_${token}`,
+      time: localTime,
+      interpolation,
+      position: [root.position.x, root.position.y, root.position.z],
+      rotation: [root.rotation.x, root.rotation.y, root.rotation.z].map(THREE.MathUtils.radToDeg) as [number, number, number],
+      scale: root.scale.x * 100,
+    };
+    const cameraFrame: CameraAnimationKeyframe = {
+      id: `camera_${token}`,
+      time: localTime,
+      interpolation,
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [controls.target.x, controls.target.y, controls.target.z],
+      focalLength: camera.getFocalLength(),
+    };
+    commitAnimationTimeline((timelineValue) => ({
+      ...timelineValue,
+      shots: timelineValue.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
+        ...animationShot,
+        tracks: animationShot.tracks.map((track) => track.kind === "pose"
+          ? { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, poseFrame, timelineValue.fps) }
+          : track.kind === "root"
+            ? { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, rootFrame, timelineValue.fps) }
+            : { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, cameraFrame, timelineValue.fps) }),
+      }),
+    }));
+    if (showMessage) flash(text(`Keyframe added at ${localTime.toFixed(2)}s`, `已在 ${localTime.toFixed(2)} 秒添加关键帧`));
+    return true;
+  };
+
+  const loadMotionPreset = (motionId: "idle" | "walk" | "run" | "wave" | "kneel") => {
+    const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
+    const root = modelRootsRef.current[selectedModelIdRef.current];
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!shot || !root || !camera || !controls) return;
+    const duration = motionId === "wave" ? 5 : motionId === "kneel" ? 4 : motionId === "run" ? 6 : motionId === "walk" ? 4 : 3;
+    const natural = poseItems.find((pose) => pose.name === "自然站立") ?? defaultPose;
+    const target = poseItems.find((pose) => pose.name === (motionId === "wave" ? "单手举起" : motionId === "kneel" ? "单膝跪地" : motionId === "run" ? "全力冲刺" : motionId === "walk" ? "自然行走" : "自然站立")) ?? natural;
+    const fps = animationTimelineLatestRef.current.fps;
+    const interpolation = animationTimelineLatestRef.current.interpolation;
+    const poseFrame = (id: string, time: number, pose: PoseItem): PoseAnimationKeyframe => ({
+      id: `${motionId}_${id}_${shot.id}`,
+      time: snapAnimationTime(time, fps),
+      interpolation,
+      poseId: pose.id,
+      poseIndex: pose.enginePoseIndex,
+      bones: capturePoseBoneSnapshot(pose.enginePoseIndex),
+    });
+    const poseFrames = motionId === "wave"
+      ? [poseFrame("start", 0, natural), poseFrame("raise", 2.5, target), poseFrame("end", 5, natural)]
+      : motionId === "kneel"
+        ? [poseFrame("start", 0, natural), poseFrame("kneel", 4, target)]
+        : motionId === "idle"
+          ? [poseFrame("start", 0, natural), poseFrame("end", 3, natural)]
+          : [poseFrame("start", 0, target), poseFrame("cycle", duration / 2, target), poseFrame("end", duration, target)];
+    const startPosition: [number, number, number] = [root.position.x, root.position.y, root.position.z];
+    const travel = motionId === "run" ? 5 : motionId === "walk" ? 2.4 : 0;
+    const rootFrames: RootAnimationKeyframe[] = [
+      { id: `${motionId}_root_start_${shot.id}`, time: 0, interpolation, position: startPosition, rotation: [root.rotation.x, root.rotation.y, root.rotation.z].map(THREE.MathUtils.radToDeg) as [number, number, number], scale: root.scale.x * 100 },
+      { id: `${motionId}_root_end_${shot.id}`, time: duration, interpolation: motionId === "run" || motionId === "walk" ? "linear" : interpolation, position: [startPosition[0], startPosition[1], startPosition[2] - travel], rotation: [root.rotation.x, root.rotation.y, root.rotation.z].map(THREE.MathUtils.radToDeg) as [number, number, number], scale: root.scale.x * 100 },
+    ];
+    const startCamera: [number, number, number] = [camera.position.x, camera.position.y, camera.position.z];
+    const direction = camera.position.clone().sub(controls.target).normalize();
+    const endCamera = camera.position.clone().addScaledVector(direction, motionId === "run" ? 3.2 : 0);
+    const cameraFrames: CameraAnimationKeyframe[] = [
+      { id: `${motionId}_camera_start_${shot.id}`, time: 0, interpolation, position: startCamera, target: [controls.target.x, controls.target.y, controls.target.z], focalLength: camera.getFocalLength() },
+      { id: `${motionId}_camera_end_${shot.id}`, time: duration, interpolation, position: [endCamera.x, endCamera.y, endCamera.z], target: [controls.target.x, controls.target.y, controls.target.z - travel * 0.45], focalLength: camera.getFocalLength() },
+    ];
+    const durationDelta = duration - shot.duration;
+    commitTimeline((timelineValue) => ({
+      ...timelineValue,
+      duration: Math.max(duration, timelineValue.duration + durationDelta),
+      shots: timelineValue.shots.map((item) => item.id === shot.id
+        ? { ...item, end: item.start + duration, duration }
+        : item.start >= shot.end ? { ...item, start: item.start + durationDelta, end: item.end + durationDelta } : item),
+    }));
+    commitAnimationTimeline((timelineValue) => ({
+      ...timelineValue,
+      shots: timelineValue.shots.map((animationShot) => animationShot.shotId !== shot.id ? animationShot : {
+        ...animationShot,
+        duration,
+        loop: motionId === "idle" || motionId === "walk" || motionId === "run",
+        tracks: animationShot.tracks.map((track) => track.kind === "pose"
+          ? { ...track, keyframes: poseFrames }
+          : track.kind === "root"
+            ? { ...track, keyframes: rootFrames }
+            : { ...track, keyframes: cameraFrames }),
+      }),
+    }));
+    setTimelineOpen(true);
+    scrubTimeline(shot.start, true);
+    flash(text(`${motionId.toUpperCase()} motion loaded`, `已载入${motionId === "wave" ? "5 秒抬手" : motionId === "kneel" ? "4 秒单膝跪" : motionId === "run" ? "6 秒奔跑与镜头后拉" : motionId === "walk" ? "行走" : "待机"}动画`));
+  };
+
   const scrubTimeline = (time: number, applyShot = true) => {
     setTimelinePlaying(false);
     const value = clamp(time, 0, timelineLatestRef.current.duration);
@@ -4663,9 +4956,10 @@ export default function Home() {
     playheadRef.current = value;
     const shot = timelineLatestRef.current.shots.find((item) => value >= item.start && value < item.end)
       ?? (value === timelineLatestRef.current.duration ? timelineLatestRef.current.shots.at(-1) : undefined);
-    if (applyShot && shot && shot.id !== activeShotIdRef.current) {
+    if (shot) {
       const target = timelineLatestRef.current.shots.find((item) => item.id === shot.id) ?? shot;
-      applyTimelineShot(target, true);
+      if (applyShot && shot.id !== activeShotIdRef.current) applyTimelineShot(target, true);
+      applyAnimationAtTime(target, value);
     }
   };
 
@@ -4925,13 +5219,14 @@ export default function Home() {
         timelinePlaybackStartRef.current.shotId = shot.id;
         applyTimelineShot(shot, true);
       }
+      if (shot) applyAnimationAtTime(shot, nextTime);
+      timelinePlaybackTimerRef.current = window.requestAnimationFrame(tick);
     };
-    // A 30 fps transport clock is smooth for the timeline while avoiding a
-    // full 3D workspace React render on every display refresh.
+    // One master clock drives shot switching, keyframe evaluation, camera and
+    // root motion. Scrubbing calls the same evaluator above.
     tick();
-    timelinePlaybackTimerRef.current = window.setInterval(tick, 1000 / 30);
     return () => {
-      if (timelinePlaybackTimerRef.current !== null) window.clearInterval(timelinePlaybackTimerRef.current);
+      if (timelinePlaybackTimerRef.current !== null) window.cancelAnimationFrame(timelinePlaybackTimerRef.current);
       timelinePlaybackTimerRef.current = null;
     };
   // Timeline playback intentionally reads the latest refs so editing the timeline does not restart the high-precision clock.
@@ -4940,6 +5235,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!persistenceReady || timelinePlaying || applyingShotRef.current || !activeShotIdRef.current) return;
+    if (animationTimelineLatestRef.current.autoKey) recordAnimationKeyframe(false);
     setTimeline((current) => {
       const active = current.shots.find((shot) => shot.id === activeShotIdRef.current);
       if (!active || active.dirty) return current;
@@ -5650,12 +5946,17 @@ export default function Home() {
     setPromptToPoseResult(null);
     setTimelinePlaying(false);
     setTimeline(createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+    const emptyAnimationTimeline = createAnimationTimeline([], 24);
+    setAnimationTimeline(emptyAnimationTimeline);
     setActiveShotId(null);
     setTimelinePlayhead(0);
     setTimelineOpen(false);
     timelineHistoryRef.current = [];
     timelineFutureRef.current = [];
     timelineLatestRef.current = createEmptyTimeline<ShotSceneSnapshot>("16:9");
+    animationTimelineLatestRef.current = emptyAnimationTimeline;
+    animationHistoryRef.current = [];
+    animationFutureRef.current = [];
     playheadRef.current = 0;
     if (cameraRef.current && controlsRef.current) {
       cameraRef.current.position.set(...cameraPresets.commercial.position);
@@ -6206,6 +6507,7 @@ export default function Home() {
 
         {timelineOpen && <VideoTimelinePanel
           timeline={timeline}
+          animationTimeline={animationTimeline}
           playhead={timelinePlayhead}
           activeShotId={activeShotId}
           playing={timelinePlaying}
@@ -6238,6 +6540,11 @@ export default function Home() {
           onScrub={scrubTimeline}
           onClipPointerDown={beginTimelineClipDrag}
           onResizePointerDown={beginTimelineResize}
+          onToggleAutoKey={() => commitAnimationTimeline((current) => ({ ...current, autoKey: !current.autoKey }))}
+          onAddKeyframe={() => recordAnimationKeyframe(true)}
+          onStepFrame={(directionValue) => scrubTimeline(playheadRef.current + directionValue / timelineLatestRef.current.fps, true)}
+          onSetInterpolation={(interpolation: AnimationInterpolation) => commitAnimationTimeline((current) => ({ ...current, interpolation }))}
+          onLoadMotion={loadMotionPreset}
         />}
 
         <ContextActionBar
