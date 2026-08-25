@@ -65,7 +65,8 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*\.intro-loader/s);
   assert.match(page, /const \[introPhase, setIntroPhase\] = useState<"loading" \| "leaving" \| "hidden">\("loading"\)/);
   assert.match(page, /if \(!modelInfo\.loaded && !modelInfo\.label\.includes\("失败"\)\) return;/);
-  assert.match(css, /\.timeline-workspace \{[^}]*grid-template-columns:\s*190px minmax\(0, 1fr\)/);
+  assert.match(css, /\.timeline-workspace \{[^}]*grid-template-columns:\s*224px minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*?\.timeline-workspace \{[^}]*grid-template-columns:\s*212px minmax\(0, 1fr\)/);
   assert.match(css, /--primary:\s*#2684ff/);
   assert.match(css, /--context-panel:\s*380px/);
   assert.match(css, /\.workspace\s*\{[^}]*grid-template-areas:\s*"rail canvas panel"/s);
