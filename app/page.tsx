@@ -3825,13 +3825,33 @@ export default function Home() {
     camera.updateMatrixWorld(true);
     root.updateMatrixWorld(true);
     const startPointer = new THREE.Vector2(event.clientX, event.clientY);
+    const proxy = event.currentTarget;
+    const pointerId = event.pointerId;
     const startWorld = root.getWorldPosition(new THREE.Vector3());
     const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
     const cameraUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
     const distance = Math.max(camera.position.distanceTo(startWorld), 0.1);
     const worldPerPixel = (2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(renderer.domElement.clientHeight, 1);
 
+    let active = true;
+    const end = (pointerEvent?: PointerEvent) => {
+      if (!active || (pointerEvent && pointerEvent.pointerId !== pointerId)) return;
+      active = false;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      proxy.removeEventListener("lostpointercapture", handleLostPointerCapture);
+      if (proxy.hasPointerCapture(pointerId)) proxy.releasePointerCapture(pointerId);
+      if (controlsRef.current) controlsRef.current.enabled = interactionModeRef.current === "camera-browse" && !cameraLockedRef.current;
+      endContinuousEdit();
+      flash(text("Model position updated", "模型位置已更新"));
+    };
     const move = (pointerEvent: PointerEvent) => {
+      if (!active || pointerEvent.pointerId !== pointerId) return;
+      if (pointerEvent.buttons !== 1) {
+        end(pointerEvent);
+        return;
+      }
       const deltaX = pointerEvent.clientX - startPointer.x;
       const deltaY = pointerEvent.clientY - startPointer.y;
       const nextWorld = startWorld.clone()
@@ -3840,13 +3860,11 @@ export default function Home() {
       const nextLocal = root.parent ? root.parent.worldToLocal(nextWorld.clone()) : nextWorld;
       updateContinuousEdit((current) => ({ ...current, position: [nextLocal.x, nextLocal.y, nextLocal.z] }));
     };
-    const end = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      endContinuousEdit();
-      flash(text("Model position updated", "模型位置已更新"));
+    const handleLostPointerCapture = (pointerEvent: PointerEvent) => {
+      if (pointerEvent.pointerId === pointerId) end(pointerEvent);
     };
+    proxy.setPointerCapture(pointerId);
+    proxy.addEventListener("lostpointercapture", handleLostPointerCapture);
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", end);
     window.addEventListener("pointercancel", end);

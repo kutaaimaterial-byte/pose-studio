@@ -121,6 +121,10 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /const changeActiveTool = \(tool: ActiveTool\) => \{\s*setActiveTool\(tool\)/s);
   assert.match(page, /syncTransformController\(nextMode, nextRoot\)/);
   assert.match(page, /const beginOffCanvasModelDrag = \(event: React\.PointerEvent<HTMLButtonElement>\)/);
+  assert.match(page, /const pointerId = event\.pointerId/);
+  assert.match(page, /pointerEvent\.buttons !== 1/);
+  assert.match(page, /proxy\.setPointerCapture\(pointerId\)/);
+  assert.match(page, /proxy\.addEventListener\("lostpointercapture", handleLostPointerCapture\)/);
   assert.match(page, /className="offcanvas-transform-proxy"/);
   assert.match(page, /<div><strong>\{toolLabels\[activeTool\]\}<\/strong><\/div>/);
   assert.doesNotMatch(page, /<div><strong>\{toolLabels\[activeTool\]\}<\/strong><small>/);
