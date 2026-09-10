@@ -5,7 +5,6 @@ colors:
   primary: "#246bfd"
   primary-hover: "#1759d8"
   primary-soft: "#eaf1ff"
-  selected-page: "#edf4ff"
   app-background: "#f5f7fa"
   surface-primary: "#fff"
   surface-secondary: "#f8fafc"
@@ -35,7 +34,7 @@ components:
   search-input: { backgroundColor: "{colors.surface-secondary}", rounded: "{rounded.control}", padding: "0 14px", height: "40px", width: "280px" }
   import-action: { backgroundColor: "{colors.surface-primary}", rounded: "{rounded.upload}", padding: "10px 14px" }
   template-card: { backgroundColor: "{colors.surface-primary}", rounded: "{rounded.card}", padding: "20px" }
-  selected-page: { backgroundColor: "{colors.selected-page}", textColor: "{colors.primary-hover}", rounded: "{rounded.compact}" }
+  page-switcher: { backgroundColor: "{colors.surface-secondary}", textColor: "{colors.text-primary}", rounded: "{rounded.compact}", height: "32px" }
   recovery-banner: { backgroundColor: "{colors.error-background}", textColor: "{colors.error-text}", rounded: "{rounded.control}", padding: "12px 16px" }
 ---
 
@@ -67,7 +66,7 @@ Home uses a scrollable viewport, a 76px white header and a centered 1300px conte
 
 The recent-project row keeps its text container shrinkable and wraps the name anywhere. At 720px and below the text takes a full row and the actions wrap below it. Ordinary project-card names also wrap; compact page navigation and workspace-header names use ellipsis.
 
-Workspace uses a 48px project header over a 190px page rail and a flexible editor. The rail becomes 150px at 1100px; at 720px it becomes a 58px horizontal page strip above the editor. Project identity and local-save state live in the outer header; page choices and shared-content context live in the rail. The inner studio keeps its existing tools, canvas and timeline.
+Workspace uses a 48px project header over a full-width flexible editor. Project identity and local-save state live in the outer header. Page switching, adding and management are consolidated into a compact 32px header control; there is no permanent page rail. The inner studio keeps its existing tools, canvas and timeline.
 
 ## Elevation & Depth
 
@@ -75,14 +74,14 @@ Cards and the workspace frame stay flat with 1px borders. Only temporary menus a
 
 ## Shapes
 
-Use the observed compact-to-card radius steps for controls, menus, page rows and project cards. Desktop header and rail boundaries are straight. Card covers preserve user-image aspect with `object-fit: contain`; absent covers use a task icon and template label, not generated catalog art.
+Use the observed compact-to-card radius steps for controls, menus, the page switcher and project cards. Desktop header boundaries are straight. Card covers preserve user-image aspect with `object-fit: contain`; absent covers use a task icon and template label, not generated catalog art.
 
 ## Components
 
 - **Search and upload:** Search is a labeled cool-white field. Import and change-cover labels retain a keyboard-focusable file input; `:focus-within` puts the blue 2px outline with 3px offset on the visible label. All other wrapper controls use matching `:focus-visible` treatment.
 - **Templates and projects:** Template cards use a blue border on hover. Project cards expose name, template, page count and timestamp; separate menus hold management actions. Grid/list and library/trash controls expose pressed state.
 - **Recent project:** Soft-blue continuation area with a fully wrapping name, page count, last-opened text and continuation/management actions; never truncate its name to protect buttons.
-- **Page navigation:** Selected rows use a blue tint and text; compact page controls remain distinct from editor tools. Shared-content count and separate linked-view/independent-copy labels explain the project/page relationship.
+- **Page navigation:** A compact header selector switches pages. Its adjacent plus adds a linked view, while the overflow menu exposes rename, independent-copy, ordering and deletion. It must remain visually subordinate to editor tools.
 - **Recovery:** The runtime error banner is fixed 20px from the bottom and sides, above the workspace, with `role="alert"`, a 45dvh maximum and scrolling. Active work offers retry-save, export-current-project and dismiss; the home variant offers retry and local-backup export. Actions wrap on narrow screens. The initial storage-loading error remains an inline alert.
 
 ## Do's and Don'ts

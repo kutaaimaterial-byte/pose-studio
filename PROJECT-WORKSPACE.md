@@ -13,7 +13,7 @@
 - Four templates: 景别与构图, 剧情分镜, 人物姿态, 自由项目.
 - A story project initially links Stage, Storyboard and Animation pages. Other templates use one appropriate page and can add further views.
 - Stage presets remain in the existing 舞台 inspector. Storyboard pages default to readable, automatically ordered shot cards. Animation pages default to the existing timeline. Pose pages start without a timeline.
-- Per-page state includes active shot, camera, aspect, playhead, zoom, tool, inspector visibility and timeline/card view. Newer shared content takes precedence over stale page camera state. Restored playback is paused.
+- Per-page state includes active shot, camera, aspect, playhead, zoom, tool, inspector visibility and timeline/card view. Newer shared content takes precedence over stale page camera state. Restored playback is paused. Page switching, adding and management live in the compact workspace header so the editor keeps the full available width; no permanent project-page rail is shown.
 - Home supports search, list/grid, recent continuation, rename, cover image, duplicate, portable export/import, trash, restore and confirmed permanent deletion.
 - Saving is local to the current browser. Removing browser data removes these projects; export files are the portable backup. This is not cross-device sync or collaboration.
 

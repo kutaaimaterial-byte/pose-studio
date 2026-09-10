@@ -47,12 +47,12 @@
       "css": ".ds-template-card{display:flex;flex-direction:column;gap:12px;text-align:left;padding:20px;border:1px solid #dce3ec;border-radius:10px;background:#fff;color:#182230;cursor:pointer;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif}.ds-template-card strong{font-size:16px}.ds-template-card span{font-size:14px;color:#64748b;line-height:1.6}.ds-template-card:hover{border-color:#246bfd}.ds-template-card:focus-visible{outline:2px solid #246bfd;outline-offset:3px}.ds-template-card:disabled{opacity:.5;cursor:not-allowed}@media(max-width:720px){.ds-template-card{padding:14px}}"
     },
     {
-      "name": "Selected project page",
+      "name": "Project page switcher",
       "kind": "nav",
-      "refersTo": "selected-page",
-      "description": "Compact selected page row, separate from the retained editor's tool navigation. Runtime icons and page menus are omitted from this text-state specimen.",
-      "html": "<nav aria-label=\"项目页面\" class=\"ds-project-pages\"><div class=\"ds-page-selected\"><button class=\"ds-page-open\"><span>舞台</span></button></div></nav>",
-      "css": ".ds-project-pages{padding:16px 8px;background:#fff;border-right:1px solid #dce3ec;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif}.ds-page-selected{display:flex;align-items:center;min-width:0;border-radius:6px;margin-bottom:4px;background:#edf4ff;color:#1759d8}.ds-page-open{min-width:0;flex:1;padding:12px 8px;display:flex;align-items:center;gap:8px;text-align:left;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer}.ds-page-open span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-page-open:focus-visible{outline:2px solid #246bfd;outline-offset:3px}.ds-page-open:disabled{opacity:.5;cursor:not-allowed}@media(max-width:720px){.ds-project-pages{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid #dce3ec;overflow:auto}.ds-page-selected{flex:none}}"
+      "refersTo": "page-switcher",
+      "description": "Compact header selector that replaces the permanent page rail and returns its width to the editor.",
+      "html": "<label class=\"ds-page-switcher\">当前页面<select><option>舞台构图</option><option>分镜</option><option>动画时间轴</option></select></label>",
+      "css": ".ds-page-switcher{display:flex;align-items:center;gap:8px;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:#64748b}.ds-page-switcher select{width:180px;height:32px;padding:0 28px 0 10px;color:#344054;background:#f8fafc;border:1px solid #dce3ec;border-radius:6px;text-overflow:ellipsis}.ds-page-switcher select:focus-visible{outline:2px solid #246bfd;outline-offset:3px}@media(max-width:720px){.ds-page-switcher select{width:min(34vw,140px)}}"
     },
     {
       "name": "Bottom recovery banner",
