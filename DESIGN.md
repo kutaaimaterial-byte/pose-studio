@@ -104,6 +104,8 @@ components:
 
 ## V3.4.1 preset-first scope (current)
 
+Entry correction: retain the established top tool navigation, central canvas, right context inspector and full animation timeline. Complete-shot cards, orientation, primary actions and optional advanced Stage controls live inside that same right inspector. The earlier separate left-library/default-mode layout below is superseded; no 返回预设模式 control or global workspace mode exists.
+
 The user-approved Precision Light screenshot and preset-first brief govern the new default surface. It uses a 60px orientation header, 310px complete-shot library, dominant live preview, and 218px shot timeline. Below 850px the library narrows; primary actions remain visible and 3D frames keep their actual aspect. The historical pose-first layout below remains available only in Advanced adjustments.
 
 Reuse the incumbent #246bfd blue, #182230 ink, #64748b secondary text, white panels, and cool blue-gray stage. Compact 10–13px metadata and 6–8px control radii intentionally follow the selected studio UI, not the older document's limited typography/radius ramp. Rendered shot cards are functional composition previews; no decorative image generation is used. Advanced parameters and animation tracks are folded away, not removed. A single Impeccable detector pass found advisory token-document drift; these scoped exceptions are intentional, not a reason to restyle legacy surfaces.

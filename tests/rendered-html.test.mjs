@@ -51,6 +51,7 @@ test("server-renders the PoseBoard studio shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>AI Character Studio \| PoseBoard 3D Studio<\/title>/i);
   assert.match(html, /class="editor-app/);
+  assert.doesNotMatch(html, /返回预设模式|expert-mode-toggle|editor-app preset-mode/);
   assert.match(html, /class="intro-loader/);
   assert.match(html, />正在准备 3D 工作区<\/p>/);
   assert.match(html, />PoseBoard<\/span>/);
@@ -69,6 +70,19 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, /aria-pressed="false">EN<\/button>/);
   assert.match(html, /aria-pressed="true">中文<\/button>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+});
+
+test("complete shot presets stay inside the Stage inspector", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const inspector = page.slice(page.indexOf('<aside className="panel inspector-panel'), page.indexOf('{activeTool === "model" && <>'));
+  assert.match(inspector, /activeTool === "stage"/);
+  assert.match(inspector, /aria-label="舞台功能"/);
+  assert.match(inspector, /镜头预设<\/button>/);
+  assert.match(inspector, /<RecipeLibrary/);
+  assert.match(inspector, /className="recipe-main-actions"/);
+  assert.match(inspector, /stageAdvanced && <StagePanel/);
+  assert.match(page, /simple=\{false\}/);
+  assert.doesNotMatch(page, /expertMode|setExpertMode|返回预设模式/);
 });
 
 test("keeps the Precision Light workstation responsive and restrained", async () => {

@@ -2932,7 +2932,7 @@ export default function Home() {
   const [storedStudioGraph, setStudioGraph] = useState<StudioGraph>({ nodes: [], edges: [] });
   const studioGraph = useMemo(() => syncShotCards(storedStudioGraph, timeline.shots), [storedStudioGraph, timeline.shots]);
   const [graphOpen, setGraphOpen] = useState(false);
-  const [expertMode, setExpertMode] = useState(false);
+  const [stageAdvanced, setStageAdvanced] = useState(false);
   const [recipeTemplate, setRecipeTemplate] = useState<THREE.Object3D | null>(null);
   const [recipeThumbnails, setRecipeThumbnails] = useState<Record<string, string>>({});
   const [recipePlan, setRecipePlan] = useState<RecipePlan | null>(null);
@@ -3440,6 +3440,7 @@ export default function Home() {
     setToolMode("pose");
     setActiveTool("pose");
     setInteractionMode("ik-edit");
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     if (controlsRef.current) controlsRef.current.enabled = false;
     if (transformControlsRef.current) {
       transformControlsRef.current.enabled = false;
@@ -3571,6 +3572,7 @@ export default function Home() {
 
   const changeActiveTool = (tool: ActiveTool) => {
     setActiveTool(tool);
+    if (tool !== "stage") { setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined); }
     setAdvancedOpen(false);
     setContextPanelOpen(true);
     setMobilePanel(window.innerWidth < 1024 ? "context" : null);
@@ -3815,6 +3817,7 @@ export default function Home() {
     setToolMode("pose");
     setActiveTool("pose");
     setInteractionMode("ik-edit");
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     setMobilePanel(null);
     setPromptToPoseOpen(false);
     flash(text(`Text pose applied: ${result.pose.nameEn}`, `文字姿态已应用：${result.pose.name}`));
@@ -3951,7 +3954,7 @@ export default function Home() {
   };
 
   const toggleOrientation = () => {
-    const current = editorLatestRef.current.ratio;
+    const current = recipePlan?.ratio ?? editorLatestRef.current.ratio;
     const ratio: Ratio = current === "16:9" || current === "21:9" ? "9:16" : current === "9:16" ? "16:9" : current === "3:2" ? "2:3" : current === "2:3" ? "3:2" : current === "4:3" ? "3:4" : current === "3:4" || current === "4:5" ? "4:3" : "1:1";
     changeArtboardRatio(ratio);
   };
@@ -3963,6 +3966,7 @@ export default function Home() {
       perspectiveGrid: perspectiveDefaultsForMode(mode, current.perspectiveGrid),
     }));
     setActiveTool("perspective");
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     setInteractionMode(mode === "off" ? "camera-browse" : "perspective-edit");
     if (controlsRef.current) controlsRef.current.enabled = mode === "off" && !cameraLocked;
     flash(mode === "off"
@@ -5366,6 +5370,7 @@ export default function Home() {
 
   const toggleTimelinePlayback = () => {
     if (!timelineLatestRef.current.shots.length) return;
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     if (timelinePlaying) {
       setTimelinePlaying(false);
       timelineLatestRef.current = { ...timelineLatestRef.current, playhead: playheadRef.current };
@@ -5530,6 +5535,10 @@ export default function Home() {
   };
 
   const changeArtboardRatio = (nextRatio: Ratio) => {
+    if (recipePlan) {
+      if (nextRatio !== "16:9" && nextRatio !== "9:16") { flash("此预设已制作横版 16:9 与竖版 9:16 构图，请选择其中一种"); return; }
+      setRecipeCamera(undefined); setRecipePlan({ ...recipePlan, ratio: nextRatio }); return;
+    }
     const currentRatio = editorLatestRef.current.ratio;
     if (nextRatio === currentRatio) return;
     const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
@@ -5705,6 +5714,7 @@ export default function Home() {
     setCanvasImages((current) => [...current, ...uploaded]);
     setSelectedCanvasImageId(uploaded.at(-1)?.id ?? null);
     setActiveTool("model");
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     setContextPanelOpen(true);
     flash(text(`${uploaded.length} image layer${uploaded.length > 1 ? "s" : ""} added`, `已添加 ${uploaded.length} 个图片图层`));
   };
@@ -6513,6 +6523,7 @@ export default function Home() {
     setToolMode("pose");
     setActiveTool("pose");
     setInteractionMode("ik-edit");
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     setMobilePanel(null);
     setSelectedPoseId(defaultPose.id);
     setCanvasImages([]);
@@ -6593,6 +6604,8 @@ export default function Home() {
 
   const previewRecipePlan = (plan: RecipePlan) => {
     setTimelinePlaying(false); setRecipePlaying(false); setRecipeIndex(0); setRecipeCamera(undefined); setRecipePlan(plan);
+    setInteractionMode("camera-browse"); setActiveIKControl(null);
+    setMobilePanel(null);
   };
   const useRecipePlan = () => {
     if (!recipePlan || !recipeTemplate) return;
@@ -6676,7 +6689,7 @@ export default function Home() {
     <SSRProvider>
     <FluentProvider theme={poseBoardTheme} className="fluent-root" applyStylesToPortals={false}>
     <main
-      className={`editor-app ${expertMode ? "expert-mode" : "preset-mode"} ${recipePlan ? "recipe-preview-active" : ""} tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${timelineOpen ? "timeline-open" : ""} ${mobilePanel ? "show-context" : ""}`}
+      className={`editor-app ${recipePlan ? "recipe-preview-active" : ""} tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${timelineOpen ? "timeline-open" : ""} ${mobilePanel ? "show-context" : ""}`}
       style={{ "--timeline-height": `${timelineHeight}px` } as React.CSSProperties}
       aria-busy={introPhase !== "hidden"}
     >
@@ -6705,10 +6718,8 @@ export default function Home() {
 
         <ToolRail activeTool={activeTool} labels={toolLabels} panelOpen={contextPanelOpen} onChange={changeActiveTool} onTogglePanel={() => setContextPanelOpen((open) => !open)} />
 
-        {!expertMode && <div className="recipe-orientation" role="group" aria-label="镜头画幅">{(["16:9", "9:16"] as RecipeRatio[]).map((ratio) => <button key={ratio} aria-pressed={recipeRatio === ratio} onClick={() => { setRecipeCamera(undefined); if (recipePlan) setRecipePlan({ ...recipePlan, ratio }); else changeArtboardRatio(ratio); }}>{ratio === "16:9" ? "横版 16:9" : "竖版 9:16"}</button>)}</div>}
-        <button className="expert-mode-toggle" aria-expanded={expertMode} onClick={() => { setRecipePlan(null); setRecipePlaying(false); if (expertMode) { setInteractionMode("camera-browse"); setActiveIKControl(null); } setExpertMode(!expertMode); }}>{expertMode ? "返回预设模式" : "高级调整"}</button>
         <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
-          <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => changeArtboardRatio(event.target.value as Ratio)} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "4:5", "2:3", "3:4", "4:3", "9:16", "16:9", "21:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
+          <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={recipePlan?.ratio ?? editor.ratio} onChange={(event) => changeArtboardRatio(event.target.value as Ratio)} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "4:5", "2:3", "3:4", "4:3", "9:16", "16:9", "21:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
           <ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} title={text("Switch orientation", "切换横竖屏")} />
           <Button className={`perspective-grid-button ${editor.perspectiveGrid.mode !== "off" ? "active" : ""}`} appearance="subtle" aria-pressed={editor.perspectiveGrid.mode !== "off"} onClick={togglePerspectiveGrid} icon={<Perspective size={18} weight={editor.perspectiveGrid.mode !== "off" ? "fill" : "regular"} />}><span className="perspective-grid-label">{text("Perspective", "透视网格")}</span><kbd>G</kbd></Button>
           <Button className={`video-timeline-button ${timelineOpen ? "active" : ""}`} appearance="subtle" aria-pressed={timelineOpen} onClick={() => setTimelineOpen((open) => !open)} icon={<FilmStrip size={18} weight={timelineOpen ? "fill" : "regular"} />}><span>{text("Timeline", "时间轴")}</span>{timeline.shots.length > 0 && <small>{timeline.shots.length}</small>}</Button>
@@ -6730,11 +6741,6 @@ export default function Home() {
       </header>
 
       <section className="workspace">
-        {!expertMode && <RecipeLibrary ratio={recipeRatio} thumbnails={recipeThumbnails} plan={recipePlan} selectedIndex={recipeIndex} ready={!!recipeTemplate}
-          onRecipe={(id) => previewRecipePlan(planForRecipes([id], recipeRatio, shotRecipes.find((r) => r.id === id)!.name))}
-          onSuite={(id) => { const suite = shotSuites.find((s) => s.id === id)!; previewRecipePlan(planForRecipes(suite.recipeIds, recipeRatio, suite.name)); }}
-          onPrompt={(prompt) => previewRecipePlan(recommendRecipePlan(prompt, recipeRatio))}
-          onSelectIndex={(index) => { setRecipeIndex(index); setRecipeCamera(undefined); setRecipePlaying(false); }} />}
         <aside className="panel library-panel context-panel" aria-label="Pose Library">
           <div className="library-scroll-header">
             <div className="panel-title-row">
@@ -6866,24 +6872,11 @@ export default function Home() {
             </button>
           )}
           <div className="canvas-stage">
-            {!expertMode && <>
+            {activeTool === "stage" && !stageAdvanced && <>
               {activeRecipe && recipePlan && <div className="recipe-live-preview">
-                <div className="recipe-preview-caption"><strong>{activeRecipe.name}</strong><span>{recipeRatio} · 静态 · {recipePlan.items[recipeIndex].duration.toFixed(2)} 秒</span><button onClick={() => { setRecipePlan(null); setRecipePlaying(false); }}>返回当前作品</button></div>
+                <div className="recipe-preview-caption"><strong>{activeRecipe.name}</strong><span>{recipeRatio} · 静态 · {recipePlan.items[recipeIndex].duration.toFixed(2)} 秒 · 预览未保存</span><button onClick={() => { setRecipePlan(null); setRecipePlaying(false); }}>取消预览</button></div>
                 <div className={`recipe-preview-frame ${recipeRatio === "9:16" ? "portrait" : "landscape"}`}><RecipeViewport template={recipeTemplate} factory={createRecipeActor} recipe={activeRecipe} ratio={recipeRatio} camera={recipeCamera ?? plannedRecipeCamera} exportSignal={recipeExport} onError={flash} />{recipeGuides && <div className="studio-guide-overlay with-thirds with-safe" aria-hidden="true"><i /><b /></div>}</div>
               </div>}
-              <div className="recipe-main-actions">
-                <button className="primary" disabled={!recipePlan || !recipeTemplate} onClick={useRecipePlan}>{recipePlan && recipePlan.items.length > 1 ? `使用这 ${recipePlan.items.length} 镜` : "使用此镜头"}</button>
-                <button disabled={!modelInfo.loaded} onClick={() => activeRecipe ? setRecipeExport((v) => v + 1) : void exportPng("clean")}>保存图片</button>
-                <button disabled={!recipeTemplate} onClick={nextRecipeScheme}>换一个方案</button>
-                {recipePlan && recipePlan.items.length > 1 && <button aria-pressed={recipePlaying} onClick={() => { if (!recipePlaying) setRecipeIndex(0); setRecipePlaying(!recipePlaying); }}>{recipePlaying ? "暂停预览" : "播放套组"}</button>}
-                {(activeRecipe || activeTimelineShot) && <details className="recipe-adjustments"><summary>{activeRecipe ? "微调" : "微调副本"}</summary><div>
-                  {!activeRecipe && <p>保留原镜头；在副本中调整构图，动作与时长不变。</p>}
-                  {([ ["near", "近一点"], ["far", "远一点"], ["left", "人物偏左"], ["right", "人物偏右"], ["high", "机位高一点"], ["low", "机位低一点"] ] as const).map(([kind, label]) => <button key={kind} onClick={() => nudgeRecipe(kind)}>{label}</button>)}
-                  {activeRecipe && <><button aria-pressed={recipePlan?.mirrored} onClick={() => flipRecipePlan("mirrored")}>镜像构图</button><button disabled={activeRecipe.actors.length < 2} aria-pressed={recipePlan?.swapped} onClick={() => flipRecipePlan("swapped")}>交换人物</button><button aria-pressed={recipeGuides} onClick={() => setRecipeGuides(!recipeGuides)}>构图参考线</button><button onClick={() => { setRecipeCamera(undefined); if (recipePlan) setRecipePlan({ ...recipePlan, items: recipePlan.items.map((item, index) => index === recipeIndex ? { ...item, cameras: undefined } : item) }); }}>恢复预设构图</button></>}
-                  {!activeRecipe && <><button onClick={() => void exportPng("with-grid")}>保存网格图</button><button onClick={() => void exportPng("annotated")}>保存标注图</button></>}
-                </div></details>}
-                {!timelineOpen && <button onClick={() => setTimelineOpen(true)}>展开时间轴</button>}
-              </div>
             </>}
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
               <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>
@@ -6974,7 +6967,33 @@ export default function Home() {
           </div>
 
           <div className="inspector-content">
-            {activeTool === "stage" && <StagePanel
+            {activeTool === "stage" && <>
+              <div className="stage-workflow-tabs" role="tablist" aria-label="舞台功能">
+                <button role="tab" aria-selected={!stageAdvanced} onClick={() => setStageAdvanced(false)}>镜头预设</button>
+                <button role="tab" aria-selected={stageAdvanced} onClick={() => { setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined); setStageAdvanced(true); }}>高级调整</button>
+              </div>
+              {!stageAdvanced && <>
+              <div className="recipe-main-actions">
+                <button className="primary" disabled={!recipePlan || !recipeTemplate} onClick={useRecipePlan}>{recipePlan && recipePlan.items.length > 1 ? `使用这 ${recipePlan.items.length} 镜` : "使用此镜头"}</button>
+                <button disabled={!modelInfo.loaded} onClick={() => activeRecipe ? setRecipeExport((v) => v + 1) : void exportPng("clean")}>保存图片</button>
+                <button disabled={!recipeTemplate} onClick={nextRecipeScheme}>换一个方案</button>
+                {recipePlan && recipePlan.items.length > 1 && <button aria-pressed={recipePlaying} onClick={() => { if (!recipePlaying) setRecipeIndex(0); setRecipePlaying(!recipePlaying); }}>{recipePlaying ? "暂停预览" : "播放套组"}</button>}
+                {(activeRecipe || activeTimelineShot) && <details className="recipe-adjustments"><summary>{activeRecipe ? "微调" : "微调副本"}</summary><div>
+                  {!activeRecipe && <p>保留原镜头；在副本中调整构图，动作与时长不变。</p>}
+                  {([ ["near", "近一点"], ["far", "远一点"], ["left", "人物偏左"], ["right", "人物偏右"], ["high", "机位高一点"], ["low", "机位低一点"] ] as const).map(([kind, label]) => <button key={kind} onClick={() => nudgeRecipe(kind)}>{label}</button>)}
+                  {activeRecipe && <><button aria-pressed={recipePlan?.mirrored} onClick={() => flipRecipePlan("mirrored")}>镜像构图</button><button disabled={activeRecipe.actors.length < 2} aria-pressed={recipePlan?.swapped} onClick={() => flipRecipePlan("swapped")}>交换人物</button><button aria-pressed={recipeGuides} onClick={() => setRecipeGuides(!recipeGuides)}>构图参考线</button><button onClick={() => { setRecipeCamera(undefined); if (recipePlan) setRecipePlan({ ...recipePlan, items: recipePlan.items.map((item, index) => index === recipeIndex ? { ...item, cameras: undefined } : item) }); }}>恢复预设构图</button></>}
+                  {!activeRecipe && <><button onClick={() => void exportPng("with-grid")}>保存网格图</button><button onClick={() => void exportPng("annotated")}>保存标注图</button></>}
+                </div></details>}
+                {!timelineOpen && <button onClick={() => setTimelineOpen(true)}>展开时间轴</button>}
+              </div>
+                <div className="recipe-orientation" role="group" aria-label="镜头画幅">{(["16:9", "9:16"] as RecipeRatio[]).map((ratio) => <button key={ratio} aria-pressed={recipeRatio === ratio} onClick={() => { setRecipeCamera(undefined); if (recipePlan) setRecipePlan({ ...recipePlan, ratio }); else changeArtboardRatio(ratio); }}>{ratio === "16:9" ? "横版 16:9" : "竖版 9:16"}</button>)}</div>
+                <RecipeLibrary ratio={recipeRatio} thumbnails={recipeThumbnails} plan={recipePlan} selectedIndex={recipeIndex} ready={!!recipeTemplate}
+                  onRecipe={(id) => previewRecipePlan(planForRecipes([id], recipeRatio, shotRecipes.find((r) => r.id === id)!.name))}
+                  onSuite={(id) => { const suite = shotSuites.find((s) => s.id === id)!; previewRecipePlan(planForRecipes(suite.recipeIds, recipeRatio, suite.name)); }}
+                  onPrompt={(prompt) => previewRecipePlan(recommendRecipePlan(prompt, recipeRatio))}
+                  onSelectIndex={(index) => { setRecipeIndex(index); setRecipeCamera(undefined); setRecipePlaying(false); }} />
+              </>}
+              {stageAdvanced && <StagePanel
               key={studioPromptSeed || "stage-panel"} initialPrompt={studioPromptSeed}
               cloudStatus={cloudStatus} onCloudSave={() => { persistActiveTimelineShotScene(); saveStageRecord(); setPendingCloudSave(true); }} onCloudRestore={() => void restoreCloudProject()}
               stage={stageSettings} stages={[...stageRecords.filter((r) => r.settings.id !== stageSettings.id).map((r) => r.settings), stageSettings]}
@@ -6988,6 +7007,7 @@ export default function Home() {
               onAddShot={addBlankTimelineShot} onUpdateShot={updateActiveTimelineShot} onSnapshot={(mode) => void exportPng(mode)}
               onGraph={() => { setGraphOpen(true); setTimelineOpen(true); }} onExport={exportProjectJson} onImport={(file) => void importStudioProject(file)}
             />}
+            </>}
             {activeTool === "model" && <>
               <div className="model-stack" aria-label={text("Canvas models", "画板模型列表")}>
                 <div className="model-stack-title"><span>{text("Canvas Models", "画板模型")}</span><small>{modelList.length} / 8</small></div>
@@ -7223,8 +7243,8 @@ export default function Home() {
           </div>
         </aside>
 
-        {timelineOpen && graphOpen && !expertMode && <ShotCardView shots={timeline.shots} activeId={activeShotId} onSelect={(id) => { const shot = timeline.shots.find((s) => s.id === id); if (shot) selectTimelineShot(shot); }} onReorder={reorderRecipeShots} onTimeline={() => setGraphOpen(false)} />}
-        {timelineOpen && graphOpen && expertMode && <StoryboardGraph graph={studioGraph} onChange={setStudioGraph} shots={timeline.shots} activeShotId={activeShotId}
+        {timelineOpen && graphOpen && !stageAdvanced && <ShotCardView shots={timeline.shots} activeId={activeShotId} onSelect={(id) => { const shot = timeline.shots.find((s) => s.id === id); if (shot) selectTimelineShot(shot); }} onReorder={reorderRecipeShots} onTimeline={() => setGraphOpen(false)} />}
+        {timelineOpen && graphOpen && stageAdvanced && <StoryboardGraph graph={studioGraph} onChange={setStudioGraph} shots={timeline.shots} activeShotId={activeShotId}
           onSelectShot={(id) => { const shot = timelineLatestRef.current.shots.find((s) => s.id === id); if (shot) selectTimelineShot(shot); changeActiveTool("stage"); }}
           onRun={(kind, prompt) => {
             if (kind === "parse" || kind === "prompt") { if (prompt) setStudioPromptSeed(prompt); else flash("请填写 Prompt 节点，并连接到解析节点"); changeActiveTool("stage"); }
@@ -7234,7 +7254,7 @@ export default function Home() {
           }}
           onTimeline={() => setGraphOpen(false)} onMessage={flash} />}
         {timelineOpen && !graphOpen && <VideoTimelinePanel
-          simple={!expertMode}
+          simple={false}
           timeline={timeline}
           animationTimeline={animationTimeline}
           playhead={timelinePlayhead}
@@ -7246,8 +7266,8 @@ export default function Home() {
           canUndo={timelineCanUndo}
           canRedo={timelineCanRedo}
           onCollapse={() => setTimelineOpen(false)}
-          onOpenGraph={() => { setGraphOpen(true); if (expertMode) changeActiveTool("stage"); }}
-          onOpenPrompt={() => { if (expertMode) setTimelinePromptOpen(true); else document.getElementById("recipe-prompt")?.focus(); }}
+          onOpenGraph={() => { setGraphOpen(true); if (stageAdvanced) changeActiveTool("stage"); }}
+          onOpenPrompt={() => setTimelinePromptOpen(true)}
           onAddShot={addBlankTimelineShot}
           onUpdateShot={updateActiveTimelineShot}
           onSplitShot={splitActiveTimelineShot}

@@ -2,6 +2,8 @@
 
 ## Current default workflow — preset-first, V3.4.1
 
+Current entry correction: complete-shot presets are a Stage tool feature in the existing workstation. Click 舞台 → 镜头预设; the right inspector holds the library and actions while the center previews the shot and the existing timeline remains available. No global preset/expert page switch. 高级调整 only changes the Stage inspector's contents. Applying explicitly appends shots and returns the canvas to its existing editing controls; cancelling previews preserves the original work.
+
 The user's preset-first brief supersedes the older pose-first entry flow below. The default is a complete shot: authored actors and relationships, stage, lighting, separate landscape/portrait cameras, and a static duration. Choose a card to preview in an isolated scene, then explicitly append it or its suite. Primary actions are use, save image, and another scheme. Existing parameter editing remains under Advanced adjustments.
 
 The first complete catalog contains 11 static shots and three suites. Prompt matching selects these local authored recipes; it is not unrestricted scene or animation generation. Unsupported actions, props, cast sizes and timing gaps are disclosed. Animated source shots remain editable and a framing adjustment creates a copy preserving actor/root animation and duration. Previously confirmed images remain stored; copies are marked for reconfirmation.
