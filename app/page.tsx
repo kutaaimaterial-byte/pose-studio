@@ -112,9 +112,12 @@ import {
 import { VideoTimelinePanel } from "./video-timeline-panel";
 import { StagePanel, type SnapshotMode } from "./stage-panel";
 import { StoryboardGraph } from "./storyboard-graph";
+import { RecipeLibrary, ShotCardView } from "./recipe-library";
+import { RecipeViewport, generateRecipeThumbnails, makeRecipeCamera, renderRecipeThumbnail, captureShotThumbnail } from "./recipe-renderer";
+import { shotRecipes, shotSuites, planForRecipes, recommendRecipePlan, orderedShotIds, composedRecipeCamera, nudgeRecipeCamera, arrangedRecipe, type CameraNudge, type RecipeActor, type RecipeCamera, type RecipePlan, type RecipeRatio } from "./shot-recipes";
 import { studioCloudRequest } from "./studio-cloud";
 import { cameraForShot, createStageEnvironment, disposeStageEnvironment, drawShotGuides } from "./stage-scene";
-import { compositions, defaultShotPreset, defaultStage, normalizeShotPreset, parseShotPrompt, shotSnapshotFilename, shotSizes, stageTypes, type CustomShotPreset, type ShotDraft, type ShotPreset, type StageRecord, type StageSettings, type StudioGraph } from "./stage-studio";
+import { compositions, defaultShotPreset, defaultStage, normalizeShotPreset, parseShotPrompt, shotSnapshotFilename, shotSizes, stageTypes, syncShotCards, type CustomShotPreset, type ShotDraft, type ShotPreset, type StageRecord, type StageSettings, type StudioGraph } from "./stage-studio";
 import {
   animationLocalTime,
   cameraMotionLibrary as cameraMotionPresets,
@@ -343,6 +346,7 @@ type ShotModelSnapshot = {
 };
 
 type ShotSceneSnapshot = {
+  recipeId?: string;
   stage?: StageSettings;
   shotPreset?: ShotPreset;
   editor: EditorState;
@@ -2490,6 +2494,17 @@ function applyRigPose(rig: RigBinding, poseIndex: number, mirrored = false) {
   };
 }).__POSEBOARD_ENGINE_DEBUG__ = { createRigBinding, applyRigPose, poses: poseItems };
 
+function createRecipeActor(template: THREE.Object3D, actor: RecipeActor) {
+  const model = cloneSkeleton(template);
+  model.traverse((child) => {
+    if (child instanceof THREE.Mesh) { child.geometry = child.geometry.clone(); child.material = createMannequinMaterial(); }
+  });
+  const rig = createRigBinding(model);
+  if (rig) applyRigPose(rig, Math.max(0, poseItems.findIndex((pose) => pose.name === actor.pose)), !!actor.mirrored);
+  const root = new THREE.Group(); root.add(model); root.position.set(...actor.position); root.rotation.y = THREE.MathUtils.degToRad(actor.yaw);
+  return root;
+}
+
 function createMannequinMaterial() {
   return new THREE.MeshStandardMaterial({ color: 0xf5f5f3, roughness: 0.76, metalness: 0.03 });
 }
@@ -2914,8 +2929,35 @@ export default function Home() {
   const shotFramingRef = useRef(shotFraming);
   const [stageRecords, setStageRecords] = useState<StageRecord<ShotSceneSnapshot>[]>([]);
   const [customShotPresets, setCustomShotPresets] = useState<CustomShotPreset<ShotCameraSnapshot>[]>([]);
-  const [studioGraph, setStudioGraph] = useState<StudioGraph>({ nodes: [], edges: [] });
+  const [storedStudioGraph, setStudioGraph] = useState<StudioGraph>({ nodes: [], edges: [] });
+  const studioGraph = useMemo(() => syncShotCards(storedStudioGraph, timeline.shots), [storedStudioGraph, timeline.shots]);
   const [graphOpen, setGraphOpen] = useState(false);
+  const [expertMode, setExpertMode] = useState(false);
+  const [recipeTemplate, setRecipeTemplate] = useState<THREE.Object3D | null>(null);
+  const [recipeThumbnails, setRecipeThumbnails] = useState<Record<string, string>>({});
+  const [recipePlan, setRecipePlan] = useState<RecipePlan | null>(null);
+  const [recipeIndex, setRecipeIndex] = useState(0);
+  const [recipeExport, setRecipeExport] = useState(0);
+  const [recipeCamera, setRecipeCamera] = useState<RecipeCamera | undefined>();
+  const [recipePlaying, setRecipePlaying] = useState(false);
+  const [recipeGuides, setRecipeGuides] = useState(false);
+  const [framingCopyId, setFramingCopyId] = useState<string | null>(null);
+  const recipeRatio: RecipeRatio = recipePlan?.ratio ?? (editor.ratio === "16:9" ? "16:9" : "9:16");
+  const activeRecipe = useMemo(() => { const recipe = shotRecipes.find((r) => r.id === recipePlan?.items[recipeIndex]?.recipeId); return recipe && recipePlan ? arrangedRecipe(recipe, recipePlan) : undefined; }, [recipePlan, recipeIndex]);
+  const plannedRecipeCamera = useMemo(() => activeRecipe ? recipePlan?.items[recipeIndex]?.cameras?.[recipeRatio] ?? composedRecipeCamera(activeRecipe, recipeRatio, recipePlan?.items[recipeIndex]?.composition) : undefined, [activeRecipe, recipeRatio, recipePlan, recipeIndex]);
+  useEffect(() => {
+    if (!recipeTemplate) return;
+    return generateRecipeThumbnails(recipeTemplate, createRecipeActor, (id, image) => setRecipeThumbnails((old) => ({ ...old, [id]: image })), () => setRecipePlaying(false));
+  }, [recipeTemplate]);
+  useEffect(() => {
+    if (!recipePlaying || !recipePlan) return;
+    const timer = window.setTimeout(() => {
+      setRecipeCamera(undefined);
+      if (recipeIndex + 1 < recipePlan.items.length) setRecipeIndex(recipeIndex + 1);
+      else setRecipePlaying(false);
+    }, recipePlan.items[recipeIndex].duration * 1000);
+    return () => window.clearTimeout(timer);
+  }, [recipePlaying, recipePlan, recipeIndex]);
   const [studioPromptSeed, setStudioPromptSeed] = useState("");
   const [pendingGraphAction, setPendingGraphAction] = useState<"snapshot" | "export" | null>(null);
   const [pendingCloudSave, setPendingCloudSave] = useState(false);
@@ -4345,7 +4387,7 @@ export default function Home() {
     const timer = window.setTimeout(() => {
       try {
         window.localStorage.setItem("poseboard.project.v3", JSON.stringify({
-          schemaVersion: "6.0", appVersion: "3.4.0",
+          schemaVersion: "6.0", appVersion: "3.4.1",
           stageSettings, shotFraming, stageRecords, customShotPresets, studioGraph,
           currentScene: modelInfo.loaded ? captureSceneSnapshot() : restoredStudioSceneRef.current,
           selectedPoseId, editor, videoTimeline: timeline, animationTimeline, activeShotId, timelineOpen, timelineHeight,
@@ -4365,7 +4407,7 @@ export default function Home() {
     const active = current.shots.find((shot) => shot.id === shotId);
     if (!active) return false;
     const snapshot = captureSceneSnapshot(active.promptText || sourcePosePrompt);
-    const thumbnail = includeThumbnail ? capturePoseThumbnail(rendererRef.current?.domElement) : "";
+    const thumbnail = includeThumbnail ? captureShotThumbnail(rendererRef.current?.domElement) : "";
     const next: PoseBoardTimeline = {
       ...current,
       updatedAt: current.updatedAt + 1,
@@ -4981,6 +5023,7 @@ export default function Home() {
   };
 
   const selectTimelineShot = (shot: VideoShot<ShotSceneSnapshot>) => {
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     setTimelinePlaying(false);
     setTimelinePlayhead(shot.start);
     playheadRef.current = shot.start;
@@ -5587,7 +5630,7 @@ export default function Home() {
       if (!active || active.dirty) return current;
       const next = {
         ...current,
-        shots: current.shots.map((shot) => shot.id === activeShotIdRef.current ? { ...shot, dirty: true } : shot),
+        shots: current.shots.map((shot) => shot.id === activeShotIdRef.current ? { ...shot, dirty: true, needsReview: Object.keys(shot.snapshots ?? {}).length > 0 || shot.needsReview } : shot),
       };
       timelineLatestRef.current = next;
       return next;
@@ -5979,6 +6022,7 @@ export default function Home() {
           if (child.material instanceof THREE.Material) child.material = child.material.clone();
         });
         templateModelRef.current = template;
+        setRecipeTemplate(template);
         modelRootsRef.current["model-1"] = root;
         modelMeshesRef.current["model-1"] = originalMeshes;
         modelRigsRef.current["model-1"] = rig;
@@ -6004,7 +6048,8 @@ export default function Home() {
       camera.updateProjectionMatrix();
       renderer.render(scene, camera);
     };
-    const observer = new ResizeObserver(resize);
+    let resizeFrame = 0;
+    const observer = new ResizeObserver(() => { cancelAnimationFrame(resizeFrame); resizeFrame = requestAnimationFrame(resize); });
     observer.observe(host);
     resize();
 
@@ -6069,6 +6114,7 @@ export default function Home() {
 
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", selectModelFromCanvas);
       controls.removeEventListener("start", handleCameraStart);
@@ -6399,9 +6445,9 @@ export default function Home() {
       const suffix = overlayOnly ? "grid-overlay" : transparentOutput ? "transparent" : includeGrid ? "with-grid" : "clean";
       link.download = activeShot ? shotSnapshotFilename(projectName, activeShot.index, framing, exportMode === "setting" ? suffix : exportMode) : `poseboard-${selectedPose.name}-${suffix}-${targetWidth}x${targetHeight}.png`;
       if (activeShot) {
-        const thumbnail = capturePoseThumbnail(output);
+        const thumbnail = captureShotThumbnail(output);
         persistActiveTimelineShotScene();
-        commitTimeline((current) => ({ ...current, shots: current.shots.map((shot) => shot.id === activeShot.id ? { ...shot, thumbnail, snapshots: { ...shot.snapshots, [`${editor.ratio}:${exportMode}`]: { thumbnail, filename: link.download, capturedAt: Date.now() } } } : shot) }));
+        commitTimeline((current) => ({ ...current, shots: current.shots.map((shot) => shot.id === activeShot.id ? { ...shot, thumbnail, needsReview: false, snapshots: { ...shot.snapshots, [`${editor.ratio}:${exportMode}:${Date.now()}`]: { thumbnail, filename: link.download, capturedAt: Date.now() } } } : shot) }));
       }
       link.click();
       flash(overlayOnly
@@ -6545,11 +6591,92 @@ export default function Home() {
     }
   };
 
+  const previewRecipePlan = (plan: RecipePlan) => {
+    setTimelinePlaying(false); setRecipePlaying(false); setRecipeIndex(0); setRecipeCamera(undefined); setRecipePlan(plan);
+  };
+  const useRecipePlan = () => {
+    if (!recipePlan || !recipeTemplate) return;
+    persistActiveTimelineShotScene();
+    const base = captureSceneSnapshot(), current = timelineLatestRef.current;
+    let cursor = current.shots.at(-1)?.end ?? 0;
+    const sequence = Math.max(modelCounterRef.current, ...base.models.map((m) => Number(m.id.match(/\d+/)?.[0] ?? 0) + 1));
+    const slots = [base.models[0] ?? { id: `model-${sequence}`, name: "人物 A" }, base.models[1] ?? { id: `model-${sequence + (base.models[0] ? 0 : 1)}`, name: "人物 B" }];
+    const stageId = `recipe-stage-${crypto.randomUUID()}`;
+    const usedColors = new Set(current.shots.map((shot) => shot.color));
+    let previousColor = current.shots.at(-1)?.color;
+    const shots: VideoShot<ShotSceneSnapshot>[] = recipePlan.items.map((item, index) => {
+      const recipe = arrangedRecipe(shotRecipes.find((r) => r.id === item.recipeId)!, recipePlan);
+      const snapshotFor = (ratio: RecipeRatio): ShotSceneSnapshot => {
+        const camera = index === recipeIndex && ratio === recipePlan.ratio && recipeCamera ? recipeCamera : item.cameras?.[ratio] ?? composedRecipeCamera(recipe, ratio, item.composition);
+        const models = recipe.actors.map((actor) => ({ id: slots[actor.slot === "A" ? 0 : 1].id, name: slots[actor.slot === "A" ? 0 : 1].name, state: { ...getModelEditState(initialState), pose: Math.max(0, poseItems.findIndex((p) => p.name === actor.pose)), mirrored: !!actor.mirrored, position: [...actor.position] as [number, number, number], rotation: [0, actor.yaw, 0] as [number, number, number] } }));
+        return { ...cloneShotSceneSnapshot(base), recipeId: recipe.id, canvasImages: [], models, selectedModelId: models[0].id, selectedPoseId: poseItems[models[0].state.pose].id,
+          stage: { ...defaultStage, id: stageId, name: recipePlan.name, type: recipe.environment, width: 14, depth: 14 },
+          shotPreset: { ...defaultShotPreset, size: recipe.size, ratio, focalLength: camera.focalLength, gridEnabled: false, guides: recipeGuides, composition: item.composition ?? (models.length > 1 ? "dialogue" : "center") },
+          editor: { ...cloneState(initialState), ...models[0].state, ratio, background: "#e5ebf2", focalLength: camera.focalLength, fov: makeRecipeCamera(camera, ratio).fov, perspectiveGrid: { ...clonePerspectiveGrid(initialPerspectiveGrid), enabled: false, mode: "off" } },
+          camera: { ...camera }, sourcePrompt: item.prompt };
+      };
+      const landscape = snapshotFor("16:9"), portrait = snapshotFor("9:16");
+      const id = `recipe-${crypto.randomUUID()}`, start = cursor; cursor += item.duration;
+      const color = shotColorForId(id, current.shots.length + index, previousColor, usedColors); usedColors.add(color); previousColor = color;
+      const snapshot = recipePlan.ratio === "16:9" ? landscape : portrait;
+      const thumbnail = recipePlan.mirrored || item.composition || item.cameras ? renderRecipeThumbnail(recipeTemplate, createRecipeActor, recipe, recipePlan.ratio, snapshot.camera) : recipeThumbnails[`${recipe.id}:${recipePlan.ratio}`] ?? "";
+      return { id, index: current.shots.length + index + 1, start, end: cursor, duration: item.duration, color, colorToken: `shot-color-${String((current.shots.length + index) % 12 + 1).padStart(2, "0")}`, title: recipe.name, promptText: item.prompt, transitionIn: "cut", sceneSnapshot: snapshot, aspectOverrides: { "16:9": { ratio: "16:9", snapshot: landscape, updatedAt: 1 }, "9:16": { ratio: "9:16", snapshot: portrait, updatedAt: 1 } }, thumbnail, snapshotLocked: true, snapshotVersion: 2, dirty: false };
+    });
+    commitTimeline((value) => ({ ...value, shots: [...value.shots, ...shots], duration: Math.max(cursor, value.shots.length ? value.duration : 0), masterAspect: recipePlan.ratio }));
+    setAnimationTimeline((value) => normalizeAnimationTimeline(value, [...current.shots, ...shots], current.fps));
+    editorLatestRef.current = { ...editorLatestRef.current, ratio: recipePlan.ratio };
+    setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined); setTimelineOpen(true);
+    applyTimelineShot(shots[0]); setTimelinePlayhead(shots[0].start); playheadRef.current = shots[0].start;
+    flash(`已追加 ${shots.length} 个静态镜头，原有作品保持不变`);
+  };
+  const reorderRecipeShots = (from: string, to: string) => {
+    const ordered = orderedShotIds(timeline.shots.map((s) => s.id), from, to);
+    commitTimeline((current) => {
+      let cursor = 0;
+      const shots = ordered.map((id, index) => { const shot = current.shots.find((s) => s.id === id)!; const start = cursor; cursor += shot.duration; return { ...shot, index: index + 1, start, end: cursor }; });
+      return { ...current, shots, duration: cursor };
+    });
+  };
+  const nudgeRecipe = (kind: CameraNudge) => {
+    if (activeRecipe && recipePlan) { const camera = nudgeRecipeCamera(recipeCamera ?? plannedRecipeCamera!, kind); setRecipeCamera(camera); setRecipePlan({ ...recipePlan, items: recipePlan.items.map((item, index) => index === recipeIndex ? { ...item, cameras: { ...item.cameras, [recipeRatio]: camera } } : item) }); return; }
+    const original = timelineLatestRef.current.shots.find((s) => s.id === activeShotIdRef.current);
+    if (!original) return;
+    setTimelinePlaying(false);
+    const snapshot = captureSceneSnapshot(original.promptText);
+    snapshot.camera = nudgeRecipeCamera(snapshot.camera, kind);
+    const isCopy = original.id === framingCopyId, id = isCopy ? original.id : `framing-${crypto.randomUUID()}`;
+    const start = isCopy ? original.start : timelineLatestRef.current.shots.at(-1)?.end ?? 0;
+    const copy: VideoShot<ShotSceneSnapshot> = { ...structuredClone(original), id, index: isCopy ? original.index : timelineLatestRef.current.shots.length + 1, start, end: start + original.duration, title: isCopy ? original.title : `${original.title} · 构图副本`, needsReview: true, sceneSnapshot: snapshot, aspectOverrides: { ...structuredClone(original.aspectOverrides), [snapshot.editor.ratio]: { ratio: snapshot.editor.ratio, snapshot, updatedAt: timelineLatestRef.current.updatedAt + 1 } } };
+    commitTimeline((current) => ({ ...current, shots: isCopy ? current.shots.map((s) => s.id === id ? copy : s) : [...current.shots, copy], duration: Math.max(current.duration, copy.end) }));
+    setAnimationTimeline((value) => {
+      const animation = value.shots.find((s) => s.shotId === original.id);
+      if (!animation) return value;
+      const adapted = { ...structuredClone(animation), id: `animation-${id}`, shotId: id, tracks: animation.tracks.map((track) => track.kind !== "camera" ? structuredClone(track) : { ...track, keyframes: track.keyframes.map((key) => ({ ...key, ...nudgeRecipeCamera(key, kind) })) }) };
+      return { ...value, shots: isCopy ? value.shots.map((s) => s.shotId === id ? adapted : s) : [...value.shots, adapted] };
+    });
+    setFramingCopyId(id); applyTimelineShot(copy); setTimelinePlayhead(start); playheadRef.current = start;
+    flash(isCopy ? "已微调构图，人物动作与时长保留" : "已创建构图副本，原镜头和确认图保留；副本待重新确认");
+  };
+  const flipRecipePlan = (kind: "mirrored" | "swapped") => {
+    if (!recipePlan) return;
+    setRecipeCamera(undefined); setRecipePlaying(false);
+    setRecipePlan({ ...recipePlan, [kind]: !recipePlan[kind], items: recipePlan.items.map((item) => ({ ...item, cameras: undefined })) });
+    flash(kind === "mirrored" ? "已切换整套镜像构图，人物关系保持一致" : "已交换 A / B 人物身份槽位");
+  };
+  const nextRecipeScheme = () => {
+    if (recipePlan && (recipePlan.items.length > 1 || recipePlan.sourcePrompt)) {
+      if (/[AB甲乙].{0,4}[左右]/i.test(recipePlan.sourcePrompt ?? "")) { flash("指定的左右关系仅有当前方案可用，不会擅自镜像"); return; }
+      flipRecipePlan("mirrored"); return;
+    }
+    const index = shotRecipes.findIndex((r) => r.id === activeRecipe?.id), next = shotRecipes[(index + 1) % shotRecipes.length];
+    previewRecipePlan(planForRecipes([next.id], recipeRatio, next.name));
+  };
+
   return (
     <SSRProvider>
     <FluentProvider theme={poseBoardTheme} className="fluent-root" applyStylesToPortals={false}>
     <main
-      className={`editor-app tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${timelineOpen ? "timeline-open" : ""} ${mobilePanel ? "show-context" : ""}`}
+      className={`editor-app ${expertMode ? "expert-mode" : "preset-mode"} ${recipePlan ? "recipe-preview-active" : ""} tool-${activeTool} ${contextPanelOpen ? "panel-open" : "panel-collapsed"} ${timelineOpen ? "timeline-open" : ""} ${mobilePanel ? "show-context" : ""}`}
       style={{ "--timeline-height": `${timelineHeight}px` } as React.CSSProperties}
       aria-busy={introPhase !== "hidden"}
     >
@@ -6578,6 +6705,8 @@ export default function Home() {
 
         <ToolRail activeTool={activeTool} labels={toolLabels} panelOpen={contextPanelOpen} onChange={changeActiveTool} onTogglePanel={() => setContextPanelOpen((open) => !open)} />
 
+        {!expertMode && <div className="recipe-orientation" role="group" aria-label="镜头画幅">{(["16:9", "9:16"] as RecipeRatio[]).map((ratio) => <button key={ratio} aria-pressed={recipeRatio === ratio} onClick={() => { setRecipeCamera(undefined); if (recipePlan) setRecipePlan({ ...recipePlan, ratio }); else changeArtboardRatio(ratio); }}>{ratio === "16:9" ? "横版 16:9" : "竖版 9:16"}</button>)}</div>}
+        <button className="expert-mode-toggle" aria-expanded={expertMode} onClick={() => { setRecipePlan(null); setRecipePlaying(false); if (expertMode) { setInteractionMode("camera-browse"); setActiveIKControl(null); } setExpertMode(!expertMode); }}>{expertMode ? "返回预设模式" : "高级调整"}</button>
         <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
           <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => changeArtboardRatio(event.target.value as Ratio)} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "4:5", "2:3", "3:4", "4:3", "9:16", "16:9", "21:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
           <ToolbarButton className="icon-button swap-button" appearance="subtle" icon={<ArrowsLeftRight size={18} />} onClick={toggleOrientation} aria-label={text("Switch orientation", "切换横竖屏")} title={text("Switch orientation", "切换横竖屏")} />
@@ -6601,6 +6730,11 @@ export default function Home() {
       </header>
 
       <section className="workspace">
+        {!expertMode && <RecipeLibrary ratio={recipeRatio} thumbnails={recipeThumbnails} plan={recipePlan} selectedIndex={recipeIndex} ready={!!recipeTemplate}
+          onRecipe={(id) => previewRecipePlan(planForRecipes([id], recipeRatio, shotRecipes.find((r) => r.id === id)!.name))}
+          onSuite={(id) => { const suite = shotSuites.find((s) => s.id === id)!; previewRecipePlan(planForRecipes(suite.recipeIds, recipeRatio, suite.name)); }}
+          onPrompt={(prompt) => previewRecipePlan(recommendRecipePlan(prompt, recipeRatio))}
+          onSelectIndex={(index) => { setRecipeIndex(index); setRecipeCamera(undefined); setRecipePlaying(false); }} />}
         <aside className="panel library-panel context-panel" aria-label="Pose Library">
           <div className="library-scroll-header">
             <div className="panel-title-row">
@@ -6732,6 +6866,25 @@ export default function Home() {
             </button>
           )}
           <div className="canvas-stage">
+            {!expertMode && <>
+              {activeRecipe && recipePlan && <div className="recipe-live-preview">
+                <div className="recipe-preview-caption"><strong>{activeRecipe.name}</strong><span>{recipeRatio} · 静态 · {recipePlan.items[recipeIndex].duration.toFixed(2)} 秒</span><button onClick={() => { setRecipePlan(null); setRecipePlaying(false); }}>返回当前作品</button></div>
+                <div className={`recipe-preview-frame ${recipeRatio === "9:16" ? "portrait" : "landscape"}`}><RecipeViewport template={recipeTemplate} factory={createRecipeActor} recipe={activeRecipe} ratio={recipeRatio} camera={recipeCamera ?? plannedRecipeCamera} exportSignal={recipeExport} onError={flash} />{recipeGuides && <div className="studio-guide-overlay with-thirds with-safe" aria-hidden="true"><i /><b /></div>}</div>
+              </div>}
+              <div className="recipe-main-actions">
+                <button className="primary" disabled={!recipePlan || !recipeTemplate} onClick={useRecipePlan}>{recipePlan && recipePlan.items.length > 1 ? `使用这 ${recipePlan.items.length} 镜` : "使用此镜头"}</button>
+                <button disabled={!modelInfo.loaded} onClick={() => activeRecipe ? setRecipeExport((v) => v + 1) : void exportPng("clean")}>保存图片</button>
+                <button disabled={!recipeTemplate} onClick={nextRecipeScheme}>换一个方案</button>
+                {recipePlan && recipePlan.items.length > 1 && <button aria-pressed={recipePlaying} onClick={() => { if (!recipePlaying) setRecipeIndex(0); setRecipePlaying(!recipePlaying); }}>{recipePlaying ? "暂停预览" : "播放套组"}</button>}
+                {(activeRecipe || activeTimelineShot) && <details className="recipe-adjustments"><summary>{activeRecipe ? "微调" : "微调副本"}</summary><div>
+                  {!activeRecipe && <p>保留原镜头；在副本中调整构图，动作与时长不变。</p>}
+                  {([ ["near", "近一点"], ["far", "远一点"], ["left", "人物偏左"], ["right", "人物偏右"], ["high", "机位高一点"], ["low", "机位低一点"] ] as const).map(([kind, label]) => <button key={kind} onClick={() => nudgeRecipe(kind)}>{label}</button>)}
+                  {activeRecipe && <><button aria-pressed={recipePlan?.mirrored} onClick={() => flipRecipePlan("mirrored")}>镜像构图</button><button disabled={activeRecipe.actors.length < 2} aria-pressed={recipePlan?.swapped} onClick={() => flipRecipePlan("swapped")}>交换人物</button><button aria-pressed={recipeGuides} onClick={() => setRecipeGuides(!recipeGuides)}>构图参考线</button><button onClick={() => { setRecipeCamera(undefined); if (recipePlan) setRecipePlan({ ...recipePlan, items: recipePlan.items.map((item, index) => index === recipeIndex ? { ...item, cameras: undefined } : item) }); }}>恢复预设构图</button></>}
+                  {!activeRecipe && <><button onClick={() => void exportPng("with-grid")}>保存网格图</button><button onClick={() => void exportPng("annotated")}>保存标注图</button></>}
+                </div></details>}
+                {!timelineOpen && <button onClick={() => setTimelineOpen(true)}>展开时间轴</button>}
+              </div>
+            </>}
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
               <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>
                 <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
@@ -7070,7 +7223,8 @@ export default function Home() {
           </div>
         </aside>
 
-        {timelineOpen && graphOpen && <StoryboardGraph graph={studioGraph} onChange={setStudioGraph} shots={timeline.shots} activeShotId={activeShotId}
+        {timelineOpen && graphOpen && !expertMode && <ShotCardView shots={timeline.shots} activeId={activeShotId} onSelect={(id) => { const shot = timeline.shots.find((s) => s.id === id); if (shot) selectTimelineShot(shot); }} onReorder={reorderRecipeShots} onTimeline={() => setGraphOpen(false)} />}
+        {timelineOpen && graphOpen && expertMode && <StoryboardGraph graph={studioGraph} onChange={setStudioGraph} shots={timeline.shots} activeShotId={activeShotId}
           onSelectShot={(id) => { const shot = timelineLatestRef.current.shots.find((s) => s.id === id); if (shot) selectTimelineShot(shot); changeActiveTool("stage"); }}
           onRun={(kind, prompt) => {
             if (kind === "parse" || kind === "prompt") { if (prompt) setStudioPromptSeed(prompt); else flash("请填写 Prompt 节点，并连接到解析节点"); changeActiveTool("stage"); }
@@ -7080,6 +7234,7 @@ export default function Home() {
           }}
           onTimeline={() => setGraphOpen(false)} onMessage={flash} />}
         {timelineOpen && !graphOpen && <VideoTimelinePanel
+          simple={!expertMode}
           timeline={timeline}
           animationTimeline={animationTimeline}
           playhead={timelinePlayhead}
@@ -7091,8 +7246,8 @@ export default function Home() {
           canUndo={timelineCanUndo}
           canRedo={timelineCanRedo}
           onCollapse={() => setTimelineOpen(false)}
-          onOpenGraph={() => { setGraphOpen(true); changeActiveTool("stage"); }}
-          onOpenPrompt={() => setTimelinePromptOpen(true)}
+          onOpenGraph={() => { setGraphOpen(true); if (expertMode) changeActiveTool("stage"); }}
+          onOpenPrompt={() => { if (expertMode) setTimelinePromptOpen(true); else document.getElementById("recipe-prompt")?.focus(); }}
           onAddShot={addBlankTimelineShot}
           onUpdateShot={updateActiveTimelineShot}
           onSplitShot={splitActiveTimelineShot}

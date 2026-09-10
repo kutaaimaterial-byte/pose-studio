@@ -1,6 +1,6 @@
 ---
 name: PoseBoard 3D Studio 1.0.3
-description: Professional Compact PoseBoard workspace governed by the V1.1 component specification and a strict 4px grid.
+description: Precision Light preset-first workstation; the V3.4.1 scope below supersedes the historical pose-first layout.
 colors:
   app-background: "#f4f6f8"
   canvas-background: "#e9edf2"
@@ -14,7 +14,7 @@ colors:
   text-primary: "#182230"
   text-secondary: "#667085"
   text-tertiary: "#98a2b3"
-  primary: "#2684ff"
+  primary: "#246bfd"
   primary-hover: "#1672e8"
   primary-pressed: "#125fca"
   primary-soft: "#eaf3ff"
@@ -101,6 +101,14 @@ components:
 ---
 
 # Design System: PoseBoard 3D Studio 1.0.3
+
+## V3.4.1 preset-first scope (current)
+
+The user-approved Precision Light screenshot and preset-first brief govern the new default surface. It uses a 60px orientation header, 310px complete-shot library, dominant live preview, and 218px shot timeline. Below 850px the library narrows; primary actions remain visible and 3D frames keep their actual aspect. The historical pose-first layout below remains available only in Advanced adjustments.
+
+Reuse the incumbent #246bfd blue, #182230 ink, #64748b secondary text, white panels, and cool blue-gray stage. Compact 10–13px metadata and 6–8px control radii intentionally follow the selected studio UI, not the older document's limited typography/radius ramp. Rendered shot cards are functional composition previews; no decorative image generation is used. Advanced parameters and animation tracks are folded away, not removed. A single Impeccable detector pass found advisory token-document drift; these scoped exceptions are intentional, not a reason to restyle legacy surfaces.
+
+Finish evidence: 22 base compositions visually reviewed and corrected; safe preview→use→save, static suite playback, node ordering, animated-copy preservation, and 1024/600/390px layouts verified in isolated Chromium. Details stay within the small canvas, ResizeObserver work is frame-scheduled, and saved thumbnails retain aspect. Catalog limitations are visible in the UI and release notes.
 
 ## Overview
 

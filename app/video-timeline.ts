@@ -35,6 +35,7 @@ export type VideoShot<TSnapshot = unknown> = {
   sceneSnapshot: TSnapshot | null;
   aspectOverrides: Record<string, TimelineAspectOverride<TSnapshot>>;
   thumbnail: string;
+  needsReview?: boolean;
   snapshots?: Record<string, { thumbnail: string; filename: string; capturedAt: number }>;
   snapshotLocked: boolean;
   snapshotVersion: number;
@@ -350,6 +351,7 @@ function validShot<TSnapshot>(value: unknown, index: number, fps: number): Video
     aspectOverrides: raw.aspectOverrides && typeof raw.aspectOverrides === "object" ? raw.aspectOverrides : {},
     thumbnail: typeof raw.thumbnail === "string" ? raw.thumbnail : "",
     snapshots: raw.snapshots && typeof raw.snapshots === "object" ? raw.snapshots : {},
+    needsReview: Boolean(raw.needsReview),
     snapshotLocked: Boolean(raw.snapshotLocked),
     snapshotVersion: Number.isFinite(Number(raw.snapshotVersion)) ? Math.max(0, Number(raw.snapshotVersion)) : 0,
     dirty: Boolean(raw.dirty),

@@ -41,6 +41,7 @@ type VideoTimelinePanelProps<TSnapshot> = {
   canRedo: boolean;
   onCollapse: () => void;
   onOpenGraph: () => void;
+  simple?: boolean;
   onOpenPrompt: () => void;
   onAddShot: () => void;
   onUpdateShot: () => void;
@@ -94,6 +95,7 @@ export function VideoTimelinePanel<TSnapshot>({
   canRedo,
   onCollapse,
   onOpenGraph,
+  simple = false,
   onOpenPrompt,
   onAddShot,
   onUpdateShot,
@@ -191,7 +193,7 @@ export function VideoTimelinePanel<TSnapshot>({
           <button className="icon-only" onClick={onUndo} disabled={!canUndo} title={text("Undo timeline edit", "撤销时间轴编辑")}><ArrowCounterClockwise size={16} /></button>
           <button className="icon-only" onClick={onRedo} disabled={!canRedo} title={text("Redo timeline edit", "重做时间轴编辑")}><ArrowClockwise size={16} /></button>
           <button className="icon-only" onClick={onExport} disabled={!timeline.shots.length} title={text("Export timeline JSON", "导出时间轴 JSON")}><DownloadSimple size={16} /></button>
-          <button onClick={onOpenGraph}>{text("Nodes", "节点视图")}</button>
+          <button onClick={onOpenGraph}>{simple ? "分镜卡片" : text("Nodes", "节点视图")}</button>
           <button className="icon-only" onClick={onCollapse} title={text("Collapse timeline", "收起时间轴")}><CaretDown size={17} /></button>
         </div>
       </header>
@@ -225,8 +227,8 @@ export function VideoTimelinePanel<TSnapshot>({
           {!timeline.shots.length ? (
             <button className="timeline-empty" onClick={onOpenPrompt}>
               <span><FilmStrip size={24} /></span>
-              <div><strong>{text("Build a cut preview from a timed prompt", "用带时间段的提示词建立切镜预览")}</strong><small>{text("Paste 0–2s / 2–5s shot descriptions, then preview the real rhythm.", "粘贴 0–2 秒、2–5 秒等分镜描述，即可按真实时长预演。")}</small></div>
-              <em>{text("Create timeline", "创建时间轴")}</em>
+              <div><strong>{simple ? "选好镜头，时间轴自动就绪" : text("Build a cut preview from a timed prompt", "用带时间段的提示词建立切镜预览")}</strong><small>{simple ? "从左侧选预设或套组，点击使用即可播放分镜。" : text("Paste 0–2s / 2–5s shot descriptions, then preview the real rhythm.", "粘贴 0–2 秒、2–5 秒等分镜描述，即可按真实时长预演。")}</small></div>
+              <em>{simple ? "描述分镜" : text("Create timeline", "创建时间轴")}</em>
             </button>
           ) : (
             <div

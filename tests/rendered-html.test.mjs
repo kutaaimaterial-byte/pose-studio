@@ -238,7 +238,8 @@ test("keeps the Precision Light workstation responsive and restrained", async ()
   assert.match(page, /const persistTimelineShotScene = \(shotId: string, includeThumbnail = false\) => \{/);
   assert.match(page, /activeShotIdRef\.current !== shotId/);
   assert.match(page, /const persistActiveTimelineShotScene = \(includeThumbnail = false\) => \{/);
-  assert.match(page, /includeThumbnail \? capturePoseThumbnail\(rendererRef\.current\?\.domElement\) : ""/);
+  // Shot covers now retain the full authored aspect instead of cropping to pose-library cards.
+  assert.match(page, /includeThumbnail \? captureShotThumbnail\(rendererRef\.current\?\.domElement\) : ""/);
   assert.match(page, /A captured scene is authoritative[\s\S]*snapshotLocked: true,[\s\S]*dirty: false/);
   assert.match(page, /const outgoingShotId = activeShotIdRef\.current;\s*const isCurrentShot = outgoingShotId === shot\.id;\s*if \(outgoingShotId\) persistTimelineShotScene\(outgoingShotId\);[\s\S]*if \(isCurrentShot\) return;/s);
   assert.match(page, /const selectedShot = timelineLatestRef\.current\.shots\.find\(\(shot\) => shot\.id === shotId\);[\s\S]*if \(activeShotIdRef\.current !== shotId\) selectTimelineShot\(selectedShot\);[\s\S]*const sourceTimeline = clonePoseBoardTimeline\(timelineLatestRef\.current\);/s);

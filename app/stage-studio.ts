@@ -64,6 +64,18 @@ export function parseShotSequence(text: string, ratio: StudioRatio = "9:16"): { 
 export const nodeKinds = { prompt: "Prompt · 提示词", parse: "Shot Parse · 解析", stage: "Stage · 舞台", pose: "Pose · 姿态", camera: "Camera · 相机", shot: "Shot · 景别", lighting: "Lighting · 灯光", timeline: "Timeline · 片段", snapshot: "Snapshot · 快照", export: "Export · 导出" } as const;
 export type StudioNode = { id: string; kind: keyof typeof nodeKinds; x: number; y: number; shotId?: string; text?: string };
 export type StudioGraph = { nodes: StudioNode[]; edges: { from: string; to: string }[] };
+export function syncShotCards(graph: StudioGraph, shots: { id: string; title: string; duration: number }[]): StudioGraph {
+  const ids = new Set(shots.map((s) => s.id));
+  const internal = graph.nodes.filter((n) => (!n.shotId || ids.has(n.shotId)) && !(n.kind === "shot" && n.shotId));
+  const cards = shots.map((shot, index): StudioNode => {
+    const previous = graph.nodes.find((n) => n.kind === "shot" && n.shotId === shot.id);
+    return { id: previous?.id ?? `card-${shot.id}`, kind: "shot", shotId: shot.id, x: previous?.x ?? index * 240 + 24, y: previous?.y ?? 24, text: previous && !previous.id.startsWith("card-") ? previous.text : `${shot.title} · ${shot.duration.toFixed(2)}s` };
+  });
+  const nodeIds = new Set([...internal, ...cards].map((n) => n.id)), cardIds = new Set(cards.map((n) => n.id));
+  const edges = graph.edges.filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to) && !(cardIds.has(e.from) && cardIds.has(e.to)));
+  cards.slice(1).forEach((card, index) => edges.push({ from: cards[index].id, to: card.id }));
+  return { nodes: [...internal, ...cards], edges };
+}
 export function connectNodes(graph: StudioGraph, from: string, to: string): StudioGraph {
   if (from === to || !graph.nodes.some((n) => n.id === from) || !graph.nodes.some((n) => n.id === to) || graph.edges.some((e) => e.from === from && e.to === to)) return graph;
   const pending = [to], visited = new Set<string>();
