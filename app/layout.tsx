@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./precision-light.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://poseboard-3d-studio.kutaaimaterial.chatgpt.site"),
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body>
-    <div hidden dangerouslySetInnerHTML={{ __html: "<!-- THESIS: A canvas-first pose workstation that refuses the permanent three-column inspector layout. OWN-WORLD: cool white structural surfaces, graphite text, one precise blue accent, compact linear controls, and border-led depth. STORY: choose a pose, make focused adjustments, then move through camera, perspective, lighting, prompt, and export without losing the canvas. FIRST VIEWPORT: a 56px top bar, 64px left tool rail, one 380px context panel, the dominant artboard, and a full-width 48px result-and-next bar. FORM: PRD-pinned Operate workstation; seed poseboard-v4-prd. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md -->" }} />
+    <div hidden dangerouslySetInnerHTML={{ __html: "<!-- THESIS: A precision-light canvas workstation that keeps pose, camera, and animation controls visible without crowding the character. OWN-WORLD: cool white surfaces, graphite text, one precise blue accent, compact linear controls, and border-led depth. STORY: choose a pose, adjust the character, animate the camera, and export without leaving the workspace. FIRST VIEWPORT: a 48px top bar, 44px horizontal tool navigation, the dominant artboard, a 372px pose library, and a three-lane timeline. FORM: PRD-pinned Operate workstation; seed poseboard-v4-prd. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md -->" }} />
     {children}
   </body></html>;
 }

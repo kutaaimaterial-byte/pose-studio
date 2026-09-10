@@ -25,6 +25,7 @@ import {
   Check,
   Camera,
   CalendarDots,
+  CaretDown,
   Copy,
   Cube,
   CubeFocus,
@@ -350,7 +351,7 @@ type PoseBoardTimeline = VideoTimeline<ShotSceneSnapshot>;
 const initialState: EditorState = {
   pose: 0,
   mirrored: false,
-  ratio: "16:9",
+  ratio: "9:16",
   position: [0, 0, 0],
   rotation: [0, 0, 0],
   scale: 100,
@@ -2830,7 +2831,7 @@ export default function Home() {
   const languageRef = useRef<Language>("zh");
   const interactionModeRef = useRef<InteractionMode>("ik-edit");
   const cameraLockedRef = useRef(false);
-  const timelineLatestRef = useRef<PoseBoardTimeline>(createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+  const timelineLatestRef = useRef<PoseBoardTimeline>(createEmptyTimeline<ShotSceneSnapshot>("9:16"));
   const animationTimelineLatestRef = useRef<AnimationTimeline>(createAnimationTimeline([], 24));
   const animationHistoryRef = useRef<AnimationTimeline[]>([]);
   const animationFutureRef = useRef<AnimationTimeline[]>([]);
@@ -2876,7 +2877,7 @@ export default function Home() {
   const [selectedCanvasImageId, setSelectedCanvasImageId] = useState<string | null>(null);
   const [toolMode, setToolMode] = useState<ToolMode>("pose");
   const [activeTool, setActiveTool] = useState<ActiveTool>("pose");
-  const [interactionMode, setInteractionMode] = useState<InteractionMode>("ik-edit");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("camera-browse");
   const [poseControlsVisible, setPoseControlsVisible] = useState(true);
   const [contextPanelOpen, setContextPanelOpen] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -2893,9 +2894,9 @@ export default function Home() {
   const [promptPlatform, setPromptPlatform] = useState<PromptPlatform>("midjourney");
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
   const [modelInfo, setModelInfo] = useState({ loaded: false, hasSkeleton: false, label: "正在加载 GLB…" });
-  const [timeline, setTimeline] = useState<PoseBoardTimeline>(() => createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+  const [timeline, setTimeline] = useState<PoseBoardTimeline>(() => createEmptyTimeline<ShotSceneSnapshot>("9:16"));
   const [animationTimeline, setAnimationTimeline] = useState<AnimationTimeline>(() => createAnimationTimeline([], 24));
-  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(true);
   const [timelinePromptOpen, setTimelinePromptOpen] = useState(false);
   const [timelinePrompt, setTimelinePrompt] = useState(timelinePromptExample);
   const [timelinePlaying, setTimelinePlaying] = useState(false);
@@ -3190,8 +3191,10 @@ export default function Home() {
           : restoredTimeline.shots[0]?.id ?? null;
         setActiveShotId(restoredShotId);
         setTimelinePlayhead(restoredTimeline.playhead);
-        if (typeof savedProject.timelineOpen === "boolean") setTimelineOpen(savedProject.timelineOpen);
-        else if (restoredTimeline.shots.length) setTimelineOpen(true);
+        // Precision Light treats the sequencer as part of the primary workspace.
+        // Keep it visible when reopening a project; users can still collapse it
+        // for the current editing session.
+        setTimelineOpen(true);
       }
       if (typeof savedProject?.timelineHeight === "number") setTimelineHeight(clamp(savedProject.timelineHeight, 176, 420));
     } finally {
@@ -5650,7 +5653,7 @@ export default function Home() {
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * Math.max(camera.aspect, 0.1));
     const limitingFov = Math.min(verticalFov, horizontalFov);
-    const distance = Math.max(3.2, sphere.radius / Math.max(Math.sin(limitingFov / 2), 0.1) * 1.14);
+    const distance = Math.max(2.2, sphere.radius / Math.max(Math.sin(limitingFov / 2), 0.1) * 0.72);
     controls.target.copy(sphere.center);
     camera.position.copy(sphere.center).addScaledVector(direction, distance);
     // Keep the near plane in front of every visible character. Deriving it
@@ -6184,7 +6187,7 @@ export default function Home() {
     setSourcePosePrompt("");
     setPromptToPoseResult(null);
     setTimelinePlaying(false);
-    setTimeline(createEmptyTimeline<ShotSceneSnapshot>("16:9"));
+    setTimeline(createEmptyTimeline<ShotSceneSnapshot>("9:16"));
     const emptyAnimationTimeline = createAnimationTimeline([], 24);
     setAnimationTimeline(emptyAnimationTimeline);
     setActiveShotId(null);
@@ -6192,7 +6195,7 @@ export default function Home() {
     setTimelineOpen(false);
     timelineHistoryRef.current = [];
     timelineFutureRef.current = [];
-    timelineLatestRef.current = createEmptyTimeline<ShotSceneSnapshot>("16:9");
+    timelineLatestRef.current = createEmptyTimeline<ShotSceneSnapshot>("9:16");
     animationTimelineLatestRef.current = emptyAnimationTimeline;
     animationHistoryRef.current = [];
     animationFutureRef.current = [];
@@ -6277,6 +6280,11 @@ export default function Home() {
         <div className="brand-block">
           <span className="brand-mark">P</span>
           <span className="brand-name">PoseBoard</span>
+          <span className="brand-edition">AI Character Studio</span>
+          <span className="brand-divider" aria-hidden="true" />
+          <button className="project-menu" type="button" onClick={() => document.querySelector<HTMLInputElement>(".canvas-project-name")?.focus()} title={text("Edit project name", "编辑项目名称")}>
+            <span>{projectName || text("Untitled Project", "未命名项目")}</span><CaretDown size={14} />
+          </button>
           <div className="language-switch" role="group" aria-label={text("Language", "语言")}>
             <button className={language === "en" ? "active" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
             <button className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} onClick={() => changeLanguage("zh")}>中文</button>
@@ -6299,7 +6307,10 @@ export default function Home() {
           <ToolbarButton className="icon-button history-button" appearance="subtle" icon={<ArrowClockwise size={18} />} onClick={redo} disabled={!canRedo} aria-label={text("Redo", "重做")} title={text("Redo ⌘/Ctrl Shift Z", "重做 ⌘/Ctrl Shift Z")} />
           <span className="toolbar-separator" />
           <ToolbarButton className="icon-button" appearance="subtle" icon={<Info size={18} />} onClick={() => setHelpOpen(true)} aria-label={text("Open shortcuts", "打开快捷键")} title={text("Shortcuts · ?", "快捷键 · ?")} />
-          <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><span className="export-button-label">{text("Export", "导出")}</span></Button>
+          <div className="export-split">
+            <Button appearance="primary" className={`export-button ${exporting ? "loading" : ""}`} icon={<DownloadSimple size={18} weight="bold" />} onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-busy={exporting}><span className="export-button-label">{text("Export", "导出")}</span></Button>
+            <button className="export-menu-toggle" type="button" onClick={() => setExportDialogOpen(true)} disabled={exporting || !modelInfo.loaded} aria-label={text("Export options", "导出选项")}><CaretDown size={14} weight="bold" /></button>
+          </div>
         </Toolbar>
       </header>
 
@@ -6308,9 +6319,9 @@ export default function Home() {
         <aside className="panel library-panel context-panel" aria-label="Pose Library">
           <div className="library-scroll-header">
             <div className="panel-title-row">
-              <div><h2>{text("Pose Library", "姿势预设库")}</h2></div>
+              <div><h2>{text("Pose Library", "姿势库")}</h2></div>
               <div className="panel-heading-actions">
-                <span className="count">{poseItems.length + savedPoses.length} poses</span>
+                <span className="count">{text(`${poseItems.length + savedPoses.length} poses`, `${poseItems.length + savedPoses.length} 个姿势`)}</span>
                 <button onClick={() => setHelpOpen(true)} aria-label={text("Open help", "打开帮助")} title={text("Help and shortcuts", "帮助与快捷键")}><Info size={18} /></button>
                 <button onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "收起面板")} title={text("Collapse panel", "收起面板")}><SidebarSimple size={18} weight="fill" /></button>
               </div>

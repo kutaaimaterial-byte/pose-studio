@@ -55,8 +55,8 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.match(html, />正在准备 3D 工作区<\/p>/);
   assert.match(html, />PoseBoard<\/span>/);
   assert.doesNotMatch(html, />V1\.0\.3<\/span>/);
-  assert.match(html, />姿势预设库<\/h2>/);
-  assert.match(html, /152<!-- --> poses/);
+  assert.match(html, />姿势库<\/h2>/);
+  assert.match(html, /152 个姿势/);
   assert.match(html, /aria-label="Pose Library"/);
   assert.match(html, /aria-label="Workspace tools"/);
   assert.match(html, /class="tool-rail"/);
@@ -71,9 +71,10 @@ test("server-renders the PoseBoard studio shell", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("keeps the V4 single-panel workstation responsive and restrained", async () => {
-  const [css, page, layout, workspaceUi, timelinePanel] = await Promise.all([
+test("keeps the Precision Light workstation responsive and restrained", async () => {
+  const [css, precisionCss, page, layout, workspaceUi, timelinePanel] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/precision-light.css", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/workspace-ui.tsx", import.meta.url), "utf8"),
@@ -119,7 +120,7 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
-  assert.doesNotMatch(page, /className="brand-edition"/);
+  assert.match(page, /className="brand-edition"/);
   assert.doesNotMatch(page, /className="canvas-meta"/);
   assert.match(page, /className="canvas-project-name"/);
   assert.doesNotMatch(page, /className="project-identity"/);
@@ -131,7 +132,11 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /className="export-button-label"/);
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
   assert.match(page, /useState<ToolMode>\("pose"\)/);
-  assert.match(page, /useState<InteractionMode>\("ik-edit"\)/);
+  assert.match(page, /useState<InteractionMode>\("camera-browse"\)/);
+  assert.match(precisionCss, /grid-template-areas:\s*"rail rail"\s*"canvas panel"/s);
+  assert.match(precisionCss, /\.tool-rail-list\s*\{[^}]*flex-direction:\s*row/s);
+  assert.match(precisionCss, /\.artboard-command-bar\s*\{[^}]*flex-direction:\s*column/s);
+  assert.match(precisionCss, /\.timeline-open \.workspace[\s\S]*"timeline timeline"/s);
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
   assert.match(page, /const syncTransformController = \(mode: "translate" \| "rotate"/);
   assert.match(page, /transformControls\.attach\(root\)/);
