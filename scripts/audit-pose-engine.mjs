@@ -11,7 +11,7 @@ globalThis.ProgressEvent ??= class ProgressEvent {
   }
 };
 
-await import("../app/page.tsx");
+await import("../app/studio-editor.tsx");
 
 const engine = globalThis.__POSEBOARD_ENGINE_DEBUG__;
 const parameterAudit = globalThis.__POSEBOARD_ENGINE_AUDIT__;

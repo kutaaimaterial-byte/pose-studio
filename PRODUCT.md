@@ -1,5 +1,15 @@
 # Product
 
+## Project home and multi-page workspaces
+
+The default `/` route is now the browser-local project library. Quick-start templates create real Stage, Storyboard, Animation or Pose editor pages; the existing Three.js editor is retained in `app/studio-editor.tsx`. The homepage and ownership bridge live in `app/page.tsx`, with the data contract and IndexedDB persistence in `app/project-store.ts`.
+
+Pages hold a content reference and their own view state. Linked pages share one stage/shot/animation content record. “在另一页面打开” adds another view; “复制为新方案” clones content and rewrites instance references. Whole-project copies additionally replace project/page/content identifiers and exclude cloud access credentials. Cross-project reads and writes are scoped, and revision checks reject stale writes from another window.
+
+Project storage is IndexedDB in this browser, not automatic cloud sync. Legacy localStorage is retained and backed up before recording a one-time migration into “原有项目”. Project JSON export contains page references, shared content, work state and embedded user images; imports create a separate project. Projects go through a recoverable trash state. Deleting a page retains its referenced content. Existing per-content cloud backup remains optional inside the advanced Stage tools, not a promise of account-backed project sync.
+
+Default journey: home → choose template → use presets in the existing editor → auto-save → return home → continue at the last page, paused. Saving failures show retry/export and prevent navigation from silently dropping pending work.
+
 ## Current default workflow — preset-first, V3.4.1
 
 Current entry correction: complete-shot presets are a Stage tool feature in the existing workstation. Click 舞台 → 镜头预设; the right inspector holds the library and actions while the center previews the shot and the existing timeline remains available. No global preset/expert page switch. 高级调整 only changes the Stage inspector's contents. Applying explicitly appends shots and returns the canvas to its existing editing controls; cancelling previews preserves the original work.

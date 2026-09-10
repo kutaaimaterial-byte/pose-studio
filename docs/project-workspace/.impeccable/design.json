@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-10T10:57:24.822Z",
+  "title": "Design System: PoseBoard project home and workspace",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "temporary-menu",
+        "value": "0 8px 24px #1822301c",
+        "purpose": "Temporary management menus only."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1100px"
+      },
+      {
+        "name": "narrow",
+        "value": "720px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Project search",
+      "kind": "input",
+      "refersTo": "search-input",
+      "description": "Labeled project-name field with the wrapper's visible keyboard focus.",
+      "html": "<label class=\"ds-project-search\">搜索项目<input placeholder=\"搜索项目名称\" /></label>",
+      "css": ".ds-project-search{font-size:0}.ds-project-search input{font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;width:280px;height:40px;border:1px solid #dce3ec;border-radius:8px;padding:0 14px;font-size:14px;color:#182230;background:#f8fafc}.ds-project-search input:focus-visible{outline:2px solid #246bfd;outline-offset:3px}@media(max-width:720px){.ds-project-search{display:block}.ds-project-search input{width:100%}}"
+    },
+    {
+      "name": "Import project",
+      "kind": "button",
+      "refersTo": "import-action",
+      "description": "Visible upload-label focus follows the hidden native file input; no import handler is included in the preview.",
+      "html": "<label class=\"ds-project-import\">导入项目<input type=\"file\" accept=\".json\" /></label>",
+      "css": ".ds-project-import{display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 14px;border:1px solid #dce3ec;border-radius:7px;background:#fff;color:#182230;white-space:nowrap;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif}.ds-project-import input{width:1px;height:1px;opacity:0;position:absolute}.ds-project-import:focus-within{outline:2px solid #246bfd;outline-offset:3px}"
+    },
+    {
+      "name": "Quick-start template",
+      "kind": "card",
+      "refersTo": "template-card",
+      "description": "Text portion of the observed flat template button; real runtime cards also use the corresponding Phosphor task icon.",
+      "html": "<button class=\"ds-template-card\"><strong>景别与构图</strong><span>选用完整镜头，保存构图参考</span></button>",
+      "css": ".ds-template-card{display:flex;flex-direction:column;gap:12px;text-align:left;padding:20px;border:1px solid #dce3ec;border-radius:10px;background:#fff;color:#182230;cursor:pointer;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif}.ds-template-card strong{font-size:16px}.ds-template-card span{font-size:14px;color:#64748b;line-height:1.6}.ds-template-card:hover{border-color:#246bfd}.ds-template-card:focus-visible{outline:2px solid #246bfd;outline-offset:3px}.ds-template-card:disabled{opacity:.5;cursor:not-allowed}@media(max-width:720px){.ds-template-card{padding:14px}}"
+    },
+    {
+      "name": "Selected project page",
+      "kind": "nav",
+      "refersTo": "selected-page",
+      "description": "Compact selected page row, separate from the retained editor's tool navigation. Runtime icons and page menus are omitted from this text-state specimen.",
+      "html": "<nav aria-label=\"项目页面\" class=\"ds-project-pages\"><div class=\"ds-page-selected\"><button class=\"ds-page-open\"><span>舞台</span></button></div></nav>",
+      "css": ".ds-project-pages{padding:16px 8px;background:#fff;border-right:1px solid #dce3ec;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif}.ds-page-selected{display:flex;align-items:center;min-width:0;border-radius:6px;margin-bottom:4px;background:#edf4ff;color:#1759d8}.ds-page-open{min-width:0;flex:1;padding:12px 8px;display:flex;align-items:center;gap:8px;text-align:left;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer}.ds-page-open span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-page-open:focus-visible{outline:2px solid #246bfd;outline-offset:3px}.ds-page-open:disabled{opacity:.5;cursor:not-allowed}@media(max-width:720px){.ds-project-pages{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid #dce3ec;overflow:auto}.ds-page-selected{flex:none}}"
+    },
+    {
+      "name": "Bottom recovery banner",
+      "kind": "custom",
+      "refersTo": "recovery-banner",
+      "description": "Observed runtime alert positioning and recovery controls; preview controls have no persistence or export handlers.",
+      "html": "<div class=\"ds-project-error\" role=\"alert\"><span>本地保存失败，请重试或导出项目</span><button>重试保存</button><button>导出当前项目</button><button aria-label=\"关闭提示\">×</button></div>",
+      "css": ".ds-project-error{position:fixed;left:20px;right:20px;bottom:20px;max-height:45dvh;overflow:auto;z-index:3000;display:flex;gap:12px;align-items:center;background:#fff1ef;border:1px solid #f4b4ab;padding:12px 16px;color:#912018;border-radius:8px;font:14px Inter,'PingFang SC','Microsoft YaHei',sans-serif}.ds-project-error span{flex:1}.ds-project-error button{border:1px solid #e9a69b;border-radius:5px;padding:5px 8px;background:transparent;color:inherit;font:inherit;cursor:pointer}.ds-project-error button:focus-visible{outline:2px solid #246bfd;outline-offset:3px}@media(max-width:720px){.ds-project-error{flex-wrap:wrap}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "冷静的舞台工作台",
+    "overview": "This additive, surface-scoped reference extends the incumbent Precision Light identity. It documents the project home and multi-page wrapper in `app/page.tsx` and `app/project-workspace.css`, not a replacement editor or a new brand. Root `DESIGN.md` remains authoritative for the retained studio; this file records only the wrapper's observed values and behavior.",
+    "keyCharacteristics": [
+      "Flat white surfaces, cool-gray structure, and functional blue state.",
+      "Explicit project → page → shared-content hierarchy around the existing editor.",
+      "Compact controls, visible local-save status, and recoverable failures."
+    ],
+    "rules": [],
+    "dos": [
+      "Do preserve the incumbent editor and the project/page/shared-content hierarchy.",
+      "Do keep local-save language, wrapping recent names, visible upload focus and reachable recovery actions."
+    ],
+    "donts": [
+      "Don't change the pinned Inter/blue-white identity or overwrite the root design reference.",
+      "Don't add unsupported cloud/account claims, catalog art, decorative motion or new accent systems."
+    ]
+  }
+}

@@ -3,6 +3,7 @@ import "./globals.css";
 import "./precision-light.css";
 import "./stage-studio.css";
 import "./recipe-studio.css";
+import "./project-workspace.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://poseboard-3d-studio.kutaaimaterial.chatgpt.site"),

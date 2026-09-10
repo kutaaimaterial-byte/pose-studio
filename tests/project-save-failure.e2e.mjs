@@ -1,0 +1,13 @@
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({headless:true});const page=await browser.newPage({acceptDownloads:true});
+await page.goto('http://localhost:3000/');await page.locator('.project-templates button').filter({hasText:'人物姿态'}).click();
+await page.locator('.project-editor .editor-app').waitFor({timeout:60000});await page.locator('.intro-loader').waitFor({state:'hidden',timeout:60000});await page.waitForTimeout(1200);
+await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(){throw new DOMException('测试：浏览器存储空间不足','QuotaExceededError');};});
+await page.locator('.canvas-project-name').fill('未保存的名称');await page.getByRole('button',{name:'项目首页',exact:true}).click();
+await page.getByRole('alert').waitFor();assert.equal(await page.locator('.project-workspace').count(),1);assert.match(await page.locator('.project-workspace-header output').innerText(),/保存失败/);
+await page.screenshot({path:'.impeccable/review/save-error.png'});
+const download=page.waitForEvent('download');await page.getByRole('button',{name:'导出当前项目',exact:true}).click();const file=await download;assert.match(file.suggestedFilename(),/poseboard.json$/);
+await page.evaluate(()=>{IDBObjectStore.prototype.put=window.originalPut;});await page.getByRole('button',{name:'重试保存',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.project-workspace-header output')?.textContent.startsWith('已保存'));
+await page.getByRole('button',{name:'项目首页',exact:true}).click();await page.locator('.project-home').waitFor();assert.match(await page.locator('.project-card h3').innerText(),/未保存的名称/);
+console.log('PASS failed save blocks navigation, offers project export, retry persists edits');await browser.close();

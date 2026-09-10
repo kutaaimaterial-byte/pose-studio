@@ -1,0 +1,20 @@
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({headless:true});
+const context=await browser.newContext();
+await context.addInitScript(()=>{if(!localStorage.getItem('test-seeded')){localStorage.setItem('test-seeded','1');localStorage.setItem('poseboard.project.v3',JSON.stringify({editor:{ratio:'16:9'},videoTimeline:{shots:[{id:'legacy-shot',name:'保留镜头',start:0,end:3}]}}));localStorage.setItem('poseboard.savedPoses.v1','[]');}});
+const page=await context.newPage();await page.goto('http://localhost:3000/');await page.locator('.project-card').waitFor();
+const output=await page.evaluate(async()=>{
+ const m=await import('/app/project-store.ts');
+ const projects=await m.listProjects();if(projects.length!==1||projects[0].name!=='原有项目')throw Error('migration missing');
+ await m.migrateLegacy(localStorage);if((await m.listProjects()).length!==1)throw Error('duplicate migration');
+ const legacy=projects[0],raw=localStorage.getItem('poseboard.project.v3');if(Object.values(legacy.contents)[0].local['poseboard.project.v3']!==raw)throw Error('migration changes original');
+ const database=await new Promise((r,j)=>{const q=indexedDB.open('poseboard-projects');q.onsuccess=()=>r(q.result);q.onerror=j;});
+ const backup=await new Promise((r,j)=>{const q=database.transaction('backups').objectStore('backups').get('legacy-v1');q.onsuccess=()=>r(q.result);q.onerror=j;});if(backup['poseboard.project.v3']!==raw)throw Error('missing backup');
+ const clone=await m.saveProject(m.duplicateProject(legacy));const stale=structuredClone(clone);clone.name='更新名称';await m.saveProject(clone);let conflict=false;try{await m.saveProject(stale);}catch{conflict=true;}if(!conflict)throw Error('stale overwrite');
+ const linked=m.addProjectPage(legacy,'animation',legacy.pages[0].id);const contentId=linked.contentId;legacy.pages=legacy.pages.filter(p=>p.id!==linked.id);if(!legacy.contents[contentId])throw Error('page deletion lost shared content');
+ legacy.cover=URL.createObjectURL(new Blob([new Uint8Array([137,80,78,71])],{type:'image/png'}));const portable=await m.portableProject(legacy);if(!portable.project.cover.startsWith('data:image/png;base64,'))throw Error('non portable image');
+ let saved=await m.saveProject(legacy);saved.deletedAt=Date.now();saved=await m.saveProject(saved);delete saved.deletedAt;saved=await m.saveProject(saved);if(saved.deletedAt)throw Error('restore failed');saved.deletedAt=Date.now();saved=await m.saveProject(saved);await m.removeProject(saved);
+ return {migration:true,backup:true,idempotence:true,conflict:true,portableImage:true,trashRestoreDelete:true};
+});
+console.log(output);assert.ok(Object.values(output).every(Boolean));await browser.close();
