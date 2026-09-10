@@ -228,37 +228,39 @@ export function slerpQuaternion(a: QuaternionTuple, b: QuaternionTuple, amount: 
 }
 
 function framePair<T extends { time: number; interpolation: AnimationInterpolation }>(frames: T[], time: number) {
-  const sorted = [...frames].sort((a, b) => a.time - b.time);
-  if (!sorted.length) return null;
-  if (time <= sorted[0].time) return { before: sorted[0], after: sorted[0], amount: 0 };
-  if (time >= sorted.at(-1)!.time) return { before: sorted.at(-1)!, after: sorted.at(-1)!, amount: 0 };
-  const afterIndex = sorted.findIndex((frame) => frame.time >= time);
-  const before = sorted[Math.max(0, afterIndex - 1)];
-  const after = sorted[afterIndex];
+  if (!frames.length) return null;
+  let first = frames[0], last = frames[0];
+  let before: T | undefined, after: T | undefined;
+  // Match stable sorting, including duplicate times, without sorting or copying
+  // the track on every playback frame. Imported tracks may be unsorted.
+  for (const frame of frames) {
+    if (frame.time < first.time) first = frame;
+    if (frame.time >= last.time) last = frame;
+    if (frame.time < time && (!before || frame.time >= before.time)) before = frame;
+    if (frame.time >= time && (!after || frame.time < after.time)) after = frame;
+  }
+  if (time <= first.time) return { before: first, after: first, amount: 0 };
+  if (time >= last.time) return { before: last, after: last, amount: 0 };
+  if (!before || !after) return null;
   const span = Math.max(1e-6, after.time - before.time);
   return { before, after, amount: easing((time - before.time) / span, before.interpolation) };
+}
+
+function interpolateSnapshot<T>(before: Record<string, T> = {}, after: Record<string, T> = {}, amount: number, interpolate: (a: T, b: T, t: number) => T) {
+  const result: Record<string, T> = {};
+  for (const name of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const start = before[name] ?? after[name];
+    const end = after[name] ?? start;
+    if (start && end) result[name] = interpolate(start, end, amount);
+  }
+  return result;
 }
 
 function evaluatePose(track: Extract<AnimationTrack, { kind: "pose" }>, time: number) {
   const pair = framePair(track.keyframes, time);
   if (!pair) return undefined;
-  const bones: BoneQuaternionSnapshot = {};
-  const names = new Set([...Object.keys(pair.before.bones), ...Object.keys(pair.after.bones)]);
-  names.forEach((name) => {
-    const before = pair.before.bones[name] ?? pair.after.bones[name];
-    const after = pair.after.bones[name] ?? before;
-    if (before && after) bones[name] = slerpQuaternion(before, after, pair.amount);
-  });
-  const bonePositions: BonePositionSnapshot = {};
-  const positionNames = new Set([
-    ...Object.keys(pair.before.bonePositions ?? {}),
-    ...Object.keys(pair.after.bonePositions ?? {}),
-  ]);
-  positionNames.forEach((name) => {
-    const before = pair.before.bonePositions?.[name] ?? pair.after.bonePositions?.[name];
-    const after = pair.after.bonePositions?.[name] ?? before;
-    if (before && after) bonePositions[name] = lerpVec3(before, after, pair.amount);
-  });
+  const bones = interpolateSnapshot(pair.before.bones, pair.after.bones, pair.amount, slerpQuaternion);
+  const bonePositions = interpolateSnapshot(pair.before.bonePositions ?? {}, pair.after.bonePositions ?? {}, pair.amount, lerpVec3);
   const selected = pair.amount < 0.5 ? pair.before : pair.after;
   const beforeRig = pair.before.rigPosition ?? pair.after.rigPosition;
   const afterRig = pair.after.rigPosition ?? beforeRig;
@@ -275,7 +277,8 @@ export function evaluateAnimationShot(shot: AnimationShot | undefined, localTime
   if (!shot) return {};
   const time = Math.min(shot.duration, Math.max(0, localTime));
   const result: EvaluatedAnimation = {};
-  shot.tracks.filter((track) => track.enabled).forEach((track) => {
+  for (const track of shot.tracks) {
+    if (!track.enabled) continue;
     if (track.kind === "pose") result.pose = evaluatePose(track, time);
     if (track.kind === "root") {
       const pair = framePair(track.keyframes, time);
@@ -293,7 +296,7 @@ export function evaluateAnimationShot(shot: AnimationShot | undefined, localTime
         focalLength: round(lerpNumber(pair.before.focalLength, pair.after.focalLength, pair.amount)),
       };
     }
-  });
+  }
   return result;
 }
 

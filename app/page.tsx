@@ -2629,9 +2629,7 @@ function cloneState(state: EditorState): EditorState {
     rotation: [...state.rotation],
     perspectiveGrid: clonePerspectiveGrid(state.perspectiveGrid ?? initialPerspectiveGrid),
     semanticModifiers: { ...state.semanticModifiers },
-    ikTargets: Object.fromEntries(
-      Object.entries(state.ikTargets).map(([key, value]) => [key, value ? [...value] : value]),
-    ) as IKTargetMap,
+    ikTargets: cloneIKTargets(state.ikTargets),
   };
 }
 
@@ -2849,7 +2847,7 @@ export default function Home() {
   const lastPerspectiveModeRef = useRef<PerspectiveGridMode>("ground");
 
   const [language, setLanguage] = useState<Language>("zh");
-  const [editor, setEditor] = useState<EditorState>(cloneState(initialState));
+  const [editor, setEditor] = useState<EditorState>(() => cloneState(initialState));
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [zoom, setZoom] = useState(76);
@@ -2992,9 +2990,9 @@ export default function Home() {
   const selectedSavedPose = savedPoseById.get(selectedPoseId);
   const timelinePromptPreview = useMemo(() => parseTimelinePrompt(timelinePrompt), [timelinePrompt]);
   const hasJointEdits = Object.keys(editor.ikTargets).length > 0;
-  const hasUnsavedJointEdits = selectedSavedPose
+  const hasUnsavedJointEdits = useMemo(() => selectedSavedPose
     ? JSON.stringify({ ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers, mirrored: editor.mirrored }) !== JSON.stringify({ ikTargets: selectedSavedPose.ikTargets, semanticModifiers: selectedSavedPose.semanticModifiers, mirrored: selectedSavedPose.mirrored })
-    : hasJointEdits;
+    : hasJointEdits, [editor.ikTargets, editor.semanticModifiers, editor.mirrored, selectedSavedPose, hasJointEdits]);
 
   const filteredPoses = useMemo(() => {
     const keyword = debouncedQuery.trim().toLowerCase();
@@ -4502,22 +4500,15 @@ export default function Home() {
     activeShotIdRef.current = shot.id;
   };
 
-  const captureRigBoneSnapshot = (rig: RigBinding | null | undefined): BoneQuaternionSnapshot => {
-    if (!rig) return {};
-    return Object.fromEntries([...rig.bonesByName.entries()].map(([name, bone]) => [
-      name,
-      [bone.quaternion.x, bone.quaternion.y, bone.quaternion.z, bone.quaternion.w],
-    ]));
+  const captureRigPoseState = (rig: RigBinding) => {
+    const bones: BoneQuaternionSnapshot = {};
+    const bonePositions: Record<string, [number, number, number]> = {};
+    for (const [name, bone] of rig.bonesByName) {
+      bones[name] = [bone.quaternion.x, bone.quaternion.y, bone.quaternion.z, bone.quaternion.w];
+      bonePositions[name] = [bone.position.x, bone.position.y, bone.position.z];
+    }
+    return { bones, bonePositions, rigPosition: [rig.root.position.x, rig.root.position.y, rig.root.position.z] as [number, number, number] };
   };
-
-  const captureRigPoseState = (rig: RigBinding) => ({
-    bones: captureRigBoneSnapshot(rig),
-    bonePositions: Object.fromEntries([...rig.bonesByName.entries()].map(([name, bone]) => [
-      name,
-      [bone.position.x, bone.position.y, bone.position.z] as [number, number, number],
-    ])),
-    rigPosition: [rig.root.position.x, rig.root.position.y, rig.root.position.z] as [number, number, number],
-  });
 
   const capturePoseRigState = (
     poseIndex: number,
@@ -4628,49 +4619,21 @@ export default function Home() {
       frame("wave_c", duration * 0.8, raised, false, { LeftLowerArm: [0, 0, -14], LeftHand: [0, 0, -18], RightLowerArm: [0, 0, 14], RightHand: [0, 0, 18] }),
       frame("end", duration, natural),
     ];
-    if (motionId === "kneel") return [
-      frame("start", 0, natural),
-      frame("lower", duration * 0.45, halfSquat),
-      frame("settle", duration * 0.82, kneel),
-      frame("end", duration, kneel),
-    ];
+    const transitions: Partial<Record<MotionId, [string, number, PoseItem][]>> = {
+      kneel: [["lower", 0.45, halfSquat], ["settle", 0.82, kneel], ["end", 1, kneel]],
+      jump: [["prepare", 0.22, halfSquat], ["air", 0.48, jump], ["land", 0.74, landing], ["end", 1, natural]],
+      squat: [["lower", 0.3, halfSquat], ["hold", 0.58, squat], ["rise", 0.82, halfSquat], ["end", 1, natural]],
+      sit: [["lower", 0.42, halfSquat], ["settle", 0.76, sit], ["end", 1, sit]],
+      turn: [["side", 0.38, side], ["back", 0.74, backTurn], ["end", 1, backTurn]],
+      "look-back": [["glance", 0.46, lookBack], ["hold", 0.72, lookBack], ["end", 1, natural]],
+    };
+    const transition = transitions[motionId];
+    if (transition) return [frame("start", 0, natural), ...transition.map(([suffix, fraction, pose]) => frame(suffix, duration * fraction, pose))];
     if (motionId === "idle") return [
       frame("start", 0, natural, false, {}, "linear"),
       frame("inhale", duration * 0.25, natural, false, { Chest: [-2.5, 0, 0], LeftShoulder: [-1, 0, -2], RightShoulder: [-1, 0, 2] }, "linear"),
       frame("exhale", duration * 0.75, natural, false, { Chest: [1.5, 0, 0], Head: [0.8, 0, 0] }, "linear"),
       frame("end", duration, natural, false, {}, "linear"),
-    ];
-    if (motionId === "jump") return [
-      frame("start", 0, natural),
-      frame("prepare", duration * 0.22, halfSquat),
-      frame("air", duration * 0.48, jump),
-      frame("land", duration * 0.74, landing),
-      frame("end", duration, natural),
-    ];
-    if (motionId === "squat") return [
-      frame("start", 0, natural),
-      frame("lower", duration * 0.3, halfSquat),
-      frame("hold", duration * 0.58, squat),
-      frame("rise", duration * 0.82, halfSquat),
-      frame("end", duration, natural),
-    ];
-    if (motionId === "sit") return [
-      frame("start", 0, natural),
-      frame("lower", duration * 0.42, halfSquat),
-      frame("settle", duration * 0.76, sit),
-      frame("end", duration, sit),
-    ];
-    if (motionId === "turn") return [
-      frame("start", 0, natural),
-      frame("side", duration * 0.38, side),
-      frame("back", duration * 0.74, backTurn),
-      frame("end", duration, backTurn),
-    ];
-    if (motionId === "look-back") return [
-      frame("start", 0, natural),
-      frame("glance", duration * 0.46, lookBack),
-      frame("hold", duration * 0.72, lookBack),
-      frame("end", duration, natural),
     ];
     if (motionId === "salute") return [
       frame("start", 0, natural),
@@ -5941,7 +5904,7 @@ export default function Home() {
     const tick = () => {
       controls.update();
       const rig = modelRigsRef.current[selectedModelIdRef.current];
-      if (rig && cameraRef.current && rendererRef.current) {
+      if (rig && interactionModeRef.current === "ik-edit" && editorLatestRef.current.visible && cameraRef.current && rendererRef.current) {
         const rect = rendererRef.current.domElement.getBoundingClientRect();
         (Object.keys(ikControlBoneMap) as IKControlId[]).forEach((control) => {
           const element = controlPointRefs.current[control];
@@ -5951,7 +5914,7 @@ export default function Home() {
             element.style.display = "none";
             return;
           }
-          const world = rig.root.localToWorld(point.clone()).project(cameraRef.current!);
+          const world = rig.root.localToWorld(point).project(cameraRef.current!);
           const visible = world.z > -1 && world.z < 1;
           element.style.display = visible ? "grid" : "none";
           element.style.transform = `translate(${((world.x + 1) * 0.5 * rect.width) - 18}px, ${((-world.y + 1) * 0.5 * rect.height) - 18}px)`;

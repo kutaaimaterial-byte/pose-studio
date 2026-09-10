@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { transpileModule, ScriptTarget } from "typescript";
 
 async function render() {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -22,6 +23,25 @@ async function render() {
     },
   );
 }
+
+test("rig snapshots retain independent rotations, bone positions and root positions", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const start = page.indexOf("  const captureRigPoseState = ");
+  const end = page.indexOf("  const capturePoseRigState = ", start);
+  assert.ok(start >= 0 && end > start);
+  const { outputText } = transpileModule(page.slice(start, end), { compilerOptions: { target: ScriptTarget.ES2022 } });
+  const capture = new Function(`${outputText}; return captureRigPoseState;`)();
+  const bone = { quaternion: { x: 0, y: 0, z: 0, w: 1 }, position: { x: 1, y: 2, z: 3 } };
+  const root = { position: { x: 4, y: 5, z: 6 } };
+  const snapshot = capture({ bonesByName: new Map([["hips", bone]]), root });
+  assert.deepEqual(snapshot, { bones: { hips: [0, 0, 0, 1] }, bonePositions: { hips: [1, 2, 3] }, rigPosition: [4, 5, 6] });
+  bone.position.x = 9;
+  root.position.x = 10;
+  snapshot.bones.hips[0] = 0.5;
+  assert.equal(snapshot.bonePositions.hips[0], 1);
+  assert.equal(snapshot.rigPosition[0], 4);
+  assert.equal(bone.quaternion.x, 0);
+});
 
 test("server-renders the PoseBoard studio shell", async () => {
   const response = await render();
@@ -231,7 +251,6 @@ test("keeps the V4 single-panel workstation responsive and restrained", async ()
   assert.match(page, /videoTimeline: \{ \.\.\.timelineLatestRef\.current/);
   assert.match(page, /animationTimeline: animationTimelineLatestRef\.current/);
   assert.match(page, /frames\.push\(frame\(`step_\$\{step\}`,[\s\S]*step % 2 === 1,[\s\S]*"linear"\)\)/s);
-  assert.match(page, /bonePositions: Object\.fromEntries/);
   assert.match(page, /if \(value\.pose\.rigPosition\) rig\.root\.position\.set/);
   assert.match(page, /motionRevision: 2/);
   assert.match(page, /motionId,\s*loop: motionId === "idle"/s);

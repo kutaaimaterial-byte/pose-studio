@@ -139,15 +139,12 @@ export function VideoTimelinePanel<TSnapshot>({
   }, [majorStep, timeline.duration]);
   const activeShot = timeline.shots.find((shot) => shot.id === activeShotId) ?? null;
   const activeShotStart = activeShot?.start ?? 0;
-  const activeAnimationShot = animationTimeline.shots.find((shot) => shot.shotId === activeShotId) ?? null;
-  const motionForShot = (shotId: string) => {
-    const motionId = animationTimeline.shots.find((shot) => shot.shotId === shotId)?.motionId;
-    return animationTimeline.motionLibrary.find((motion) => motion.id === motionId) ?? null;
-  };
-  const cameraMotionForShot = (shotId: string) => {
-    const cameraMotionId = animationTimeline.shots.find((shot) => shot.shotId === shotId)?.cameraMotionId;
-    return animationTimeline.cameraMotionLibrary.find((motion) => motion.id === cameraMotionId) ?? null;
-  };
+  const shotsById = useMemo(() => new Map(animationTimeline.shots.map((shot) => [shot.shotId, {
+    shot,
+    motion: animationTimeline.motionLibrary.find((motion) => motion.id === shot.motionId),
+    cameraMotion: animationTimeline.cameraMotionLibrary.find((motion) => motion.id === shot.cameraMotionId),
+  }] as const).reverse()), [animationTimeline.shots, animationTimeline.motionLibrary, animationTimeline.cameraMotionLibrary]);
+  const activeAnimationShot = activeShotId !== null ? shotsById.get(activeShotId)?.shot ?? null : null;
   const errors = timeline.issues.filter((issue) => issue.severity === "error");
 
   const scrubFromPointer = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -244,8 +241,7 @@ export function VideoTimelinePanel<TSnapshot>({
               <div className="timeline-track-label"><span>{text("SHOT TRACK", "镜头轨")}</span><small>{text("Hard cuts", "硬切")}</small></div>
               <div className="timeline-track shot-track">
                 {timeline.shots.map((shot) => {
-                  const clipMotion = motionForShot(shot.id);
-                  const clipCameraMotion = cameraMotionForShot(shot.id);
+                  const { motion: clipMotion, cameraMotion: clipCameraMotion } = shotsById.get(shot.id) ?? {};
                   return (
                   <button
                     key={shot.id}
