@@ -120,7 +120,7 @@ test("keeps the Precision Light workstation responsive and restrained", async ()
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.doesNotMatch(css, /linear-gradient|#725cf6|#5a46de/i);
   assert.doesNotMatch(`${page}\n${layout}`, /[—–]/);
-  assert.match(page, /className="brand-edition"/);
+  assert.doesNotMatch(page, /className="brand-edition"/);
   assert.doesNotMatch(page, /className="canvas-meta"/);
   assert.match(page, /className="canvas-project-name"/);
   assert.doesNotMatch(page, /className="project-identity"/);
@@ -133,8 +133,14 @@ test("keeps the Precision Light workstation responsive and restrained", async ()
   assert.match(page, /useState<ActiveTool>\("pose"\)/);
   assert.match(page, /useState<ToolMode>\("pose"\)/);
   assert.match(page, /useState<InteractionMode>\("camera-browse"\)/);
-  assert.match(precisionCss, /grid-template-areas:\s*"rail rail"\s*"canvas panel"/s);
+  assert.match(precisionCss, /grid-template-areas:\s*"canvas panel"/s);
   assert.match(precisionCss, /\.tool-rail-list\s*\{[^}]*flex-direction:\s*row/s);
+  assert.ok(page.indexOf("<ToolRail activeTool={activeTool}") < page.indexOf('<Toolbar className="toolbar-center"'));
+  assert.match(page, /className="canvas-project-menu"/);
+  assert.match(page, /className="context-panel-reopen"/);
+  assert.match(page, /onClick=\{\(\) => setContextPanelOpen\(true\)\}/);
+  assert.match(precisionCss, /\.context-panel-reopen\s*\{[^}]*position:\s*absolute/s);
+  assert.match(precisionCss, /\.panel-collapsed \.topbar > \.tool-rail > \.tool-rail-collapse\s*\{[^}]*display:\s*none\s*!important/s);
   assert.match(precisionCss, /\.artboard-command-bar\s*\{[^}]*flex-direction:\s*column/s);
   assert.match(precisionCss, /\.timeline-open \.workspace[\s\S]*"timeline timeline"/s);
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);

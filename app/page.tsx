@@ -6280,17 +6280,14 @@ export default function Home() {
         <div className="brand-block">
           <span className="brand-mark">P</span>
           <span className="brand-name">PoseBoard</span>
-          <span className="brand-edition">AI Character Studio</span>
-          <span className="brand-divider" aria-hidden="true" />
-          <button className="project-menu" type="button" onClick={() => document.querySelector<HTMLInputElement>(".canvas-project-name")?.focus()} title={text("Edit project name", "编辑项目名称")}>
-            <span>{projectName || text("Untitled Project", "未命名项目")}</span><CaretDown size={14} />
-          </button>
           <div className="language-switch" role="group" aria-label={text("Language", "语言")}>
             <button className={language === "en" ? "active" : ""} aria-pressed={language === "en"} onClick={() => changeLanguage("en")}>EN</button>
             <button className={language === "zh" ? "active" : ""} aria-pressed={language === "zh"} onClick={() => changeLanguage("zh")}>中文</button>
           </div>
           <span className="file-state" aria-live="polite">{saveState === "saving" ? text("Saving…", "正在保存…") : text("Saved · just now", "已保存 · 刚刚")}</span>
         </div>
+
+        <ToolRail activeTool={activeTool} labels={toolLabels} panelOpen={contextPanelOpen} onChange={changeActiveTool} onTogglePanel={() => setContextPanelOpen((open) => !open)} />
 
         <Toolbar className="toolbar-center" aria-label={text("Canvas tools", "画板工具")}>
           <label className="artboard-ratio-control"><span>{text("Artboard", "画板")}</span><select value={editor.ratio} onChange={(event) => changeArtboardRatio(event.target.value as Ratio)} aria-label={text("Canvas ratio", "画板比例")}>{(["1:1", "4:5", "2:3", "3:4", "4:3", "9:16", "16:9", "21:9"] as Ratio[]).map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}</select></label>
@@ -6315,7 +6312,6 @@ export default function Home() {
       </header>
 
       <section className="workspace">
-        <ToolRail activeTool={activeTool} labels={toolLabels} panelOpen={contextPanelOpen} onChange={changeActiveTool} onTogglePanel={() => setContextPanelOpen((open) => !open)} />
         <aside className="panel library-panel context-panel" aria-label="Pose Library">
           <div className="library-scroll-header">
             <div className="panel-title-row">
@@ -6429,14 +6425,29 @@ export default function Home() {
 
         <section className="canvas-area">
           <div className="canvas-header">
-            <input className="canvas-project-name" value={projectName} onChange={(event) => { setProjectName(event.target.value); markSaving(); }} aria-label={text("Project name", "项目名称")} />
+            <label className="canvas-project-menu" title={text("Edit project name", "编辑项目名称")}>
+              <input className="canvas-project-name" value={projectName} onChange={(event) => { setProjectName(event.target.value); markSaving(); }} aria-label={text("Project name", "项目名称")} />
+              <CaretDown size={14} />
+            </label>
           </div>
+          {!contextPanelOpen && (
+            <button
+              className="context-panel-reopen"
+              type="button"
+              onClick={() => setContextPanelOpen(true)}
+              aria-label={activeTool === "pose" ? text("Open pose library", "展开姿势库") : text("Open tool panel", "展开工具面板")}
+              title={activeTool === "pose" ? text("Open pose library", "展开姿势库") : text("Open tool panel", "展开工具面板")}
+            >
+              <SidebarSimple size={17} weight="fill" />
+              <span>{activeTool === "pose" ? text("Pose Library", "展开姿势库") : text("Tool Panel", "展开工具面板")}</span>
+            </button>
+          )}
           <div className="canvas-stage">
             <div className="artboard-wrap" style={{ aspectRatio: editor.ratio.replace(":", " / "), width: `${zoomWidth}%` }}>
               <div className="tool-dock artboard-command-bar" role="toolbar" aria-label={text("Canvas character and artboard controls", "画板人物与画板控制")}>
                 <button className={interactionMode === "model-transform" && toolMode === "translate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "translate"} onClick={() => activateCanvasMode("translate")} title={text("Move character", "移动人物")}><ArrowsOutCardinal size={16} /><span>{text("Move", "移动")}</span></button>
                 <button className={interactionMode === "model-transform" && toolMode === "rotate" ? "active" : ""} aria-pressed={interactionMode === "model-transform" && toolMode === "rotate"} onClick={() => activateCanvasMode("rotate")} title={text("Rotate character", "旋转人物")}><ArrowClockwise size={16} /><span>{text("Rotate", "旋转")}</span></button>
-                <button className={interactionMode === "ik-edit" ? "active" : ""} aria-pressed={interactionMode === "ik-edit"} onClick={() => activateCanvasMode("pose")} title={text("Edit pose controls", "编辑姿势控制点")}><Sparkle size={16} /><span>{text("Edit Pose", "编辑控制点")}</span></button>
+                <button className={interactionMode === "ik-edit" ? "active" : ""} aria-pressed={interactionMode === "ik-edit"} onClick={() => activateCanvasMode("pose")} title={text("Edit pose controls", "编辑姿势控制点")}><Sparkle size={16} /><span>{text("Pose", "姿势")}</span></button>
                 <i className="command-bar-divider" />
                 <input ref={imageInputRef} className="canvas-image-input" type="file" accept="image/*" multiple onChange={uploadCanvasImages} />
                 <button onClick={(event) => { event.stopPropagation(); imageInputRef.current?.click(); }} disabled={canvasImages.length >= 8} title={text("Upload image to artboard", "上传图片到画板")} aria-label={text("Upload image to artboard", "上传图片到画板")}><UploadSimple size={17} /></button>
@@ -6505,8 +6516,8 @@ export default function Home() {
             <button className="zoom-value" onClick={() => setZoom(100)} aria-label={text(`Zoom ${zoom}%. Click for 100%`, `当前缩放 ${zoom}%，点击显示 100%`)}>{zoom}%</button>
             <button onClick={() => setZoom((value) => clamp(value + 8, 34, 100))} aria-label={text("Zoom in", "放大")}><Plus size={16} /></button>
             <span />
-            <button onClick={fitSelectedCharacter} title={text("Fit person · F", "适配人物 · F")}><HouseLine size={15} /> {text("Person", "人物")}</button>
-            <button onClick={() => setZoom(76)} title={text("Fit artboard · Shift F", "适配画板 · Shift F")}><GridFour size={15} /> {text("Artboard", "画板")}</button>
+            <button onClick={fitSelectedCharacter} aria-label={text("Fit person", "适配人物")} title={text("Fit person · F", "适配人物 · F")}><HouseLine size={15} /></button>
+            <button onClick={() => setZoom(76)} aria-label={text("Fit artboard", "适配画板")} title={text("Fit artboard · Shift F", "适配画板 · Shift F")}><GridFour size={15} /></button>
           </div>
 
         </section>
