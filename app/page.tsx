@@ -110,6 +110,11 @@ import {
   type InteractionMode,
 } from "./workspace-ui";
 import { VideoTimelinePanel } from "./video-timeline-panel";
+import { StagePanel, type SnapshotMode } from "./stage-panel";
+import { StoryboardGraph } from "./storyboard-graph";
+import { studioCloudRequest } from "./studio-cloud";
+import { cameraForShot, createStageEnvironment, disposeStageEnvironment, drawShotGuides } from "./stage-scene";
+import { compositions, defaultShotPreset, defaultStage, normalizeShotPreset, parseShotPrompt, shotSnapshotFilename, shotSizes, stageTypes, type CustomShotPreset, type ShotDraft, type ShotPreset, type StageRecord, type StageSettings, type StudioGraph } from "./stage-studio";
 import {
   animationLocalTime,
   cameraMotionLibrary as cameraMotionPresets,
@@ -326,6 +331,9 @@ type ShotCameraSnapshot = {
   position: [number, number, number];
   target: [number, number, number];
   focalLength: number;
+  up?: [number, number, number];
+  rotation?: [number, number, number];
+  fov?: number;
 };
 
 type ShotModelSnapshot = {
@@ -335,6 +343,8 @@ type ShotModelSnapshot = {
 };
 
 type ShotSceneSnapshot = {
+  stage?: StageSettings;
+  shotPreset?: ShotPreset;
   editor: EditorState;
   selectedPoseId: string;
   selectedModelId: string;
@@ -2723,6 +2733,8 @@ function cloneCanvasImageLayers(layers: CanvasImageLayer[]) {
 function cloneShotSceneSnapshot(snapshot: ShotSceneSnapshot): ShotSceneSnapshot {
   return {
     ...snapshot,
+    stage: snapshot.stage ? { ...snapshot.stage } : undefined,
+    shotPreset: snapshot.shotPreset ? { ...snapshot.shotPreset } : undefined,
     editor: cloneState(snapshot.editor),
     camera: { ...snapshot.camera, position: [...snapshot.camera.position], target: [...snapshot.camera.target] },
     models: snapshot.models.map((model) => ({ ...model, state: cloneModelEditState(model.state) })),
@@ -2844,6 +2856,7 @@ export default function Home() {
   const playheadRef = useRef(0);
   const activeShotIdRef = useRef<string | null>(null);
   const restoredTimelineShotRef = useRef<string | null>(null);
+  const restoredStudioSceneRef = useRef<ShotSceneSnapshot | null>(null);
   const applyingShotRef = useRef(false);
   const lastPerspectiveModeRef = useRef<PerspectiveGridMode>("ground");
 
@@ -2895,6 +2908,18 @@ export default function Home() {
   const [poseThumbnails, setPoseThumbnails] = useState<Record<number, string>>({});
   const [modelInfo, setModelInfo] = useState({ loaded: false, hasSkeleton: false, label: "正在加载 GLB…" });
   const [timeline, setTimeline] = useState<PoseBoardTimeline>(() => createEmptyTimeline<ShotSceneSnapshot>("9:16"));
+  const [stageSettings, setStageSettings] = useState<StageSettings>({ ...defaultStage });
+  const [shotFraming, setShotFraming] = useState<ShotPreset>({ ...defaultShotPreset });
+  const stageSettingsRef = useRef(stageSettings);
+  const shotFramingRef = useRef(shotFraming);
+  const [stageRecords, setStageRecords] = useState<StageRecord<ShotSceneSnapshot>[]>([]);
+  const [customShotPresets, setCustomShotPresets] = useState<CustomShotPreset<ShotCameraSnapshot>[]>([]);
+  const [studioGraph, setStudioGraph] = useState<StudioGraph>({ nodes: [], edges: [] });
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [studioPromptSeed, setStudioPromptSeed] = useState("");
+  const [pendingGraphAction, setPendingGraphAction] = useState<"snapshot" | "export" | null>(null);
+  const [pendingCloudSave, setPendingCloudSave] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState("");
   const [animationTimeline, setAnimationTimeline] = useState<AnimationTimeline>(() => createAnimationTimeline([], 24));
   const [timelineOpen, setTimelineOpen] = useState(true);
   const [timelinePromptOpen, setTimelinePromptOpen] = useState(false);
@@ -3131,6 +3156,9 @@ export default function Home() {
   }, [filteredPoses, modelInfo.loaded]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+    if (cancelled) return;
     try {
       const favorites = JSON.parse(window.localStorage.getItem("poseboard.favoriteIds") ?? "[]");
       const recent = JSON.parse(window.localStorage.getItem("poseboard.recentIds") ?? "[]");
@@ -3143,6 +3171,12 @@ export default function Home() {
         activeShotId?: string | null;
         timelineOpen?: boolean;
         timelineHeight?: number;
+        stageSettings?: StageSettings;
+        shotFraming?: ShotPreset;
+        stageRecords?: StageRecord<ShotSceneSnapshot>[];
+        customShotPresets?: CustomShotPreset<ShotCameraSnapshot>[];
+        studioGraph?: StudioGraph;
+        currentScene?: ShotSceneSnapshot;
       } | null;
       const lastSelected = window.localStorage.getItem("poseboard.lastSelectedId");
       const workspacePreferences = JSON.parse(window.localStorage.getItem("poseboard.workspace.v4") ?? "null") as { projectName?: string; contextPanelOpen?: boolean; cameraLocked?: boolean } | null;
@@ -3197,9 +3231,19 @@ export default function Home() {
         setTimelineOpen(true);
       }
       if (typeof savedProject?.timelineHeight === "number") setTimelineHeight(clamp(savedProject.timelineHeight, 176, 420));
+      if (savedProject?.stageSettings) { stageSettingsRef.current = savedProject.stageSettings; setStageSettings(savedProject.stageSettings); }
+      if (savedProject?.currentScene?.models?.length) restoredStudioSceneRef.current = savedProject.currentScene;
+      if (savedProject?.shotFraming) { const framing = normalizeShotPreset(savedProject.shotFraming); shotFramingRef.current = framing; setShotFraming(framing); }
+      if (Array.isArray(savedProject?.stageRecords)) setStageRecords(savedProject.stageRecords);
+      if (Array.isArray(savedProject?.customShotPresets)) setCustomShotPresets(savedProject.customShotPresets);
+      if (Array.isArray(savedProject?.studioGraph?.nodes) && Array.isArray(savedProject?.studioGraph?.edges)) setStudioGraph(savedProject.studioGraph);
+    } catch {
+      setCloudStatus("本机项目缓存无法读取，可在舞台面板恢复云端项目或导入 JSON");
     } finally {
       setPersistenceReady(true);
     }
+    });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -3209,21 +3253,6 @@ export default function Home() {
     window.localStorage.setItem("poseboard.savedPoses.v1", JSON.stringify(savedPoses));
     window.localStorage.setItem("poseboard.lastSelectedId", selectedPoseId);
   }, [favoriteIds, persistenceReady, recentIds, savedPoses, selectedPoseId]);
-
-  useEffect(() => {
-    if (!persistenceReady) return;
-    window.localStorage.setItem("poseboard.project.v3", JSON.stringify({
-      schemaVersion: "6.0",
-      appVersion: "3.3.0",
-      selectedPoseId,
-      editor,
-      videoTimeline: timeline,
-      animationTimeline,
-      activeShotId,
-      timelineOpen,
-      timelineHeight,
-    }));
-  }, [activeShotId, animationTimeline, editor, persistenceReady, selectedPoseId, timeline, timelineHeight, timelineOpen]);
 
   useEffect(() => {
     if (!persistenceReady) return;
@@ -3771,10 +3800,14 @@ export default function Home() {
     URL.revokeObjectURL(link.href);
   };
 
-  const exportProjectJson = () => {
-    const project = {
+  const buildStudioProject = () => {
+    return {
       schemaVersion: "6.0",
-      appVersion: "3.3.0",
+      appVersion: "3.4.0",
+      studioVersion: "1.0",
+      stageSettings, shotFraming, stageRecords, customShotPresets, studioGraph,
+      currentScene: captureSceneSnapshot(),
+      activeShotId: activeShotIdRef.current,
       name: projectName,
       updatedAt: new Date().toISOString(),
       pose: { id: selectedPose.id, name: selectedPose.name, mirrored: editor.mirrored, ikTargets: editor.ikTargets, semanticModifiers: editor.semanticModifiers },
@@ -3798,6 +3831,10 @@ export default function Home() {
       videoTimeline: { ...timelineLatestRef.current, playhead: playheadRef.current },
       animationTimeline: animationTimelineLatestRef.current,
     };
+  };
+  const exportProjectJson = () => {
+    persistActiveTimelineShotScene();
+    const project = buildStudioProject();
     downloadTextFile(`poseboard-${selectedPose.id}.json`, JSON.stringify(project, null, 2), "application/json");
     flash(text("Project JSON exported", "项目 JSON 已导出"));
   };
@@ -4270,12 +4307,14 @@ export default function Home() {
     flash(text("Timeline edit restored", "已重做时间轴编辑"));
   };
 
-  const captureSceneSnapshot = (promptText = sourcePosePrompt): ShotSceneSnapshot => {
+  function captureSceneSnapshot(promptText = sourcePosePrompt): ShotSceneSnapshot {
     const currentEditor = cloneState(editorLatestRef.current);
     modelStatesRef.current[selectedModelId] = getModelEditState(currentEditor);
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     return {
+      stage: { ...stageSettingsRef.current },
+      shotPreset: { ...shotFramingRef.current, ratio: currentEditor.ratio, focalLength: currentEditor.focalLength, gridEnabled: currentEditor.perspectiveGrid.enabled, gridMode: currentEditor.perspectiveGrid.mode },
       editor: currentEditor,
       selectedPoseId,
       selectedModelId,
@@ -4290,13 +4329,33 @@ export default function Home() {
         position: camera ? [camera.position.x, camera.position.y, camera.position.z] : [...presetCameraPosition],
         target: controls ? [controls.target.x, controls.target.y, controls.target.z] : [...presetCameraTarget],
         focalLength: currentEditor.focalLength,
+        fov: camera?.fov ?? currentEditor.fov,
+        up: camera ? camera.up.toArray() as [number, number, number] : [0, 1, 0],
+        rotation: camera ? camera.rotation.toArray().slice(0, 3) as [number, number, number] : [0, 0, 0],
       },
       canvasImages: cloneCanvasImageLayers(canvasImages),
       sourcePrompt: promptText,
       promptPlatform,
       capturedAt: timelineLatestRef.current.updatedAt + 1,
     };
-  };
+  }
+
+  useEffect(() => {
+    if (!persistenceReady) return;
+    const timer = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem("poseboard.project.v3", JSON.stringify({
+          schemaVersion: "6.0", appVersion: "3.4.0",
+          stageSettings, shotFraming, stageRecords, customShotPresets, studioGraph,
+          currentScene: modelInfo.loaded ? captureSceneSnapshot() : restoredStudioSceneRef.current,
+          selectedPoseId, editor, videoTimeline: timeline, animationTimeline, activeShotId, timelineOpen, timelineHeight,
+        }));
+      } catch { setCloudStatus("本机缓存空间不足，请保存云端或导出 JSON，避免关闭页面后丢失修改"); }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  // Capture the live scene after edits settle; the serialized shape is shared with V3.3.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeShotId, animationTimeline, editor, persistenceReady, selectedPoseId, timeline, timelineHeight, timelineOpen, stageSettings, shotFraming, stageRecords, customShotPresets, studioGraph, cameraRevision, modelInfo.loaded]);
 
   const persistTimelineShotScene = (shotId: string, includeThumbnail = false) => {
     // A scene capture is only valid for the shot that is still active. This
@@ -4343,8 +4402,8 @@ export default function Home() {
   const buildSnapshotForShotPrompt = (baseSnapshot: ShotSceneSnapshot, promptText: string, ratio: Ratio) => {
     const snapshot = cloneShotSceneSnapshot(baseSnapshot);
     const prompt = promptText.toLowerCase();
-    const hasPoseIntent = /低头|抬头|仰头|回头|看向|朝向|停下|停止|转身|前倾|后仰|疾跑|冲刺|行走|奔跑|站立|坐|蹲|跪|跳|手|腿|肩|头部|look|turn|lean|run|sprint|stop|walk|sit|kneel|jump|arm|hand|leg/.test(prompt);
-    const hasCameraIntent = /特写|近景|中景|远景|全身|俯拍|仰拍|侧面|正面|镜头|机位|焦距|close.?up|medium|wide|long shot|camera|angle|view/.test(prompt);
+    const hasPoseIntent = /低头|抬头|仰头|回头|看向|朝向|停下|停止|转身|前倾|后仰|疾跑|冲刺|行走|奔跑|站立|站在|站着|坐|蹲|跪|跳|手|腿|肩|头部|look|turn|lean|run|sprint|stop|walk|sit|kneel|jump|arm|hand|leg/.test(prompt);
+    const hasCameraIntent = /特写|近景|中景|远景|全景|全身|俯拍|仰拍|侧面|正面|镜头|机位|焦距|close.?up|medium|wide|long shot|camera|angle|view/.test(prompt);
     const hasLightingIntent = /灯光|棚拍|逆光|侧光|顶光|蓝橙|夜景|夕阳|柔光|lighting|rim light|night|sunset|soft light/.test(prompt);
     const result = analyzePromptToPose(promptText);
     const shotSize: ShotSize = /极近景|脸部特写|close.?up/.test(prompt)
@@ -4417,11 +4476,25 @@ export default function Home() {
       ? { ...model, state: cloneModelEditState({ ...model.state, ...getModelEditState(nextEditor) }) }
       : model);
     snapshot.capturedAt += 1;
+    const parsedShot = parseShotPrompt(promptText, ratio);
+    snapshot.stage = { ...(snapshot.stage ?? defaultStage), type: parsedShot.stageType === "blank" ? (snapshot.stage?.type ?? "blank") : parsedShot.stageType };
+    if (hasCameraIntent || /留白|构图|天空|前景/.test(prompt)) {
+      snapshot.shotPreset = parsedShot.shotPreset;
+      snapshot.editor.focalLength = parsedShot.shotPreset.focalLength;
+      snapshot.camera = cameraForShot(parsedShot.shotPreset, nextEditor.position, nextEditor.scale);
+    }
     return snapshot;
   };
 
   const applySceneSnapshot = (snapshotSource: ShotSceneSnapshot, fromPlayback = false, normalizeShotSize = false) => {
     const snapshot = cloneShotSceneSnapshot(snapshotSource);
+    const restoredStage = snapshot.stage ?? { ...defaultStage };
+    const legacySizes = { close: "CU", medium: "MS", full: "FS", long: "LS" } as const;
+    const restoredFraming = normalizeShotPreset(snapshot.shotPreset ?? { size: legacySizes[snapshot.editor.shotSize], ratio: snapshot.editor.ratio, focalLength: snapshot.editor.focalLength });
+    stageSettingsRef.current = restoredStage;
+    shotFramingRef.current = restoredFraming;
+    setStageSettings(restoredStage);
+    setShotFraming(restoredFraming);
     applyingShotRef.current = true;
     const targetIds = new Set(snapshot.models.map((model) => model.id));
     Object.entries(modelRootsRef.current).forEach(([id, root]) => {
@@ -4474,12 +4547,16 @@ export default function Home() {
     const controls = controlsRef.current;
     if (camera && controls) {
       camera.position.set(...snapshot.camera.position);
+      camera.up.set(...(snapshot.camera.up ?? [0, 1, 0]));
       controls.target.set(...snapshot.camera.target);
+      controls.minDistance = .05;
+      controls.maxDistance = 150;
+      controls.maxPolarAngle = Math.PI - .001;
       camera.setFocalLength(snapshot.camera.focalLength);
       camera.updateProjectionMatrix();
       controls.update();
       const selectedRoot = selected ? modelRootsRef.current[selected.id] : undefined;
-      if (selectedRoot) keepModelInCameraFrame(selectedRoot, camera, controls, restoredEditor.shotSize, normalizeShotSize);
+      if (selectedRoot && !snapshot.shotPreset) keepModelInCameraFrame(selectedRoot, camera, controls, restoredEditor.shotSize, normalizeShotSize);
     }
     window.setTimeout(() => { applyingShotRef.current = false; }, 80);
     if (!fromPlayback) flash(text("Shot scene restored", "已恢复镜头场景"));
@@ -4798,12 +4875,12 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelInfo.loaded, persistenceReady]);
 
-  const createTimelineFromPrompt = () => {
+  const createTimelineFromPrompt = (drafts?: ShotDraft[]) => {
     if (!modelInfo.loaded) {
       flash(text("Wait for the 3D character to finish loading", "请等待 3D 人物加载完成"));
       return;
     }
-    const parsed = parseTimelinePrompt(timelinePrompt);
+    const parsed = parseTimelinePrompt(drafts ? drafts.map((draft) => `${draft.start}-${draft.end}秒：${draft.promptText}`).join("\n") : timelinePrompt);
     if (!parsed.timeline.shots.length) {
       flash(text("No valid timed shots were found", "没有解析到有效的时间镜头"));
       return;
@@ -4812,13 +4889,21 @@ export default function Home() {
     // Every shot starts from the same neutral scene snapshot. Actions must be
     // isolated per clip instead of inheriting edits from the previous clip.
     const baseSnapshot = captureSceneSnapshot();
-    const shots = parsed.timeline.shots.map((shot) => {
+    const shots = parsed.timeline.shots.map((shot, index) => {
       const snapshot = buildSnapshotForShotPrompt(baseSnapshot, shot.promptText, ratio);
+      if (drafts?.[index]) {
+        const draft = drafts[index];
+        snapshot.shotPreset = normalizeShotPreset(draft.shotPreset);
+        snapshot.editor.ratio = draft.shotPreset.ratio;
+        snapshot.editor.focalLength = draft.shotPreset.focalLength;
+        snapshot.stage = { ...(snapshot.stage ?? defaultStage), type: draft.stageType };
+        snapshot.camera = cameraForShot(snapshot.shotPreset, snapshot.editor.position, snapshot.editor.scale);
+      }
       return {
         ...shot,
         sceneSnapshot: snapshot,
         aspectOverrides: {
-          [ratio]: { ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
+          [snapshot.editor.ratio]: { ratio: snapshot.editor.ratio, snapshot: cloneShotSceneSnapshot(snapshot), updatedAt: 1 },
         },
         snapshotLocked: true,
         snapshotVersion: 2,
@@ -4873,6 +4958,17 @@ export default function Home() {
     };
     animationTimelineLatestRef.current = nextAnimationTimeline;
     setAnimationTimeline(nextAnimationTimeline);
+    setStudioGraph((current) => {
+      const promptId = current.nodes.find((n) => n.kind === "prompt")?.id ?? "pipeline-prompt";
+      const parseId = current.nodes.find((n) => n.kind === "parse")?.id ?? "pipeline-parse";
+      const nodes = [...current.nodes];
+      if (!nodes.some((n) => n.id === promptId)) nodes.push({ id: promptId, kind: "prompt", x: 30, y: 30, text: drafts ? drafts.map((d) => d.promptText).join("\n") : timelinePrompt });
+      if (!nodes.some((n) => n.id === parseId)) nodes.push({ id: parseId, kind: "parse", x: 300, y: 30 });
+      const edges = [...current.edges];
+      if (!edges.some((e) => e.from === promptId && e.to === parseId)) edges.push({ from: promptId, to: parseId });
+      shots.forEach((shot, i) => { const id = `shot-node-${shot.id}`; if (!nodes.some((n) => n.id === id)) { nodes.push({ id, kind: "shot", shotId: shot.id, x: 570 + (i % 4) * 260, y: 30 + Math.floor(i / 4) * 230 }); edges.push({ from: parseId, to: id }); } });
+      return { nodes, edges };
+    });
     setTimelineOpen(true);
     setTimelinePromptOpen(false);
     setTimelinePlaying(false);
@@ -4934,6 +5030,7 @@ export default function Home() {
     }));
     setTimelineOpen(true);
     setActiveShotId(id);
+    activeShotIdRef.current = id;
     setTimelinePlayhead(start);
     flash(text("New shot captured from the current scene", "已从当前场景新增镜头"));
   };
@@ -5401,7 +5498,14 @@ export default function Home() {
     const currentSnapshot = captureSceneSnapshot(shot.promptText);
     const targetSource = shot.aspectOverrides[nextRatio]?.snapshot ?? shot.sceneSnapshot ?? currentSnapshot;
     const targetSnapshot = cloneShotSceneSnapshot(targetSource);
-    targetSnapshot.editor.ratio = nextRatio;
+    // Aspect overrides own framing, not a second copy of the actor's pose.
+    targetSnapshot.editor = cloneState({ ...targetSnapshot.editor, ...getModelEditState(currentSnapshot.editor), ratio: nextRatio });
+    targetSnapshot.models = currentSnapshot.models.map((model) => ({ ...model, state: cloneModelEditState(model.state) }));
+    targetSnapshot.selectedModelId = currentSnapshot.selectedModelId;
+    targetSnapshot.selectedPoseId = currentSnapshot.selectedPoseId;
+    targetSnapshot.stage = currentSnapshot.stage;
+    targetSnapshot.shotPreset = normalizeShotPreset({ ...(targetSnapshot.shotPreset ?? shotFramingRef.current), ratio: nextRatio });
+    if (!shot.aspectOverrides[nextRatio] && targetSnapshot.shotPreset) targetSnapshot.camera = cameraForShot(targetSnapshot.shotPreset, targetSnapshot.editor.position, targetSnapshot.editor.scale);
     commitTimeline((current) => ({
       ...current,
       shots: current.shots.map((item) => item.id === shot.id ? {
@@ -5476,8 +5580,8 @@ export default function Home() {
   }, [timelinePlaying]);
 
   useEffect(() => {
-    if (!persistenceReady || timelinePlaying || applyingShotRef.current || !activeShotIdRef.current) return;
-    if (animationTimelineLatestRef.current.autoKey) recordAnimationKeyframe(false);
+    if (!persistenceReady || timelinePlaying || !activeShotIdRef.current) return;
+    if (!applyingShotRef.current && animationTimelineLatestRef.current.autoKey) recordAnimationKeyframe(false);
     setTimeline((current) => {
       const active = current.shots.find((shot) => shot.id === activeShotIdRef.current);
       if (!active || active.dirty) return current;
@@ -5494,7 +5598,7 @@ export default function Home() {
   // Scene edits are debounced into the active shot; keeping the capture helper
   // outside dependencies avoids restarting this effect for unrelated renders.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraRevision, canvasImages, editor, modelList, persistenceReady, selectedPoseId, sourcePosePrompt, timelinePlaying]);
+  }, [cameraRevision, canvasImages, editor, modelList, persistenceReady, selectedPoseId, sourcePosePrompt, timelinePlaying, stageSettings, shotFraming]);
 
   useEffect(() => {
     const handleTimelineShortcuts = (event: KeyboardEvent) => {
@@ -6068,13 +6172,142 @@ export default function Home() {
 
   useEffect(() => {
     if (!modelInfo.loaded) return;
-    const timer = window.setTimeout(fitSelectedCharacter, 220);
+    const timer = window.setTimeout(() => {
+      const saved = restoredStudioSceneRef.current;
+      if (saved) { restoredStudioSceneRef.current = null; applySceneSnapshot(saved, true); }
+      else if (!timelineLatestRef.current.shots.length) fitSelectedCharacter();
+    }, 220);
     return () => window.clearTimeout(timer);
   // Fit only when a newly loaded model becomes available; pose changes preserve camera intent.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelInfo.loaded]);
 
-  const exportPng = async (exportMode: "setting" | "clean" | "with-grid" | "transparent" | "overlay" = "setting") => {
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !modelInfo.loaded) return;
+    const group = createStageEnvironment({ ...stageSettingsRef.current, type: stageSettings.type, width: stageSettings.width, depth: stageSettings.depth });
+    scene.add(group);
+    return () => { scene.remove(group); disposeStageEnvironment(group); };
+  }, [stageSettings.type, stageSettings.width, stageSettings.depth, modelInfo.loaded]);
+
+  const updateStageSettings = (patch: Partial<StageSettings>) => {
+    setTimelinePlaying(false);
+    const next = { ...stageSettingsRef.current, ...patch };
+    stageSettingsRef.current = next;
+    setStageSettings(next);
+  };
+
+  const saveStageRecord = () => {
+    const settings = { ...stageSettingsRef.current };
+    const record = { settings, snapshot: captureSceneSnapshot(), shotId: activeShotIdRef.current, savedAt: Date.now() };
+    setStageRecords((records) => [...records.filter((item) => item.settings.id !== settings.id), record]);
+    return record;
+  };
+
+  const selectStageRecord = (id: string) => {
+    const target = stageRecords.find((record) => record.settings.id === id);
+    if (!target) return;
+    setTimelinePlaying(false);
+    persistActiveTimelineShotScene();
+    saveStageRecord();
+    applySceneSnapshot(target.snapshot);
+    const shotId = timelineLatestRef.current.shots.some((shot) => shot.id === target.shotId) ? target.shotId : null;
+    activeShotIdRef.current = shotId;
+    setActiveShotId(shotId);
+  };
+
+  const stageAction = (action: "create" | "duplicate" | "delete" | "save" | "restore") => {
+    setTimelinePlaying(false);
+    if (action === "save") { saveStageRecord(); persistActiveTimelineShotScene(); setPendingCloudSave(true); return; }
+    if (action === "restore") {
+      const record = stageRecords.find((item) => item.settings.id === stageSettingsRef.current.id);
+      if (record) { applySceneSnapshot(record.snapshot); activeShotIdRef.current = record.shotId; setActiveShotId(record.shotId); }
+      else flash("请先保存一次舞台");
+      return;
+    }
+    if (action === "delete") {
+      const others = stageRecords.filter((item) => item.settings.id !== stageSettingsRef.current.id);
+      if (!others.length) return;
+      if (!window.confirm("删除此舞台的保存记录？已绑定的时间轴镜头仍保留完整舞台快照。")) return;
+      setStageRecords(others); applySceneSnapshot(others[0].snapshot);
+      activeShotIdRef.current = null; setActiveShotId(null);
+      return;
+    }
+    persistActiveTimelineShotScene();
+    const previous = saveStageRecord();
+    const snapshot = cloneShotSceneSnapshot(previous.snapshot);
+    const settings = { ...previous.settings, id: `stage-${crypto.randomUUID()}`, name: action === "duplicate" ? `${previous.settings.name} 副本` : `舞台 ${String(stageRecords.length + 2).padStart(2, "0")}`, ...(action === "create" ? { type: "blank" as const } : {}) };
+    snapshot.stage = settings;
+    setStageRecords((records) => [...records, { settings, snapshot, shotId: null, savedAt: Date.now() }]);
+    applySceneSnapshot(snapshot);
+    activeShotIdRef.current = null; setActiveShotId(null);
+    flash(action === "duplicate" ? "已复制完整舞台" : "已创建空白环境，保留当前人物");
+  };
+
+  const applyShotFraming = (patch: Partial<ShotPreset>) => {
+    setTimelinePlaying(false);
+    if (patch.ratio && patch.ratio !== editorLatestRef.current.ratio) { changeArtboardRatio(patch.ratio); return; }
+    const framing = normalizeShotPreset({ ...shotFramingRef.current, ratio: editorLatestRef.current.ratio, ...patch });
+    const snapshot = captureSceneSnapshot();
+    snapshot.shotPreset = framing;
+    snapshot.camera = cameraForShot(framing, snapshot.editor.position, snapshot.editor.scale);
+    if (framing.composition === "dialogue") {
+      const bounds = new THREE.Box3();
+      Object.values(modelRootsRef.current).filter((root) => root.visible).forEach((root) => bounds.union(new THREE.Box3().setFromObject(root)));
+      if (!bounds.isEmpty()) {
+        const center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
+        snapshot.camera = cameraForShot(framing, [center.x, bounds.min.y, center.z], 100, size.y, Math.max(size.x, size.z));
+      }
+    }
+    const legacySizes = { ECU: "close", CU: "close", MCU: "medium", MS: "medium", MLS: "full", FS: "full", LS: "long", ELS: "long" } as const;
+    snapshot.editor.shotSize = legacySizes[framing.size];
+    snapshot.editor.focalLength = framing.focalLength;
+    snapshot.editor.perspectiveGrid = { ...perspectiveDefaultsForMode(framing.gridMode as PerspectiveGridMode, snapshot.editor.perspectiveGrid), enabled: framing.gridEnabled, horizonY: framing.horizon };
+    applySceneSnapshot(snapshot, true);
+    const id = activeShotIdRef.current;
+    if (id) commitAnimationTimeline((current) => ({ ...current, shots: current.shots.map((shot) => shot.shotId !== id ? shot : { ...shot, tracks: shot.tracks.map((track) => {
+      if (track.kind !== "camera" || !track.keyframes.length) return track;
+      const first = track.keyframes[0];
+      return { ...track, keyframes: track.keyframes.map((frame) => ({ ...frame,
+        position: frame.position.map((v, i) => v + snapshot.camera.position[i] - first.position[i]) as [number, number, number],
+        target: frame.target.map((v, i) => v + snapshot.camera.target[i] - first.target[i]) as [number, number, number],
+        focalLength: frame.focalLength * snapshot.camera.focalLength / Math.max(1, first.focalLength),
+      })) };
+    }) }) }));
+    setCameraRevision((revision) => revision + 1);
+  };
+
+  const importStudioProject = async (file: File) => {
+    try {
+      if (file.size > 24 * 1024 * 1024) throw new Error("项目文件超过 24 MB");
+      const value = JSON.parse(await file.text());
+      if (value.studioVersion !== "1.0" || !value.currentScene?.editor || !Array.isArray(value.currentScene?.models) || !Array.isArray(value.stageRecords) || !Array.isArray(value.studioGraph?.nodes) || !Array.isArray(value.studioGraph?.edges)) throw new Error("请选择 PoseBoard V3.4 导出的项目 JSON");
+      const validateSnapshot = (s: ShotSceneSnapshot) => {
+        if (!s?.editor || !ratioSize[s.editor.ratio] || !Array.isArray(s.models) || !s.models.length || s.models.length > 8 || !Array.isArray(s.canvasImages) || !s.camera || ![s.camera.position, s.camera.target, s.editor.position, s.editor.rotation].every((v) => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite)) || !Number.isFinite(s.camera.focalLength)) throw new Error("项目场景数据无效");
+        for (const m of s.models) if (!m.state || ![m.state.position, m.state.rotation].every((v) => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite)) || !Number.isFinite(m.state.scale)) throw new Error("人物状态无效");
+        if (s.stage && (!(s.stage.type in stageTypes) || !Number.isFinite(s.stage.width) || !Number.isFinite(s.stage.depth))) throw new Error("舞台数据无效");
+      };
+      validateSnapshot(value.currentScene);
+      value.stageRecords.forEach((r: StageRecord<ShotSceneSnapshot>) => validateSnapshot(r.snapshot));
+      const next = normalizeVideoTimeline<ShotSceneSnapshot>(value.videoTimeline, value.currentScene.editor.ratio);
+      next.shots.forEach((shot) => { if (shot.sceneSnapshot) validateSnapshot(shot.sceneSnapshot); Object.values(shot.aspectOverrides).forEach((o) => validateSnapshot(o.snapshot)); });
+      if (!window.confirm("导入会替换当前项目。建议先导出备份，是否继续？")) return false;
+      setTimelinePlaying(false);
+      setStageRecords(value.stageRecords); setCustomShotPresets(Array.isArray(value.customShotPresets) ? value.customShotPresets : []); setStudioGraph(value.studioGraph);
+      setProjectName(typeof value.name === "string" ? value.name : "Imported Project");
+      timelineLatestRef.current = next; setTimeline(next);
+      const animation = normalizeAnimationTimeline(value.animationTimeline, next.shots, next.fps);
+      animationTimelineLatestRef.current = animation; setAnimationTimeline(animation);
+      applySceneSnapshot(value.currentScene);
+      activeShotIdRef.current = next.shots.some((shot) => shot.id === value.activeShotId) ? value.activeShotId : null; setActiveShotId(activeShotIdRef.current);
+      timelineHistoryRef.current = []; timelineFutureRef.current = []; animationHistoryRef.current = []; animationFutureRef.current = []; historyRef.current = []; futureRef.current = [];
+      syncTimelineHistoryAvailability(); syncHistoryAvailability();
+      flash("舞台、镜头和节点项目已恢复");
+      return true;
+    } catch (error) { flash(error instanceof Error ? error.message : "无法读取项目文件"); return false; }
+  };
+
+  const exportPng = async (exportMode: "setting" | SnapshotMode | "transparent" | "overlay" = "setting") => {
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
     const camera = cameraRef.current;
@@ -6085,6 +6318,7 @@ export default function Home() {
     }
 
     setExporting(true);
+    setTimelinePlaying(false);
     await new Promise((resolve) => window.setTimeout(resolve, 180));
 
     const oldSize = renderer.getSize(new THREE.Vector2());
@@ -6102,10 +6336,12 @@ export default function Home() {
 
     try {
       const [targetWidth, targetHeight] = ratioSize[editor.ratio];
-      const grid = editor.perspectiveGrid;
+      const grid = exportMode === "with-grid" && (!editor.perspectiveGrid.enabled || editor.perspectiveGrid.mode === "off")
+        ? perspectiveDefaultsForMode("two-point", editor.perspectiveGrid)
+        : editor.perspectiveGrid;
       const overlayOnly = exportMode === "overlay";
       const transparentOutput = exportMode === "transparent";
-      const includeGrid = grid.enabled && grid.mode !== "off" && (exportMode === "with-grid" || overlayOnly || (exportMode === "setting" && grid.includeInExport));
+      const includeGrid = (exportMode === "with-grid") || (grid.enabled && grid.mode !== "off" && (overlayOnly || (exportMode === "setting" && grid.includeInExport)));
       if (transformHelper) transformHelper.visible = false;
       if (groundGrid) groundGrid.visible = includeGrid && grid.mode === "ground";
       if (overlayOnly || transparentOutput) {
@@ -6145,11 +6381,28 @@ export default function Home() {
         }
       }
       if (includeGrid && grid.mode !== "ground") drawPerspectiveOverlay(context, targetWidth, targetHeight, grid);
+      if (exportMode === "safe-frame" || exportMode === "with-grid") drawShotGuides(context, targetWidth, targetHeight, exportMode === "safe-frame", exportMode === "with-grid");
+      const activeShot = timelineLatestRef.current.shots.find((shot) => shot.id === activeShotIdRef.current);
+      const framing = { ...shotFramingRef.current, ratio: editor.ratio };
+      if (exportMode === "annotated") {
+        const band = Math.round(targetHeight * .14);
+        context.fillStyle = "rgba(16,27,44,.88)"; context.fillRect(0, targetHeight - band, targetWidth, band);
+        context.fillStyle = "#fff"; context.font = `600 ${Math.max(17, targetWidth / 37)}px sans-serif`;
+        context.fillText(`Shot ${String(activeShot?.index ?? 1).padStart(2, "0")} · ${framing.size} ${shotSizes[framing.size]} · ${compositions[framing.composition]} · ${editor.ratio} · ${activeShot?.duration ?? 3}s`, targetWidth * .035, targetHeight - band * .64, targetWidth * .93);
+        context.font = `${Math.max(15, targetWidth / 46)}px sans-serif`;
+        const prompt = activeShot?.promptText || sourcePosePrompt || selectedPose.name;
+        context.fillText(prompt.slice(0, 64), targetWidth * .035, targetHeight - band * .28, targetWidth * .93);
+      }
 
       const link = document.createElement("a");
       link.href = output.toDataURL("image/png");
       const suffix = overlayOnly ? "grid-overlay" : transparentOutput ? "transparent" : includeGrid ? "with-grid" : "clean";
-      link.download = `poseboard-${selectedPose.name}-${suffix}-${targetWidth}x${targetHeight}.png`;
+      link.download = activeShot ? shotSnapshotFilename(projectName, activeShot.index, framing, exportMode === "setting" ? suffix : exportMode) : `poseboard-${selectedPose.name}-${suffix}-${targetWidth}x${targetHeight}.png`;
+      if (activeShot) {
+        const thumbnail = capturePoseThumbnail(output);
+        persistActiveTimelineShotScene();
+        commitTimeline((current) => ({ ...current, shots: current.shots.map((shot) => shot.id === activeShot.id ? { ...shot, thumbnail, snapshots: { ...shot.snapshots, [`${editor.ratio}:${exportMode}`]: { thumbnail, filename: link.download, capturedAt: Date.now() } } } : shot) }));
+      }
       link.click();
       flash(overlayOnly
         ? text("Transparent grid overlay exported", "透明网格 Overlay 已导出")
@@ -6172,6 +6425,40 @@ export default function Home() {
       renderer.render(scene, camera);
       setExporting(false);
     }
+  };
+
+  useEffect(() => {
+    if (!pendingGraphAction) return;
+    const timer = window.setTimeout(() => {
+      if (pendingGraphAction === "snapshot") void exportPng("clean");
+      else exportProjectJson();
+      setPendingGraphAction(null);
+    }, 220);
+    return () => window.clearTimeout(timer);
+  // Run after the graph's selected shot has restored its scene and React state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGraphAction, activeShotId, editor]);
+
+  useEffect(() => {
+    if (!pendingCloudSave) return;
+    const timer = window.setTimeout(() => {
+      setPendingCloudSave(false);
+      setCloudStatus("正在保存云端…");
+      void studioCloudRequest("PUT", buildStudioProject()).then(() => { setCloudStatus("云端项目已保存"); flash("舞台与项目已保存到云端"); }).catch((error) => { setCloudStatus(error instanceof Error ? error.message : "云端保存失败，请导出 JSON 备份"); });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  // Saving is explicit, and captures the render after stage records were updated.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCloudSave]);
+
+  const restoreCloudProject = async () => {
+    setCloudStatus("正在读取云端…");
+    try {
+      const { value, etag } = await studioCloudRequest("GET");
+      const restored = await importStudioProject(new File([JSON.stringify(value)], "cloud-project.json", { type: "application/json" }));
+      if (restored && etag) localStorage.setItem("poseboard.studio.etag", etag);
+      setCloudStatus(restored ? "云端项目已恢复" : "未替换当前项目");
+    } catch (error) { setCloudStatus(error instanceof Error ? error.message : "云端读取失败"); }
   };
 
   const resetAll = () => {
@@ -6210,9 +6497,11 @@ export default function Home() {
   };
 
   const currentSize = ratioSize[editor.ratio];
+  const activeTimelineShot = timeline.shots.find((shot) => shot.id === activeShotId);
   const zoomWidth = editor.ratio === "9:16" ? zoom * 0.43 : editor.ratio === "2:3" ? zoom * 0.58 : editor.ratio === "3:4" ? zoom * 0.66 : editor.ratio === "4:5" ? zoom * 0.69 : editor.ratio === "1:1" ? zoom * 0.72 : editor.ratio === "21:9" ? zoom * 1.08 : zoom;
   const toolLabels: Record<ActiveTool, string> = {
     pose: text("Pose", "姿势"),
+    stage: text("Stage", "舞台"),
     model: text("Models", "人物"),
     camera: text("Camera", "镜头"),
     perspective: text("Perspective", "透视"),
@@ -6226,7 +6515,7 @@ export default function Home() {
     "ik-edit": text("Fine-tune Pose", "微调姿势"),
     "perspective-edit": text("Edit Perspective", "编辑透视"),
   };
-  const nextTool: Record<ActiveTool, ActiveTool> = { pose: "camera", model: "pose", camera: "perspective", perspective: "lighting", lighting: "prompt", prompt: "convert", convert: "pose" };
+  const nextTool: Record<ActiveTool, ActiveTool> = { pose: "stage", stage: "camera", model: "pose", camera: "perspective", perspective: "lighting", lighting: "prompt", prompt: "convert", convert: "pose" };
   const goToNextTool = () => changeActiveTool(nextTool[activeTool]);
   const contextVisibilityAvailable = activeTool === "model" || activeTool === "perspective" || activeTool === "pose";
   const contextVisibilityVisible = activeTool === "model"
@@ -6458,6 +6747,7 @@ export default function Home() {
               <div className="artboard-label"><span /> {editor.ratio} · {currentSize[0]} × {currentSize[1]}</div>
               <div className="artboard-shell">
                 <div ref={viewportRef} className="three-viewport" />
+                {(shotFraming.safeFrame || shotFraming.guides) && <div className={`studio-guide-overlay ${shotFraming.safeFrame ? "with-safe" : ""} ${shotFraming.guides ? "with-thirds" : ""}`} aria-hidden="true"><i /><b /></div>}
                 <div className="canvas-image-layer" aria-label={text("Uploaded image layers", "已上传图片图层")}>
                   {canvasImages.map((image) => (
                     <button
@@ -6531,6 +6821,20 @@ export default function Home() {
           </div>
 
           <div className="inspector-content">
+            {activeTool === "stage" && <StagePanel
+              key={studioPromptSeed || "stage-panel"} initialPrompt={studioPromptSeed}
+              cloudStatus={cloudStatus} onCloudSave={() => { persistActiveTimelineShotScene(); saveStageRecord(); setPendingCloudSave(true); }} onCloudRestore={() => void restoreCloudProject()}
+              stage={stageSettings} stages={[...stageRecords.filter((r) => r.settings.id !== stageSettings.id).map((r) => r.settings), stageSettings]}
+              framing={{ ...shotFraming, ratio: editor.ratio, focalLength: editor.focalLength }} presets={customShotPresets}
+              ready={modelInfo.loaded} exporting={exporting}
+              currentShot={activeTimelineShot ? { id: activeTimelineShot.id, index: activeTimelineShot.index, title: activeTimelineShot.title, duration: activeTimelineShot.duration, pose: selectedPose.name, camera: `${editor.focalLength}mm · ${shotFraming.angle}`, framing: `${shotFraming.size} ${shotSizes[shotFraming.size]} · ${compositions[shotFraming.composition]} · ${editor.ratio}`, thumbnail: activeTimelineShot.thumbnail } : undefined}
+              onStage={updateStageSettings} onStageAction={stageAction} onSelectStage={selectStageRecord} onFraming={applyShotFraming}
+              onSavePreset={(name) => { const snapshot = captureSceneSnapshot(); setCustomShotPresets((presets) => [...presets, { id: crypto.randomUUID(), name, framing: snapshot.shotPreset!, camera: snapshot.camera }]); flash("已保存自定义景别与相机参数"); }}
+              onPreset={(id) => { const preset = customShotPresets.find((item) => item.id === id); if (!preset) return; const snapshot = captureSceneSnapshot(); snapshot.shotPreset = { ...preset.framing }; snapshot.camera = { ...preset.camera }; snapshot.editor.ratio = preset.framing.ratio; snapshot.editor.focalLength = preset.framing.focalLength; applySceneSnapshot(snapshot, true); }}
+              onCreateShots={(drafts) => { if (!timeline.shots.length || window.confirm("用这些分镜替换当前时间轴？可先导出项目备份。")) createTimelineFromPrompt(drafts); }}
+              onAddShot={addBlankTimelineShot} onUpdateShot={updateActiveTimelineShot} onSnapshot={(mode) => void exportPng(mode)}
+              onGraph={() => { setGraphOpen(true); setTimelineOpen(true); }} onExport={exportProjectJson} onImport={(file) => void importStudioProject(file)}
+            />}
             {activeTool === "model" && <>
               <div className="model-stack" aria-label={text("Canvas models", "画板模型列表")}>
                 <div className="model-stack-title"><span>{text("Canvas Models", "画板模型")}</span><small>{modelList.length} / 8</small></div>
@@ -6766,7 +7070,16 @@ export default function Home() {
           </div>
         </aside>
 
-        {timelineOpen && <VideoTimelinePanel
+        {timelineOpen && graphOpen && <StoryboardGraph graph={studioGraph} onChange={setStudioGraph} shots={timeline.shots} activeShotId={activeShotId}
+          onSelectShot={(id) => { const shot = timelineLatestRef.current.shots.find((s) => s.id === id); if (shot) selectTimelineShot(shot); changeActiveTool("stage"); }}
+          onRun={(kind, prompt) => {
+            if (kind === "parse" || kind === "prompt") { if (prompt) setStudioPromptSeed(prompt); else flash("请填写 Prompt 节点，并连接到解析节点"); changeActiveTool("stage"); }
+            else if (kind === "snapshot" || kind === "export") setPendingGraphAction(kind);
+            else if (kind === "timeline") setGraphOpen(false);
+            else changeActiveTool(kind === "pose" ? "pose" : kind === "camera" ? "camera" : kind === "lighting" ? "lighting" : "stage");
+          }}
+          onTimeline={() => setGraphOpen(false)} onMessage={flash} />}
+        {timelineOpen && !graphOpen && <VideoTimelinePanel
           timeline={timeline}
           animationTimeline={animationTimeline}
           playhead={timelinePlayhead}
@@ -6778,6 +7091,7 @@ export default function Home() {
           canUndo={timelineCanUndo}
           canRedo={timelineCanRedo}
           onCollapse={() => setTimelineOpen(false)}
+          onOpenGraph={() => { setGraphOpen(true); changeActiveTool("stage"); }}
           onOpenPrompt={() => setTimelinePromptOpen(true)}
           onAddShot={addBlankTimelineShot}
           onUpdateShot={updateActiveTimelineShot}
@@ -6865,7 +7179,7 @@ export default function Home() {
           <div className="prompt-footer">
             <button onClick={() => setTimelinePrompt(timelinePromptExample)}>{text("Load example", "载入示例")}</button>
             <button onClick={() => setTimelinePromptOpen(false)}>{text("Cancel", "取消")}</button>
-            <button className="primary" onClick={createTimelineFromPrompt} disabled={!timelinePromptPreview.timeline.shots.length || !modelInfo.loaded}><FilmStrip size={16} weight="fill" />{text("Create timeline", "创建时间轴")}</button>
+            <button className="primary" onClick={() => createTimelineFromPrompt()} disabled={!timelinePromptPreview.timeline.shots.length || !modelInfo.loaded}><FilmStrip size={16} weight="fill" />{text("Create timeline", "创建时间轴")}</button>
           </div>
         </section>
       </div>}

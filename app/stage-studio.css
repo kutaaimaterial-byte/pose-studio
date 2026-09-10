@@ -1,0 +1,59 @@
+.stage-panel { padding: 14px; color: var(--precision-ink); font-size: 14px; }
+.studio-release { display: flex; align-items: center; gap: 10px; color: var(--precision-blue); font: 700 12px/1.5 var(--mono); margin-bottom: 12px; }
+.studio-release span { color: var(--precision-secondary); font: 500 14px/1.5 sans-serif; }
+.studio-tabs { display: flex; border-bottom: 1px solid var(--precision-border); margin-bottom: 16px; }
+.stage-panel button, .studio-graph button { border: 1px solid var(--precision-border); border-radius: 6px; background: #fff; color: #344054; padding: 8px 10px; min-height: 34px; cursor: pointer; font-size: 14px; }
+.stage-panel button:hover, .studio-graph button:hover { border-color: var(--precision-blue); background: #f2f6ff; }
+.stage-panel button:disabled, .studio-graph button:disabled { opacity: .45; cursor: not-allowed; }
+.stage-panel .primary, .stage-panel button[aria-pressed="true"] { background: #edf4ff; border-color: var(--precision-blue); color: #1759d8; }
+.studio-tabs button { flex: 1; border: 0; padding: 8px 3px; border-radius: 0; background: transparent; white-space: nowrap; }
+.studio-tabs button[aria-selected="true"] { color: var(--precision-blue); border-bottom: 2px solid currentColor; font-weight: 700; }
+.studio-section { display: grid; gap: 14px; }
+.studio-section h3 { font-size: 14px; margin: 0; }
+.studio-section label { display: grid; gap: 6px; min-width: 0; font-size: 13px; color: #526174; }
+.studio-section select, .studio-section input:not([type="range"]):not([type="checkbox"]), .studio-section textarea, .studio-graph select, .studio-graph textarea { width: 100%; min-width: 0; min-height: 36px; border: 1px solid var(--precision-border); background: #f9fbfe; color: #182230; border-radius: 6px; padding: 8px; font: inherit; }
+.studio-section textarea { resize: vertical; line-height: 1.6; }
+.studio-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.studio-stage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.studio-size-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.studio-size-grid button { display: grid; place-items: center; gap: 4px; padding: 10px 2px; }
+.studio-size-grid span { font-size: 12px; }
+.studio-slider span { display: flex; justify-content: space-between; }
+.studio-slider input { width: 100%; accent-color: var(--precision-blue); }
+.studio-checks { display: flex; flex-wrap: wrap; gap: 12px; }
+.studio-checks label { display: flex; align-items: center; }
+.studio-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.studio-hint { color: #64748b; line-height: 1.6; font-size: 13px; margin: 0; }
+.studio-warning { color: #9a560c; font-size: 13px; margin: 0; }
+.studio-draft, .studio-shot-summary { padding: 12px; border: 1px solid var(--precision-border); border-radius: 8px; display: grid; gap: 8px; background: #f8faff; }
+.studio-draft p { line-height: 1.6; margin: 0; font-size: 13px; }
+.studio-draft small, .studio-shot-summary span, .studio-shot-summary small { color: #64748b; font-size: 12px; }
+.studio-shot-summary { margin-top: 18px; }
+.studio-shot-summary img { max-width: 100%; max-height: 160px; justify-self: center; object-fit: contain; border-radius: 5px; }
+.stage-panel .studio-node-entry { width: 100%; margin-top: 14px; }
+.studio-file { position: relative; padding: 8px; border: 1px solid var(--precision-border); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.studio-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.studio-guide-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.studio-guide-overlay.with-safe::before, .studio-guide-overlay.with-safe::after { content: ""; position: absolute; inset: 5%; border: 1px dashed #ffffffbb; box-shadow: 0 0 1px #182230; }
+.studio-guide-overlay.with-safe::after { inset: 10%; }
+.studio-guide-overlay.with-thirds i, .studio-guide-overlay.with-thirds b { position: absolute; inset: 0 33.333%; border-inline: 1px solid #ffffff99; }
+.studio-guide-overlay.with-thirds b { inset: 33.333% 0; border: 0; border-block: 1px solid #ffffff99; }
+.studio-view-toggle { display: flex; gap: 4px; position: absolute; z-index: 20; left: 16px; bottom: 12px; padding: 4px; background: #fff; border: 1px solid var(--precision-border); border-radius: 7px; }
+.studio-view-toggle button { padding: 6px 12px; border: 0; color: #526174; background: transparent; border-radius: 4px; font-size: 13px; cursor: pointer; }
+.studio-view-toggle button[aria-pressed="true"] { background: #edf4ff; color: #246bfd; }
+.studio-graph { grid-area: timeline; min-height: 0; overflow: hidden; background: #f4f7fb; display: flex; flex-direction: column; border-top: 1px solid var(--precision-border); }
+.studio-graph-header { padding: 8px 14px; display: flex; align-items: center; gap: 8px; background: #fff; border-bottom: 1px solid var(--precision-border); flex-wrap: wrap; }
+.studio-graph-header strong { font-size: 14px; margin-right: auto; }
+.studio-graph-header select { width: auto; }
+.studio-graph-scroll { overflow: auto; flex: 1; min-height: 0; }
+.studio-graph-world { position: relative; min-width: 1600px; min-height: 680px; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; }
+.studio-graph-world > svg { position: absolute; inset: 0; pointer-events: none; }
+.studio-graph-node { position: absolute; width: 218px; border: 1px solid #c5d2e3; border-radius: 9px; background: #fff; box-shadow: 0 3px 12px #1822300b; padding: 10px; display: grid; gap: 8px; }
+.studio-graph-node.selected { border-color: #246bfd; box-shadow: 0 0 0 2px #246bfd22; }
+.studio-graph-node .node-handle { border: 0; border-radius: 0; font-weight: 650; color: #246bfd; cursor: grab; padding: 4px 0; text-align: left; touch-action: none; }
+.studio-graph-node textarea { height: 80px; font-size: 12px; }
+.studio-node-ports { display: flex; justify-content: space-between; gap: 8px; }
+.studio-node-ports button { font-size: 12px; min-height: 28px; padding: 3px 6px; }
+.studio-graph-help { margin: 0; padding: 6px 14px; color: #64748b; font-size: 12px; background: #fff; }
+.studio-graph-node small { color: #64748b; font-size: 12px; }
+@media (max-width: 1100px) { .topbar .tool-rail-list { gap: 2px; } .topbar .tool-rail button { min-width: 56px; padding-inline: 5px; } }

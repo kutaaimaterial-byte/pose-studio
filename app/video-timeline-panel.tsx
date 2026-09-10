@@ -40,6 +40,7 @@ type VideoTimelinePanelProps<TSnapshot> = {
   canUndo: boolean;
   canRedo: boolean;
   onCollapse: () => void;
+  onOpenGraph: () => void;
   onOpenPrompt: () => void;
   onAddShot: () => void;
   onUpdateShot: () => void;
@@ -92,6 +93,7 @@ export function VideoTimelinePanel<TSnapshot>({
   canUndo,
   canRedo,
   onCollapse,
+  onOpenGraph,
   onOpenPrompt,
   onAddShot,
   onUpdateShot,
@@ -161,7 +163,7 @@ export function VideoTimelinePanel<TSnapshot>({
       <header className="timeline-header">
         <div className="timeline-heading">
           <span className="timeline-heading-icon"><FilmStrip size={17} weight="fill" /></span>
-          <div><strong>{text("Animation Sequencer", "动画时间轴")}</strong><small>V3.3 · {timeline.shots.length} Shots · {text("Independent character + camera motion", "人物与镜头独立运动")} · {timeline.fps} FPS</small></div>
+          <div><strong>{text("Animation Sequencer", "动画时间轴")}</strong><small>V3.4 · {timeline.shots.length} Shots · {text("Stage + shot framing", "舞台与景别分镜")} · {timeline.fps} FPS</small></div>
         </div>
         <div className="timeline-header-actions">
           <select className="timeline-motion-select" value={activeAnimationShot?.motionId ?? ""} onChange={(event) => {
@@ -189,6 +191,7 @@ export function VideoTimelinePanel<TSnapshot>({
           <button className="icon-only" onClick={onUndo} disabled={!canUndo} title={text("Undo timeline edit", "撤销时间轴编辑")}><ArrowCounterClockwise size={16} /></button>
           <button className="icon-only" onClick={onRedo} disabled={!canRedo} title={text("Redo timeline edit", "重做时间轴编辑")}><ArrowClockwise size={16} /></button>
           <button className="icon-only" onClick={onExport} disabled={!timeline.shots.length} title={text("Export timeline JSON", "导出时间轴 JSON")}><DownloadSimple size={16} /></button>
+          <button onClick={onOpenGraph}>{text("Nodes", "节点视图")}</button>
           <button className="icon-only" onClick={onCollapse} title={text("Collapse timeline", "收起时间轴")}><CaretDown size={17} /></button>
         </div>
       </header>

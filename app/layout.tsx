@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./precision-light.css";
+import "./stage-studio.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://poseboard-3d-studio.kutaaimaterial.chatgpt.site"),

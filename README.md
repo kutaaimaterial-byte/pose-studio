@@ -1,5 +1,9 @@
 # PoseBoard 3D Studio
 
+## V3.4 Stage & Shot Studio
+
+The latest version adds the **舞台** tool: seven stage environments, eight shot sizes, camera/composition presets, editable local Prompt-to-Shot parsing, per-shot/ratio snapshots, and a complementary node graph. Existing poses, timeline editing and independent character/camera animation remain available. Use **保存云端项目** for a private project backup or export/import V3.4 JSON. See [V3.4 release notes](docs/RELEASE_V3.4.md) for workflow, storage and compatibility details.
+
 PoseBoard is a canvas-first 3D posing workspace for illustrators, storyboard artists and AI image creators. Version `1.0.3` introduces the V4 workstation UI: a compact global header, a dedicated tool rail, one contextual panel at a time and a larger uninterrupted artboard.
 
 ## Version branches

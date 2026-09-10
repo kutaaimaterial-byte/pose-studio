@@ -13,11 +13,12 @@ import {
   Sparkle,
 } from "@phosphor-icons/react";
 
-export type ActiveTool = "pose" | "model" | "camera" | "perspective" | "lighting" | "prompt" | "convert";
+export type ActiveTool = "pose" | "stage" | "model" | "camera" | "perspective" | "lighting" | "prompt" | "convert";
 export type InteractionMode = "camera-browse" | "model-transform" | "ik-edit" | "perspective-edit";
 
 const toolIcons = {
   pose: Sparkle,
+  stage: CubeFocus,
   model: Cube,
   camera: Camera,
   perspective: Perspective,
