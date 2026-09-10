@@ -142,6 +142,7 @@ test("keeps the Precision Light workstation responsive and restrained", async ()
   assert.match(precisionCss, /\.context-panel-reopen\s*\{[^}]*position:\s*absolute/s);
   assert.match(precisionCss, /\.panel-collapsed \.topbar > \.tool-rail > \.tool-rail-collapse\s*\{[^}]*display:\s*none\s*!important/s);
   assert.match(precisionCss, /\.artboard-command-bar\s*\{[^}]*flex-direction:\s*column/s);
+  assert.match(precisionCss, /\.zoom-control button\s*\{[^}]*display:\s*grid;[^}]*place-items:\s*center/s);
   assert.match(precisionCss, /\.timeline-open \.workspace[\s\S]*"timeline timeline"/s);
   assert.match(page, /interactionModeRef\.current === "camera-browse" && !cameraLockedRef\.current/);
   assert.match(page, /const syncTransformController = \(mode: "translate" \| "rotate"/);

@@ -2,6 +2,19 @@
 
 final result: passed
 
+## Latest focused alignment check
+
+- Source visual truth: `/var/folders/l3/pplm615152ggk5m3ysjl2n1h0000gn/T/codex-clipboard-5fe9375c-bda4-4bcf-99c8-af264805914f.png` at 172 x 398 pixels.
+- Browser-rendered implementation: `/private/tmp/poseboard-zoom-centered-full.jpg` at 2032 x 1392 pixels; CSS viewport 2032 x 1392 at device scale 1.
+- Focused implementation crop: `/private/tmp/poseboard-zoom-centered-crop.png` at 145 x 285 pixels.
+- Focused side-by-side evidence: `/private/tmp/poseboard-zoom-alignment-comparison.png`.
+- State: Chinese UI, 9:16 artboard, pose panel open, timeline open.
+- Earlier P2 finding: the plus and minus glyphs were left-shifted because their buttons inherited a non-centered layout.
+- Fix: the four zoom-control buttons now use the same centered grid alignment; their SVGs are block-level with zero margin.
+- Post-fix evidence: plus, minus, fit-artboard, and fit-person icons share one vertical centerline. No remaining P0, P1, or P2 findings.
+- Full-view evidence was checked for regressions; the focused crop was required because the reported issue concerns a 42-pixel-wide control.
+- Typography, colors, imagery, copy, and surrounding spacing are unchanged from the previously passed Precision Light QA.
+
 ## Evidence
 
 - Selected visual direction: `/var/folders/l3/pplm615152ggk5m3ysjl2n1h0000gn/T/codex-clipboard-bcde7339-69af-4a04-97eb-887bc12cdefd.png`.

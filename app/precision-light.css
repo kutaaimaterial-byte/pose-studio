@@ -127,8 +127,8 @@
 .artboard-command-bar button:nth-of-type(n+4) { height: 36px; }
 .artboard-command-bar .command-bar-divider { width: 30px; height: 1px; margin: 3px 0; }
 .zoom-control { width: 42px; height: auto; top: 14px; right: 14px; bottom: auto; left: auto; flex-direction: column; gap: 2px; padding: 4px; transform: none; border-radius: 9px; }
-.zoom-control button { width: 34px; min-width: 34px; height: 34px; padding: 0; font-size: 0; }
-.zoom-control button svg { width: 16px; height: 16px; }
+.zoom-control button { width: 34px; min-width: 34px; height: 34px; display: grid; place-items: center; padding: 0; font-size: 0; line-height: 1; text-align: center; }
+.zoom-control button svg { width: 16px; height: 16px; display: block; margin: 0; }
 .zoom-control button span { display: none; }
 .zoom-control > button:nth-child(1) { order: 2; }
 .zoom-control > button:nth-child(2) { display: none; }
