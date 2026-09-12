@@ -1,3 +1,5 @@
+import { authoredPoseExpansion } from "./action-authoring";
+
 export type PoseCategory =
   | "standing"
   | "walking"
@@ -407,6 +409,19 @@ export const poseItems: PoseItem[] = (Object.entries(poseNamesByCategory) as Arr
     };
   }),
 );
+
+for (const authored of authoredPoseExpansion) {
+  if (poseItems.some((item) => item.id === authored.id || item.name === authored.name)) continue;
+  const base = poseItems.find((item) => item.name === authored.base);
+  if (!base) throw new Error(`Missing authored pose base: ${authored.base}`);
+  const index = poseItems.length;
+  poseItems.push({ ...base, id: authored.id, name: authored.name, nameEn: authored.name,
+    category: authored.category, tags: [...authored.tags, ...authored.supports, "静态"],
+    aliases: [authored.name, ...authored.tags], direction: "front", intensity: "static",
+    previewAngle: 0, featured: authored.id === "pose-v35-bow" || authored.id === "pose-v35-lean-reach",
+    enginePoseIndex: index, sortOrder: index, poseAsset: `authored://${authored.id}`,
+    thumbnail: `procedural://${authored.id}`, status: authored.release === "ready" ? "ready" : "missing" });
+}
 
 export const defaultPose = poseItems.find((pose) => pose.id === "standing_natural") ?? poseItems[0];
 

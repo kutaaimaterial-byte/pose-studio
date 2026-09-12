@@ -1,5 +1,11 @@
 # PoseBoard 3D Studio
 
+## V3.5 action library — initial usable release
+
+Open a project → **姿势 → 姿态 / 动态 / 双人互动**. This incremental release adds **10 reviewed static poses and 3 interactions**, and offers **21 reviewed motions** including upgrades merged with existing entries. Preview is isolated; explicitly append a new action shot/version, or pause and save a pose/image. The full requested 88/48/24 expansion is **not finished**; unreviewed definitions are excluded from normal cards. See [scope, licensing and remaining work](docs/ACTION_LIBRARY_V3.5.md).
+
+Projects continue to save in this browser's IndexedDB, with the existing project import/export flow. No new cloud-sync claim or permanent left sidebar is introduced.
+
 ## V3.4 Stage & Shot Studio
 
 The latest version adds the **舞台** tool: seven stage environments, eight shot sizes, camera/composition presets, editable local Prompt-to-Shot parsing, per-shot/ratio snapshots, and a complementary node graph. Existing poses, timeline editing and independent character/camera animation remain available. Use **保存云端项目** for a private project backup or export/import V3.4 JSON. See [V3.4 release notes](docs/RELEASE_V3.4.md) for workflow, storage and compatibility details.

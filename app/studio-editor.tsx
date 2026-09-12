@@ -1,5 +1,6 @@
 "use client";
 import type { EditorBridge, PageView } from "./project-store";
+import actionCoverManifest from "../public/assets/actions/covers.json";
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -118,6 +119,15 @@ import { RecipeViewport, generateRecipeThumbnails, makeRecipeCamera, renderRecip
 import { shotRecipes, shotSuites, planForRecipes, recommendRecipePlan, orderedShotIds, composedRecipeCamera, nudgeRecipeCamera, arrangedRecipe, type CameraNudge, type RecipeActor, type RecipeCamera, type RecipePlan, type RecipeRatio } from "./shot-recipes";
 import { studioCloudRequest } from "./studio-cloud";
 import { cameraForShot, createStageEnvironment, disposeStageEnvironment, drawShotGuides } from "./stage-scene";
+import { authoredPoseByName } from "./action-authoring";
+import { actionPresets, type ActionPreset } from "./motion-authoring";
+import { authoredInteractions } from "./interaction-authoring";
+import { bakeActionClip,bakeInteractionClip,compactActionClip,actionPropId,sampleActionProp, type ActionRigAdapter, type RigSample } from "./action-runtime";
+import {loadActionSources,sampleSourceAction,sourceActionDuration} from "./action-source";
+import {shapeActionHand} from "./hand-shapes";
+import { ActionLibrary } from "./action-library";
+import { createActionProp,disposeActionProps,type ActionProp } from "./action-props";
+const allActionPresets=[...actionPresets,...authoredInteractions];
 import { compositions, defaultShotPreset, defaultStage, normalizeShotPreset, parseShotPrompt, shotSnapshotFilename, shotSizes, stageTypes, syncShotCards, type CustomShotPreset, type ShotDraft, type ShotPreset, type StageRecord, type StageSettings, type StudioGraph } from "./stage-studio";
 import {
   animationLocalTime,
@@ -131,6 +141,7 @@ import {
   snapAnimationTime,
   upsertAnimationKeyframe,
   type AnimationInterpolation,
+  type AnimationShot,
   type AnimationTrack,
   type AnimationTimeline,
   type BoneQuaternionSnapshot,
@@ -279,6 +290,7 @@ const timelinePromptExample = `总时长15秒，画面9:16，24fps。
 const readPlaybackClock = () => globalThis.performance.now();
 
 type EditorState = {
+  rigPose?: RigSample;
   pose: number;
   mirrored: boolean;
   ratio: Ratio;
@@ -308,6 +320,7 @@ type EditorState = {
 };
 
 type SavedPoseRecord = {
+  rigPose?: RigSample;
   id: string;
   basePoseId: string;
   name: string;
@@ -347,6 +360,7 @@ type ShotModelSnapshot = {
 };
 
 type ShotSceneSnapshot = {
+  actionProps?:ActionProp[];
   recipeId?: string;
   stage?: StageSettings;
   shotPreset?: ShotPreset;
@@ -1224,6 +1238,12 @@ function createJumpingJointPose(name: string): JointPose {
 }
 
 function createSemanticJointPose(item: PoseItem): JointPose {
+  const authored = authoredPoseByName.get(item.name);
+  if (authored) {
+    const base = poseItems.find((pose) => pose.name === authored.base);
+    if (!base) throw new Error(`Missing pose base: ${authored.base}`);
+    return poseWithBase(createSemanticJointPose(base), authored.joints);
+  }
   // V2 does not infer poses by overlapping tags. Every primary category now
   // resolves through its own authored parameter table, so the title is the
   // single source of truth for the skeleton shape.
@@ -1406,7 +1426,7 @@ const poseParametersByEngineIndex = new Map<number, PoseRuntimeParameter>();
 const semanticJointPoses: JointPose[] = [];
 // Bump this whenever authored pose parameters change. It forces both the live
 // artboard and the generated covers to discard poses left by Fast Refresh.
-const poseSolverRevision = "pose-engine-v2-skeleton-only-2";
+const poseSolverRevision = "pose-engine-v35-actions-1";
 poseItems.forEach((item) => {
   const parameter = buildPoseRuntimeParameter(item);
   poseParametersByEngineIndex.set(item.enginePoseIndex, parameter);
@@ -1849,7 +1869,23 @@ function getArmIKTargets(item: PoseItem | undefined, mirrored: boolean): ArmIKTa
   const name = item.name;
   let targets: ArmIKTarget[] = [];
 
-  if (/起跑准备|冲刺起步/.test(name)) {
+  if (/^双臂护头$/.test(name)) {
+    targets=[{side:"left",anchor:"head",offset:[.28,.06,.16],pole:[.9,-.25,.5],handDirection:[0,.8,.2]},{side:"right",anchor:"head",offset:[-.28,.06,.16],pole:[-.9,-.25,.5],handDirection:[0,.8,.2]}];
+  } else if (/^双拳防守$/.test(name)) {
+    targets=[{side:"left",anchor:"head",offset:[.3,-.24,.52],pole:[.7,-.65,.6],handDirection:[0,.8,.2]},{side:"right",anchor:"head",offset:[-.3,-.2,.44],pole:[-.7,-.65,.6],handDirection:[0,.8,.2]}];
+  } else if (/^前手直拳定格$/.test(name)) {
+    targets=[{side:"left",anchor:"chest",offset:[.2,.2,1.35],pole:[.65,-.25,1],handDirection:[0,0,1]},{side:"right",anchor:"head",offset:[-.28,-.24,.5],pole:[-.7,-.6,.6],handDirection:[0,.8,.2]}];
+  } else if (/^单腿提膝$/.test(name)) {
+    targets=[{side:"left",anchor:"chest",offset:[.38,-.1,.55],pole:[.8,-.6,.45],handDirection:[0,.5,.5]},{side:"right",anchor:"pelvis",offset:[-.5,.2,-.1],pole:[-.9,-.2,0],handDirection:[0,0,-1]}];
+  } else if (/^张臂奔向前方$/.test(name)) {
+    targets=[{side:"left",anchor:"chest",offset:[1.05,-.05,.6],pole:[1,-.2,.4],handDirection:[0,0,1]},{side:"right",anchor:"chest",offset:[-1.05,-.05,.6],pole:[-1,-.2,.4],handDirection:[0,0,1]}];
+  } else if (/^跪姿双手前伸$/.test(name)) {
+    targets=[{side:"left",anchor:"chest",offset:[.32,-.12,1.15],pole:[.8,-.5,.6],handDirection:[0,0,1]},{side:"right",anchor:"chest",offset:[-.32,-.12,1.15],pole:[-.8,-.5,.6],handDirection:[0,0,1]}];
+  } else if (/^跪姿掩面$|^坐姿掩面$/.test(name)) {
+    targets=[{side:"left",anchor:"head",offset:[.14,-.18,.25],pole:[.7,-.5,.6],handDirection:[0,1,0]},{side:"right",anchor:"head",offset:[-.14,-.18,.28],pole:[-.7,-.5,.6],handDirection:[0,1,0]}];
+  } else if (/^前倾伸手$|^奔跑中伸手够物$|^坐姿前伸递物$|^单膝跪姿伸手扶人$/.test(name)) {
+    targets=[{side:"right",anchor:"chest",offset:[-.32,-.2,1.05],pole:[-.85,-.45,.45],handDirection:[0,0,1]}];
+  } else if (/起跑准备|冲刺起步/.test(name)) {
     // Sprinter start: both hands reach below and slightly ahead of the pelvis.
     // Separate X/Z offsets keep the palms from overlapping each other.
     targets = [
@@ -2485,6 +2521,143 @@ function applyRigPose(rig: RigBinding, poseIndex: number, mirrored = false) {
     applyRigBoneTranslation(rig, "Hips", mirroredPosition);
     rig.root.updateMatrixWorld(true);
   }
+  if(poseItem&&/^(双拳防守|前手直拳定格)$/.test(poseItem.name)){
+    restoreRigSample(rig,shapeActionHand(shapeActionHand(snapshotActionRig(rig),"left","fist"),"right","fist"));
+  }
+}
+
+function snapshotActionRig(rig: RigBinding): RigSample {
+  const bones: BoneQuaternionSnapshot = {}, bonePositions: Record<string, [number,number,number]> = {};
+  rig.bonesByName.forEach((bone,name) => { bones[name]=bone.quaternion.toArray() as [number,number,number,number]; bonePositions[name]=bone.position.toArray() as [number,number,number]; });
+  return {bones,bonePositions,rigPosition:rig.root.position.toArray() as [number,number,number]};
+}
+
+function restoreRigSample(rig: RigBinding, sample: RigSample | undefined) {
+  if(!sample)return;
+  Object.entries(sample.bones).forEach(([name,q])=>rig.bonesByName.get(name)?.quaternion.set(...q));
+  Object.entries(sample.bonePositions??{}).forEach(([name,p])=>rig.bonesByName.get(name)?.position.set(...p));
+  if(sample.rigPosition)rig.root.position.set(...sample.rigPosition);
+  rig.root.updateMatrixWorld(true);
+}
+
+function readRigSample(value:unknown):RigSample|undefined {
+  if(!value||typeof value!=="object")return;
+  const sample=value as RigSample;
+  const vectors=(map:unknown,n:number)=>!!map&&typeof map==="object"&&Object.entries(map).length<=256&&Object.values(map).every(v=>Array.isArray(v)&&v.length===n&&v.every(Number.isFinite));
+  if(!vectors(sample.bones,4)||sample.bonePositions&&!vectors(sample.bonePositions,3)||sample.rigPosition&&(!Array.isArray(sample.rigPosition)||sample.rigPosition.length!==3||!sample.rigPosition.every(Number.isFinite)))return;
+  return structuredClone(sample);
+}
+
+function createActionRigAdapter(template: THREE.Object3D): ActionRigAdapter {
+  const clone=cloneSkeleton(template), rig=createRigBinding(clone);
+  if(!rig) throw new Error("当前人物缺少动作所需的人形骨骼");
+  applyRigPose(rig,defaultPose.enginePoseIndex);
+  const feet={left:rig.humanoidBones.LeftFoot!.getWorldPosition(new THREE.Vector3()).toArray() as [number,number,number],right:rig.humanoidBones.RightFoot!.getWorldPosition(new THREE.Vector3()).toArray() as [number,number,number]};
+  const hands={left:rig.humanoidBones.LeftHand!.getWorldPosition(new THREE.Vector3()).toArray() as [number,number,number],right:rig.humanoidBones.RightHand!.getWorldPosition(new THREE.Vector3()).toArray() as [number,number,number]};
+  const sourceAnchors=new Map<string,[number,number,number]>();
+  return {
+    feet,hands,
+    nudge(pose,joints){restoreRigSample(rig,pose);for(const joint of rigJointOrder){const rotation=joints[joint];if(rotation)applyRigJointRotation(rig,joint,rotation);}return snapshotActionRig(rig);},
+    source(name,time){
+      applyRigPose(rig,defaultPose.enginePoseIndex);
+      let anchor=sourceAnchors.get(name);
+      if(!anchor){restoreRigSample(rig,sampleSourceAction(name,0));groundRigInParentSpace(rig);anchor=rig.root.position.toArray() as [number,number,number];sourceAnchors.set(name,anchor);}
+      restoreRigSample(rig,sampleSourceAction(name,time));rig.root.position.set(...anchor);rig.root.updateMatrixWorld(true);
+      return snapshotActionRig(rig);
+    },
+    point:name=>{const bone=rig.humanoidBones[name as HumanoidBoneName]??rig.bonesByName.get(name);if(!bone)throw new Error(`缺少骨骼 ${name}`);return bone.getWorldPosition(new THREE.Vector3()).toArray() as [number,number,number];},
+    poseIndex: name => { const pose=poseItems.find(item=>item.name===name); if(!pose)throw new Error(`动作缺少姿态：${name}`); return pose.enginePoseIndex; },
+    sample(name,edits={}) {
+      const pose=poseItems.find(item=>item.name===name); if(!pose)throw new Error(`动作缺少姿态：${name}`);
+      applyRigPose(rig,pose.enginePoseIndex);
+      for(const joint of rigJointOrder) {
+        const angles=edits[joint];if(!angles)continue;
+        const bone=rig.humanoidBones[jointToBone[joint]];
+        if(bone)bone.quaternion.copy(rig.restQuaternions.get(bone)!);
+        const limb=/^(left|right)/.test(joint);
+        const value=getSafeRigJointRotation(joint,limb?mirrorRotation(angles):angles,1);
+        if(joint==="leftArm")value[2]-=90;
+        if(joint==="rightArm")value[2]+=90;
+        applyRigJointRotation(rig,joint,value);
+      }
+      groundRigInParentSpace(rig);
+      return snapshotActionRig(rig);
+    },
+    refine(value,targets,handTargets,directions) {
+      Object.entries(value.bones).forEach(([name,q])=>rig.bonesByName.get(name)?.quaternion.set(...q));
+      Object.entries(value.bonePositions??{}).forEach(([name,p])=>rig.bonesByName.get(name)?.position.set(...p));
+      if(value.rigPosition)rig.root.position.set(...value.rigPosition);
+      rig.root.updateMatrixWorld(true);
+      if(targets) for(const side of ["left","right"] as const) {
+        const target=new THREE.Vector3(...targets[side]);
+        const chain=effectorChains[side==="left"?"LeftFoot":"RightFoot"];
+        solveTwoBoneRigChain(rig,chain,target,target.clone().add(new THREE.Vector3(0,.6,1.5)));
+      }
+      if(handTargets)for(const side of ["left","right"] as const){
+        const point=handTargets[side];if(!point)continue;
+        const target=new THREE.Vector3(...point);
+        solveTwoBoneRigChain(rig,effectorChains[side==="left"?"LeftHand":"RightHand"],target,target.clone().add(new THREE.Vector3(side==="left"?.6:-.6,-.4,-.4)));
+        const orientation=directions?.[side];
+        if(orientation){
+          const hand=rig.humanoidBones[side==="left"?"LeftHand":"RightHand"]!,suffix=side==="left"?"l":"r";
+          const middle=rig.bonesByName.get(`middle_01_${suffix}`)!,thumb=rig.bonesByName.get(`thumb_01_${suffix}`)!;
+          const d=middle.position.clone().normalize(),up=thumb.position.clone().addScaledVector(d,-thumb.position.dot(d)).normalize(),normal=d.clone().cross(up).normalize();
+          const forward=new THREE.Vector3(...orientation.direction).normalize(),upReference=Math.abs(forward.y)>.9?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0),worldUp=upReference.addScaledVector(forward,-upReference.dot(forward)).normalize();
+          const localBasis=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(d,up,normal));
+          const desired=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(forward,worldUp,forward.clone().cross(worldUp))).multiply(localBasis.invert());
+          desired.premultiply(hand.parent!.getWorldQuaternion(new THREE.Quaternion()).invert());hand.quaternion.slerp(desired,orientation.weight);hand.updateMatrixWorld(true);
+        }
+      }
+      rig.root.updateMatrixWorld(true);
+      return snapshotActionRig(rig);
+    },
+  };
+}
+
+function renderActionCovers(template:THREE.Object3D,action:ActionPreset,ratio:string,samples=3) {
+  const adapter=createActionRigAdapter(template),clip=action.partners?bakeInteractionClip(action,[{id:"cover",adapter},{id:"cover-b",adapter:createActionRigAdapter(template)}]):bakeActionClip(action,"cover",adapter,[0,0,0],[0,0,0],100);
+  const model=cloneSkeleton(template),rig=createRigBinding(model)!;
+  const root=new THREE.Group();root.add(model);
+  model.traverse(child=>{if(child instanceof THREE.Mesh)child.material=createMannequinMaterial();});
+  const scene=new THREE.Scene();scene.background=new THREE.Color("#e9edf2");scene.add(root,new THREE.HemisphereLight(0xffffff,0x8291a6,1.6));
+  const actors=[{id:"cover",model,rig,root}];
+  if(action.partners){const modelB=cloneSkeleton(template),rigB=createRigBinding(modelB)!,rootB=new THREE.Group();rootB.add(modelB);modelB.traverse(child=>{if(child instanceof THREE.Mesh)child.material=createMannequinMaterial();});scene.add(rootB);actors.push({id:"cover-b",model:modelB,rig:rigB,root:rootB});}
+  const props=new THREE.Group();actionSupportLayout(action,adapter,"cover",[0,0,0],[0,0,0],100).forEach(prop=>props.add(createActionProp(prop)));scene.add(props);
+  const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(4,7,5);scene.add(light);
+  const apply=(t:number)=>{
+    if(action.sharedProp){const prop=props.getObjectByName(actionPropId(action,"cover")),value=evaluateAnimationShot(clip,t,actionPropId(action,"cover")).root;if(prop&&value)prop.position.set(...value.position);}
+    for(const {id,rig,root} of actors){
+    const value=evaluateAnimationShot(clip,t,id);
+    Object.entries(value.pose?.bones??{}).forEach(([name,q])=>rig.bonesByName.get(name)?.quaternion.set(...q));
+    Object.entries(value.pose?.bonePositions??{}).forEach(([name,p])=>rig.bonesByName.get(name)?.position.set(...p));
+    if(value.pose?.rigPosition)rig.root.position.set(...value.pose.rigPosition);
+    if(value.root){root.position.set(...value.root.position);root.rotation.y=THREE.MathUtils.degToRad(value.root.rotation[1]);}
+    root.updateMatrixWorld(true);root.traverse(child=>{if(child instanceof THREE.SkinnedMesh){child.skeleton.update();child.computeBoundingBox();}});
+    }
+  };
+  const bounds=new THREE.Box3();
+  for(const f of [0,.07,.18,.31,.43,.56,.69,.82,.94,1]){apply(action.duration*f);for(const actor of actors)bounds.union(new THREE.Box3().setFromObject(actor.root));}
+  if(action.framing==="upper")bounds.min.y+=bounds.getSize(new THREE.Vector3()).y*.42;
+  const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+  const aspect=ratio==="16:9"?16/9:9/16,camera=new THREE.PerspectiveCamera(36,aspect,.05,100);
+  const distance=Math.max(size.y,size.x/aspect)*.5/Math.tan(Math.PI/10)*1.15+size.z*.55;
+  camera.position.copy(center).add(new THREE.Vector3(.25,.12,1).normalize().multiplyScalar(distance));camera.lookAt(center);
+  const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(ratio==="16:9"?640:360,ratio==="16:9"?360:640,false);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  const moments=samples===3?(action.sourceClip&&action.loop?[.1,.4,.7].map(f=>f/(action.sourceCycles??1)):[.25,.5,.75]):Array.from({length:samples},(_,i)=>i/samples);
+  try{return moments.map(f=>{apply(action.duration*f);renderer.render(scene,camera);return renderer.domElement.toDataURL("image/jpeg",.84);});}
+  finally{disposeActionProps(props);for(const actor of actors)actor.model.traverse(child=>{if(child instanceof THREE.Mesh)(Array.isArray(child.material)?child.material:[child.material]).forEach(material=>material.dispose());});renderer.dispose();renderer.forceContextLoss();}
+}
+
+function actionSupportLayout(action:ActionPreset,adapter:ActionRigAdapter,actorId:string,position:[number,number,number],rotation:[number,number,number],scale:number):ActionProp[]{
+  if(action.sharedProp){const s=scale/100,p=new THREE.Vector3(...sampleActionProp(action,0)).multiplyScalar(s).applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(rotation[1])).add(new THREE.Vector3(...position));return [{id:actionPropId(action,actorId),actorId,kind:action.sharedProp.kind,position:p.toArray(),rotation:[0,rotation[1],0],size:action.sharedProp.size.map(v=>v*s) as [number,number,number]}];}
+  if(!action.props.includes("chair"))return [];
+  const sitting=action.phases.find(phase=>phase.pose==="自然正坐")??action.phases.at(-1)!;
+  if(action.sourceClip)adapter.source(action.sourceClip,action.id==="action-sit"?sourceActionDuration(action.sourceClip):0);
+  else adapter.sample(sitting.pose,sitting.joints);
+  const hip=new THREE.Vector3(...adapter.point("Hips")).add(new THREE.Vector3(...(action.sourceClip?[0,0,0]:sitting.root??[0,0,0])));
+  const s=scale/100,yaw=THREE.MathUtils.degToRad(rotation[1]);
+  const at=new THREE.Vector3(hip.x,0,hip.z-.1).multiplyScalar(s).applyAxisAngle(new THREE.Vector3(0,1,0),yaw).add(new THREE.Vector3(...position));
+  return [{id:`support-chair-${actorId}`,actorId,kind:"chair",position:at.toArray(),rotation:[0,rotation[1],0],size:[1.05*s,Math.max(.4,hip.y-.16)*s,1.05*s]}];
 }
 
 (globalThis as typeof globalThis & {
@@ -2492,8 +2665,13 @@ function applyRigPose(rig: RigBinding, poseIndex: number, mirrored = false) {
     createRigBinding: typeof createRigBinding;
     applyRigPose: typeof applyRigPose;
     poses: typeof poseItems;
+    createActionRigAdapter: typeof createActionRigAdapter;
+    renderActionCovers: typeof renderActionCovers;
+    loadActionSources: typeof loadActionSources;
+    bakeActionClip: typeof bakeActionClip;
+    bakeInteractionClip: typeof bakeInteractionClip;
   };
-}).__POSEBOARD_ENGINE_DEBUG__ = { createRigBinding, applyRigPose, poses: poseItems };
+}).__POSEBOARD_ENGINE_DEBUG__ = { createRigBinding, applyRigPose, poses: poseItems, createActionRigAdapter, renderActionCovers, loadActionSources, bakeActionClip, bakeInteractionClip };
 
 function createRecipeActor(template: THREE.Object3D, actor: RecipeActor) {
   const model = cloneSkeleton(template);
@@ -2652,6 +2830,7 @@ function generatePoseThumbnails(model: THREE.Object3D, poseIndices: number[]) {
 function cloneState(state: EditorState): EditorState {
   return {
     ...state,
+    rigPose: readRigSample(state.rigPose),
     position: [...state.position],
     rotation: [...state.rotation],
     perspectiveGrid: clonePerspectiveGrid(state.perspectiveGrid ?? initialPerspectiveGrid),
@@ -2680,6 +2859,7 @@ function readSavedPoseRecords(value: unknown): SavedPoseRecord[] {
       )),
     ) as IKTargetMap;
     return [{
+      rigPose: readRigSample(record.rigPose),
       id: record.id,
       basePoseId: basePose.id,
       name: record.name,
@@ -2720,11 +2900,12 @@ function capturePoseThumbnail(source: HTMLCanvasElement | undefined): string {
   return output.toDataURL("image/jpeg", 0.82);
 }
 
-type ModelEditState = Pick<EditorState, "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible" | "ikTargets" | "semanticModifiers">;
+type ModelEditState = Pick<EditorState, "rigPose" | "pose" | "mirrored" | "position" | "rotation" | "scale" | "visible" | "ikTargets" | "semanticModifiers">;
 type ModelListItem = { id: string; name: string };
 
 function getModelEditState(state: EditorState): ModelEditState {
   return {
+    rigPose: readRigSample(state.rigPose),
     pose: state.pose,
     mirrored: state.mirrored,
     position: [...state.position],
@@ -2749,6 +2930,7 @@ function cloneCanvasImageLayers(layers: CanvasImageLayer[]) {
 function cloneShotSceneSnapshot(snapshot: ShotSceneSnapshot): ShotSceneSnapshot {
   return {
     ...snapshot,
+    actionProps: snapshot.actionProps ? structuredClone(snapshot.actionProps) : undefined,
     stage: snapshot.stage ? { ...snapshot.stage } : undefined,
     shotPreset: snapshot.shotPreset ? { ...snapshot.shotPreset } : undefined,
     editor: cloneState(snapshot.editor),
@@ -2828,6 +3010,8 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const poseGridRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const actionPropsRef=useRef<ActionProp[]>([]);
+  const actionPropGroupRef=useRef<THREE.Group|null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -2890,7 +3074,13 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   const [hand, setHand] = useState<PoseHand | "any">("any");
   const [body, setBody] = useState<PoseBody | "any">("any");
   const [style, setStyle] = useState<PoseStyle | "any">("any");
-  const [quickView, setQuickView] = useState<QuickView>(null);
+  const [quickView, setQuickView] = useState<QuickView>("featured");
+  const [libraryKind,setLibraryKind]=useState<"pose"|"motion"|"interaction">("pose");
+  const actionCovers:Record<string,string[]>=(actionCoverManifest as Record<string,Record<string,string[]>>)[editor.ratio]??{};
+  const actionPreviewRequestRef=useRef(0);
+  const [previewActionId,setPreviewActionId]=useState<string|null>(null);
+  const [actionPreviewTime,setActionPreviewTime]=useState(0);
+  const actionPreviewRef=useRef<{action:ActionPreset;clip:AnimationShot;backup:ShotSceneSnapshot;scene:ShotSceneSnapshot;time:number;clock:number}|null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
@@ -3066,7 +3256,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
 
   const filteredPoses = useMemo(() => {
     const keyword = debouncedQuery.trim().toLowerCase();
-    let candidates = category === "saved" ? savedPoseItems : poseItems;
+    let candidates = category === "saved" ? savedPoseItems : poseItems.filter((pose) => pose.status === "ready");
     if (quickView === "featured") candidates = candidates.filter((pose) => pose.featured);
     if (quickView === "recent") {
       candidates = recentIds.map((id) => allPoseItems.find((pose) => pose.id === id)).filter((pose): pose is PoseItem => Boolean(pose));
@@ -3259,6 +3449,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
         setEditor((current) => cloneState({
           ...current,
           pose: restoredPose.enginePoseIndex,
+          rigPose: readRigSample(restoredSavedPose.rigPose),
           mirrored: restoredSavedPose.mirrored,
           ikTargets: restoredSavedPose.ikTargets,
           semanticModifiers: restoredSavedPose.semanticModifiers,
@@ -3397,6 +3588,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   };
 
   const undo = () => {
+    if(actionPreviewRef.current){cancelActionPreview();return;}
     const previous = historyRef.current.pop();
     if (!previous) return;
     setEditor((current) => {
@@ -3409,6 +3601,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   };
 
   const redo = () => {
+    if(actionPreviewRef.current){flash("请先使用或取消动作预览");return;}
     const next = futureRef.current.pop();
     if (!next) return;
     setEditor((current) => {
@@ -3454,6 +3647,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     commit((current) => ({
       ...current,
       pose: basePose.enginePoseIndex,
+      rigPose: readRigSample(savedPose?.rigPose),
       mirrored: savedPose?.mirrored ?? false,
       ikTargets: savedPose ? cloneIKTargets(savedPose.ikTargets) : {},
       semanticModifiers: savedPose ? { ...savedPose.semanticModifiers } : {},
@@ -3483,6 +3677,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const nextSequence = savedPoses.filter((pose) => pose.basePoseId === basePose.id).length + 1;
     const id = existing?.id ?? `saved-${basePose.id}-${nextSequence}`;
     const record: SavedPoseRecord = {
+      rigPose: readRigSample(editorLatestRef.current.rigPose),
       id,
       basePoseId: basePose.id,
       name: existing?.name ?? `${basePose.name} · 自定义 ${nextSequence}`,
@@ -3513,6 +3708,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
       commit((current) => ({
         ...current,
         pose: basePose.enginePoseIndex,
+        rigPose: undefined,
         mirrored: false,
         ikTargets: {},
         semanticModifiers: {},
@@ -3594,6 +3790,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
 
   const changeActiveTool = (tool: ActiveTool) => {
     setActiveTool(tool);
+    if(tool!=="pose")cancelActionPreview();
     if (tool !== "stage") { setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined); }
     setAdvancedOpen(false);
     setContextPanelOpen(true);
@@ -3813,6 +4010,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     commit((current) => ({
       ...current,
       pose: result.pose.enginePoseIndex,
+      rigPose: undefined,
       mirrored: false,
       ikTargets: {},
       semanticModifiers: { ...result.modifiers },
@@ -4127,12 +4325,12 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     }
   };
 
-  const createModelInstance = (state: ModelEditState, sequence: number) => {
+  const createModelInstance = (state: ModelEditState, sequence: number, restoredId?:string) => {
     const scene = sceneRef.current;
     const template = templateModelRef.current;
     if (!scene || !template || !modelInfo.loaded) return null;
 
-    const id = `model-${sequence}`;
+    const id = restoredId ?? `model-${sequence}`;
     const root = new THREE.Group();
     const clone = cloneSkeleton(template);
     const rig = createRigBinding(clone);
@@ -4154,6 +4352,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     root.visible = state.visible;
     if (rig) {
       applyRigPose(rig, state.pose, state.mirrored);
+      restoreRigSample(rig,state.rigPose);
       applySemanticPoseModifiers(rig, state.semanticModifiers);
       applyEditorIKTargets(rig, state.ikTargets);
     } else meshes.forEach((mesh) => applyRigidPose(mesh, state.pose, state.mirrored));
@@ -4378,6 +4577,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     return {
+      actionProps:structuredClone(actionPropsRef.current),
       stage: { ...stageSettingsRef.current },
       shotPreset: { ...shotFramingRef.current, ratio: currentEditor.ratio, focalLength: currentEditor.focalLength, gridEnabled: currentEditor.perspectiveGrid.enabled, gridMode: currentEditor.perspectiveGrid.mode },
       editor: currentEditor,
@@ -4405,7 +4605,16 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     };
   }
 
+  function loadActionProps(props:ActionProp[]){
+    const scene=sceneRef.current;if(!scene)return;
+    if(actionPropGroupRef.current){scene.remove(actionPropGroupRef.current);disposeActionProps(actionPropGroupRef.current);}
+    actionPropsRef.current=structuredClone(props);
+    const group=new THREE.Group();group.name="action-supports";props.forEach(prop=>group.add(createActionProp(prop)));
+    scene.add(group);actionPropGroupRef.current=group;
+  }
+
   const captureProjectState = () => {
+    if(actionPreviewRef.current) return; // Preview never enters durable project content.
     if (!persistenceReady || !modelInfo.loaded) return;
     const scene = captureSceneSnapshot();
     const current = timelineLatestRef.current;
@@ -4431,6 +4640,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   }, [activeShotId, animationTimeline, editor, persistenceReady, selectedPoseId, timeline, timelineHeight, timelineOpen, stageSettings, shotFraming, stageRecords, customShotPresets, studioGraph, cameraRevision, modelInfo.loaded, zoom, timelinePixelsPerSecond, activeTool, graphOpen, contextPanelOpen, cameraLocked, canvasImages, timelinePlaying]);
 
   const persistTimelineShotScene = (shotId: string, includeThumbnail = false) => {
+    if(actionPreviewRef.current) return false;
     // A scene capture is only valid for the shot that is still active. This
     // prevents a delayed autosave from writing one shot's pose into another.
     if (!shotId || activeShotIdRef.current !== shotId || !modelInfo.loaded || applyingShotRef.current) return false;
@@ -4496,6 +4706,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
       ratio,
       ...(hasPoseIntent ? {
         pose: result.pose.enginePoseIndex,
+        rigPose: undefined,
         mirrored: false,
         ikTargets: {},
         semanticModifiers: { ...result.modifiers },
@@ -4561,6 +4772,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
 
   const applySceneSnapshot = (snapshotSource: ShotSceneSnapshot, fromPlayback = false, normalizeShotSize = false) => {
     const snapshot = cloneShotSceneSnapshot(snapshotSource);
+    loadActionProps(snapshot.actionProps??[]);
     const restoredStage = snapshot.stage ?? { ...defaultStage };
     const legacySizes = { close: "CU", medium: "MS", full: "FS", long: "LS" } as const;
     const restoredFraming = normalizeShotPreset(snapshot.shotPreset ?? { size: legacySizes[snapshot.editor.shotSize], ratio: snapshot.editor.ratio, focalLength: snapshot.editor.focalLength });
@@ -4576,8 +4788,8 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     snapshot.models.forEach((model) => {
       let root: THREE.Group | undefined = modelRootsRef.current[model.id];
       if (!root) {
-        const sequence = Number(model.id.match(/\d+/)?.[0] ?? modelCounterRef.current);
-        const created = createModelInstance(model.state, sequence);
+        const sequence = Number(/^model-(\d+)$/.exec(model.id)?.[1] ?? modelCounterRef.current++);
+        const created = createModelInstance(model.state, sequence,model.id);
         root = created?.root;
       }
       if (!root) return;
@@ -4590,11 +4802,12 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
       const rig = modelRigsRef.current[model.id];
       if (rig) {
         applyRigPose(rig, state.pose, state.mirrored);
+        restoreRigSample(rig,state.rigPose);
         applySemanticPoseModifiers(rig, state.semanticModifiers);
         applyEditorIKTargets(rig, state.ikTargets);
       }
     });
-    modelCounterRef.current = Math.max(2, ...snapshot.models.map((model) => Number(model.id.match(/\d+/)?.[0] ?? 0) + 1));
+    modelCounterRef.current = Math.max(2,modelCounterRef.current,...snapshot.models.map((model) => Number(/^model-(\d+)$/.exec(model.id)?.[1] ?? 0) + 1));
     setModelList(snapshot.models.map(({ id, name }) => ({ id, name })));
     const selected = snapshot.models.find((model) => model.id === snapshot.selectedModelId) ?? snapshot.models[0];
     if (selected) {
@@ -4685,19 +4898,18 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const snapshot = captureRigPoseState(rig);
     const current = editorLatestRef.current;
     applyRigPose(rig, current.pose, current.mirrored);
+    restoreRigSample(rig,current.rigPose);
     applySemanticPoseModifiers(rig, current.semanticModifiers);
     applyEditorIKTargets(rig, current.ikTargets);
     return snapshot;
   };
 
-  const applyAnimationAtTime = (shot: VideoShot<ShotSceneSnapshot>, globalTime: number) => {
-    const animationShot = animationTimelineLatestRef.current.shots.find((item) => item.shotId === shot.id);
-    if (!animationShot || animationShot.tracks.every((track) => track.keyframes.length === 0)) return;
-    const localTime = animationLocalTime(globalTime, shot.start, animationShot.duration, animationShot.speed);
-    const value = evaluateAnimationShot(animationShot, localTime);
-    const modelId = selectedModelIdRef.current;
+  const applyClipAtTime = (animationShot:AnimationShot, localTime:number) => {
+    const ids=new Set(animationShot.tracks.filter(track=>track.kind!=="camera").map(track=>track.targetId??selectedModelIdRef.current));
+    for(const modelId of ids) {
+    const value=evaluateAnimationShot(animationShot,localTime,modelId);
     const rig = modelRigsRef.current[modelId];
-    const root = modelRootsRef.current[modelId];
+    const root = modelRootsRef.current[modelId]??actionPropGroupRef.current?.getObjectByName(modelId);
     if (value.pose && rig) {
       if (!Object.keys(value.pose.bones).length) applyRigPose(rig, value.pose.poseIndex, false);
       else Object.entries(value.pose.bones).forEach(([name, quaternion]) => {
@@ -4715,6 +4927,8 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
       root.scale.setScalar(value.root.scale / 100);
       root.updateMatrixWorld(true);
     }
+    }
+    const value=evaluateAnimationShot(animationShot,localTime);
     const camera = cameraRef.current;
     const controls = controlsRef.current;
     if (value.camera && camera && controls) {
@@ -4724,6 +4938,118 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
       camera.updateProjectionMatrix();
       controls.update();
     }
+  };
+
+  const applyAnimationAtTime = (shot: VideoShot<ShotSceneSnapshot>, globalTime: number) => {
+    const animationShot=animationTimelineLatestRef.current.shots.find(item=>item.shotId===shot.id);
+    if(!animationShot||animationShot.tracks.every(track=>!track.keyframes.length))return;
+    const local=animationShot.actionId?Math.max(0,globalTime-shot.start)*animationShot.speed:animationLocalTime(globalTime,shot.start,animationShot.duration,animationShot.speed);
+    applyClipAtTime(animationShot,local);
+  };
+
+  const cancelActionPreview=()=>{
+    actionPreviewRequestRef.current++;
+    const preview=actionPreviewRef.current;
+    if(!preview)return;
+    setTimelinePlaying(false);actionPreviewRef.current=null;setPreviewActionId(null);
+    applySceneSnapshot(preview.backup,true);
+    const shot=timelineLatestRef.current.shots.find(item=>item.id===activeShotIdRef.current);if(shot)applyAnimationAtTime(shot,playheadRef.current);
+  };
+
+  const previewAction=async(action:ActionPreset)=>{
+    const request=++actionPreviewRequestRef.current;
+    if(action.sourceClip||action.partners?.some(partner=>partner.sourceClip)){try{await loadActionSources();}catch(error){flash(error instanceof Error?error.message:"动作加载失败");return;}}
+    if(request!==actionPreviewRequestRef.current)return;
+    if(!templateModelRef.current||!modelInfo.loaded){flash("请等待人物加载完成");return;}
+    const backup=actionPreviewRef.current?.backup??captureSceneSnapshot();
+    if(!actionPreviewRef.current)captureProjectState();
+    const scene=cloneShotSceneSnapshot(backup);
+    const model=scene.models.find(item=>item.id===scene.selectedModelId)??scene.models[0];
+    if(!model)return;
+    const layoutPosition=[...model.state.position] as [number,number,number],layoutRotation=[...model.state.rotation] as [number,number,number];
+    model.state.rigPose=undefined;
+    try {
+      const adapter=createActionRigAdapter(templateModelRef.current);
+      let clip:AnimationShot;
+      if(action.partners){
+        let other=scene.models.find(item=>item.id!==model.id);
+        if(!other){other={id:`model-${modelCounterRef.current}`,name:"人物 B",state:cloneModelEditState(getModelEditState(initialState))};scene.models.push(other);}
+        const origin=[...model.state.position] as [number,number,number],yaw=model.state.rotation[1],scale=model.state.scale;
+        clip=bakeInteractionClip(action,[{id:model.id,adapter,scale:model.state.scale},{id:other.id,adapter:createActionRigAdapter(templateModelRef.current),scale:other.state.scale}],origin,yaw,scale);
+        for(const item of [model,other]){const root=evaluateAnimationShot(clip,0,item.id).root!;item.state.position=root.position;item.state.rotation=root.rotation;item.state.pose=defaultPose.enginePoseIndex;item.state.rigPose=undefined;}
+      }else clip=bakeActionClip(action,model.id,adapter,model.state.position,model.state.rotation,model.state.scale);
+      const participants=new Set(clip.tracks.map(track=>track.targetId));
+      scene.actionProps=[...(scene.actionProps??[]).filter(prop=>!participants.has(prop.actorId)),...actionSupportLayout(action,adapter,model.id,layoutPosition,layoutRotation,model.state.scale)];
+      actionPreviewRef.current={action,clip,backup,scene,time:0,clock:readPlaybackClock()};
+      setPreviewActionId(action.id);setActionPreviewTime(0);
+      setRecentIds(ids=>[action.id,...ids.filter(id=>id!==action.id)].slice(0,40));
+      setInteractionMode("camera-browse");setPoseControlsVisible(false);
+      applySceneSnapshot(scene,true);applyClipAtTime(clip,0);
+      if(!activeShotIdRef.current)fitActionPreview();
+      setTimelinePlaying(true);
+    } catch(error){cancelActionPreview();flash(error instanceof Error?error.message:"动作预览失败");}
+  };
+
+  const fitActionPreview=()=>{
+    const preview=actionPreviewRef.current,camera=cameraRef.current,controls=controlsRef.current;
+    if(!preview||!camera||!controls)return;
+    const ids=new Set(preview.clip.tracks.map(track=>track.targetId).filter(Boolean));
+    const bounds=new THREE.Box3();
+    for(const f of [0,.25,.5,.75,1]){
+      applyClipAtTime(preview.clip,preview.action.duration*f);
+      for(const id of ids){const root=modelRootsRef.current[id!];if(!root)continue;root.traverse(child=>{if(child instanceof THREE.SkinnedMesh){child.skeleton.update();child.computeBoundingBox();}});bounds.union(new THREE.Box3().setFromObject(root));}
+    }
+    if(!bounds.isEmpty()){
+      if(preview.action.framing==="upper")bounds.min.y+=bounds.getSize(new THREE.Vector3()).y*.42;
+      const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+      camera.setFocalLength(preview.action.framing==="upper"?65:50);
+      const distance=Math.max(size.y,size.x/camera.aspect)*.5/Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*1.25+size.z*.55;
+      camera.position.copy(center).add(new THREE.Vector3(.25,.12,1).normalize().multiplyScalar(distance));controls.target.copy(center);camera.updateProjectionMatrix();controls.update();
+      preview.scene.editor.focalLength=camera.getFocalLength();preview.scene.editor.fov=camera.fov;
+      setEditor(current=>({...current,focalLength:camera.getFocalLength(),fov:camera.fov}));
+    }
+    applyClipAtTime(preview.clip,actionPreviewTime);
+  };
+
+  const scrubActionPreview=(time:number)=>{
+    const preview=actionPreviewRef.current;if(!preview)return;
+    setTimelinePlaying(false);preview.time=time;preview.clock=readPlaybackClock();setActionPreviewTime(time);applyClipAtTime(preview.clip,time);
+  };
+
+  const playActionPreview=()=>{
+    const preview=actionPreviewRef.current;if(!preview)return;
+    if(timelinePlaying)preview.time=actionPreviewTime;
+    else{if(preview.time>=preview.action.duration)preview.time=0;preview.clock=readPlaybackClock();}
+    setTimelinePlaying(value=>!value);
+  };
+
+  const saveActionFrame=()=>{
+    const preview=actionPreviewRef.current;if(!preview)return;
+    scrubActionPreview(actionPreviewTime);
+    const rig=modelRigsRef.current[selectedModelIdRef.current];if(!rig)return;
+    const id=`saved-frame-${crypto.randomUUID()}`,name=`${preview.action.name} · ${actionPreviewTime.toFixed(2)} 秒`;
+    const record:SavedPoseRecord={id,name,nameEn:name,basePoseId:defaultPose.id,category:defaultPose.category,ikTargets:{},semanticModifiers:{},mirrored:false,rigPose:snapshotActionRig(rig),thumbnail:capturePoseThumbnail(rendererRef.current?.domElement),updatedAt:Date.now()};
+    setSavedPoses(poses=>[record,...poses]);setFavoriteIds(ids=>[id,...ids]);
+    flash("当前人物的定格已保存到「姿态 → 已保存」，并加入收藏");
+  };
+
+  const applyActionPreview=(newShot:boolean)=>{
+    const preview=actionPreviewRef.current;if(!preview)return;
+    const current=timelineLatestRef.current, source=current.shots.find(shot=>shot.id===activeShotIdRef.current);
+    const id=`shot_action_${crypto.randomUUID()}`,start=current.shots.at(-1)?.end??0;
+    const duration=!newShot&&source?Math.max(source.duration,preview.action.duration):preview.action.duration;
+    const scene=cloneShotSceneSnapshot(preview.scene);
+    const camera=cameraRef.current,controls=controlsRef.current;
+    if(camera&&controls){scene.camera={...scene.camera,position:camera.position.toArray() as [number,number,number],target:controls.target.toArray() as [number,number,number],focalLength:camera.getFocalLength(),fov:camera.fov};scene.editor.focalLength=camera.getFocalLength();scene.editor.fov=camera.fov;}
+    const shot:VideoShot<ShotSceneSnapshot>={id,index:current.shots.length+1,start,end:start+duration,duration,colorToken:`shot-color-${current.shots.length%12+1}`,color:shotColorForId(id,current.shots.length,current.shots.at(-1)?.color,new Set(current.shots.map(item=>item.color))),title:!newShot&&source?`${source.title} · ${preview.action.name}新版本`:preview.action.name,promptText:"",transitionIn:"cut",sceneSnapshot:scene,aspectOverrides:{[scene.editor.ratio]:{ratio:scene.editor.ratio,snapshot:cloneShotSceneSnapshot(scene),updatedAt:1}},thumbnail:captureShotThumbnail(rendererRef.current?.domElement),snapshotLocked:true,snapshotVersion:2,dirty:false};
+    const clip=compactActionClip({...preview.clip,id:`anim_${id}`,shotId:id,duration});
+    actionPreviewRef.current=null;setPreviewActionId(null);setTimelinePlaying(false);
+    // Append a version; previous animation, confirmed images and shot order survive.
+    commitTimeline(value=>({...value,shots:[...value.shots,shot],duration:shot.end,playhead:start}));
+    commitAnimationTimeline(value=>({...value,shots:[...value.shots.filter(item=>item.shotId!==id),clip]}));
+    activeShotIdRef.current=id;setActiveShotId(id);playheadRef.current=start;setTimelinePlayhead(start);setTimelineOpen(true);
+    applySceneSnapshot(scene,true);applyClipAtTime(clip,0);markSaving();
+    flash(source&&!newShot?"已创建动作新版本，原镜头和动画已保留":"已加入动作镜头，可直接播放");
   };
 
   const buildMotionPoseFrames = (
@@ -5054,6 +5380,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   };
 
   const selectTimelineShot = (shot: VideoShot<ShotSceneSnapshot>) => {
+    cancelActionPreview();
     setRecipePlan(null); setRecipePlaying(false); setRecipeCamera(undefined);
     setTimelinePlaying(false);
     setTimelinePlayhead(shot.start);
@@ -5120,6 +5447,8 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const source = current.shots.find((shot) => shot.id === activeShotIdRef.current)
       ?? current.shots.find((shot) => timelinePlayhead > shot.start && timelinePlayhead < shot.end);
     if (!source) return;
+    const authoredClip=animationTimelineLatestRef.current.shots.find(item=>item.shotId===source.id);
+    if(authoredClip?.actionId){flash("完整动作暂不支持直接切分，以免丢失动作阶段；可复制镜头并调整播放速度");return;}
     const frame = 1 / current.fps;
     const cut = Math.round(timelinePlayhead * current.fps) / current.fps;
     if (cut <= source.start + frame || cut >= source.end - frame) {
@@ -5214,6 +5543,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   };
 
   const recordAnimationKeyframe = (showMessage = true) => {
+    if(actionPreviewRef.current){if(showMessage)flash("请先使用动作镜头，再添加关键帧");return false;}
     const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
     const rig = modelRigsRef.current[selectedModelIdRef.current];
     const root = modelRootsRef.current[selectedModelIdRef.current];
@@ -5254,7 +5584,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
         ...animationShot,
         motionId: null,
         cameraMotionId: null,
-        tracks: animationShot.tracks.map((track) => track.kind === "pose"
+        tracks: animationShot.tracks.map((track) => track.kind!=="camera"&&track.targetId&&track.targetId!==selectedModelIdRef.current?track:track.kind === "pose"
           ? { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, poseFrame, timelineValue.fps) }
           : track.kind === "root"
             ? { ...track, keyframes: upsertAnimationKeyframe(track.keyframes, rootFrame, timelineValue.fps) }
@@ -5269,6 +5599,14 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const shot = timelineLatestRef.current.shots.find((item) => item.id === activeShotIdRef.current);
     const root = modelRootsRef.current[selectedModelIdRef.current];
     if (!shot || !root) return;
+    // Existing projects retain their original tracks; new selections use the
+    // reviewed catalog and the same preview / explicit append workflow.
+    const alias:Partial<Record<MotionId,string>>={idle:"action-breathe",walk:"action-walk",run:"action-jog",wave:"action-wave",sit:"action-sit","look-back":"action-look-behind"};
+    const reviewed=allActionPresets.find(action=>action.id===alias[motionId]&&action.release==="ready");
+    if(reviewed){setActiveTool("pose");setContextPanelOpen(true);setLibraryKind("motion");void previewAction(reviewed);return;}
+    if(animationTimelineLatestRef.current.shots.some(item=>item.shotId===shot.id&&item.actionId)){
+      setActiveTool("pose");setContextPanelOpen(true);setLibraryKind("motion");flash("请从动态动作库预览并另存新版本，原有多人动作会保留");return;
+    }
     const motion = motionPresets.find((item) => item.id === motionId);
     const duration = motion?.defaultDuration ?? 4;
     const fps = animationTimelineLatestRef.current.fps;
@@ -5436,6 +5774,9 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const sourceTimeline = clonePoseBoardTimeline(timelineLatestRef.current);
     const sourceShot = sourceTimeline.shots.find((shot) => shot.id === shotId);
     if (!sourceShot) return;
+    const sourceAction=animationTimelineLatestRef.current.shots.find(item=>item.shotId===shotId);
+    const minimumActionDuration=sourceAction?.actionId&&!sourceAction.loop?(sourceAction.sourceDuration??0)/sourceAction.speed:0;
+    let warnedAboutTrimming=false;
     const startX = event.clientX;
     timelineContinuousEditRef.current = sourceTimeline;
     const frame = 1 / sourceTimeline.fps;
@@ -5458,10 +5799,10 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
             : proposedStart;
           target.end = target.start + sourceShot.duration;
         } else if (mode === "trim-start") {
-          target.start = clamp(snap(sourceShot.start + delta), previous?.end ?? 0, sourceShot.end - frame);
+          target.start = clamp(snap(sourceShot.start + delta), previous?.end ?? 0, sourceShot.end - Math.max(frame,minimumActionDuration));
           target.duration = target.end - target.start;
         } else {
-          const proposedEnd = Math.max(sourceShot.start + frame, snap(sourceShot.end + delta));
+          const proposedEnd = Math.max(sourceShot.start + Math.max(frame,minimumActionDuration), snap(sourceShot.end + delta));
           if (sourceTimeline.ripple) {
             const endDelta = proposedEnd - sourceShot.end;
             target.end = proposedEnd;
@@ -5476,6 +5817,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
             target.duration = target.end - target.start;
           }
         }
+        if(mode!=="move"&&minimumActionDuration>0&&target.duration<=minimumActionDuration+frame&&!warnedAboutTrimming){warnedAboutTrimming=true;queueMicrotask(()=>flash("已保留一次性动作的完整过程；需要更短时长可调整播放速度"));}
         current.shots = shots;
         current.duration = Math.max(current.duration, shots.at(-1)?.end ?? frame);
         current.updatedAt = currentValue.updatedAt;
@@ -5562,6 +5904,16 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   };
 
   const changeArtboardRatio = (nextRatio: Ratio) => {
+    const preview=actionPreviewRef.current;
+    if(preview){
+      if(nextRatio!=="16:9"&&nextRatio!=="9:16"){flash("动作预览已检查横版 16:9 与竖版 9:16，请选择其中一种");return;}
+      // Ratio changes inside a preview must not write temporary actors or
+      // camera settings into the original, confirmed shot.
+      preview.scene.editor.ratio=nextRatio;
+      setEditor(current=>({...current,ratio:nextRatio}));
+      const camera=cameraRef.current;if(camera){const [w,h]=nextRatio.split(":").map(Number);camera.aspect=w/h;camera.updateProjectionMatrix();}
+      fitActionPreview();return;
+    }
     if (recipePlan) {
       if (nextRatio !== "16:9" && nextRatio !== "9:16") { flash("此预设已制作横版 16:9 与竖版 9:16 构图，请选择其中一种"); return; }
       setRecipeCamera(undefined); setRecipePlan({ ...recipePlan, ratio: nextRatio }); return;
@@ -5614,6 +5966,16 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
       // with requestAnimationFrame's document-timeline timestamp. Embedded
       // browsers can expose those clocks from different time origins.
       const clock = readPlaybackClock();
+      const preview=actionPreviewRef.current;
+      if(preview){
+        let time=preview.time+(clock-preview.clock)/1000;
+        if(time>=preview.action.duration){
+          if(preview.action.loop){time%=preview.action.duration;preview.time=time;preview.clock=clock;}
+          else{time=preview.action.duration;applyClipAtTime(preview.clip,time);preview.time=time;setActionPreviewTime(time);setTimelinePlaying(false);return;}
+        }
+        applyClipAtTime(preview.clip,time);setActionPreviewTime(time);
+        timelinePlaybackTimerRef.current=window.requestAnimationFrame(tick);return;
+      }
       const current = timelineLatestRef.current;
       const playback = timelinePlaybackStartRef.current;
       let nextTime = playback.playhead + (clock - playback.clock) / 1000;
@@ -5659,7 +6021,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
   }, [timelinePlaying]);
 
   useEffect(() => {
-    if (!persistenceReady || timelinePlaying || !activeShotIdRef.current) return;
+    if (!persistenceReady || timelinePlaying || actionPreviewRef.current || !activeShotIdRef.current) return;
     if (!applyingShotRef.current && animationTimelineLatestRef.current.autoKey) recordAnimationKeyframe(false);
     setTimeline((current) => {
       const active = current.shots.find((shot) => shot.id === activeShotIdRef.current);
@@ -6195,6 +6557,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const renderer = rendererRef.current;
     if (!root || !scene || !camera || !renderer) return;
 
+    if(!actionPreviewRef.current){
     modelStatesRef.current[selectedModelId] = getModelEditState(editor);
     root.position.set(...editor.position);
     root.rotation.set(...editor.rotation.map(THREE.MathUtils.degToRad) as [number, number, number]);
@@ -6208,10 +6571,13 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
     const rig = modelRigsRef.current[selectedModelId];
     if (rig) {
       applyRigPose(rig, editor.pose, editor.mirrored);
+      restoreRigSample(rig,editor.rigPose);
       applySemanticPoseModifiers(rig, editor.semanticModifiers);
       applyEditorIKTargets(rig, editor.ikTargets);
     }
     else deformableMeshesRef.current.forEach((mesh) => applyRigidPose(mesh, editor.pose, editor.mirrored));
+    }
+    const rig=modelRigsRef.current[selectedModelId];
     if (viewportRef.current) {
       viewportRef.current.dataset.poseSafety = String(rig?.root.userData.poseboardSafetyFactor ?? 1);
       viewportRef.current.dataset.poseCollision = String(rig?.root.userData.poseboardCollisionFallbackReason ?? "none");
@@ -6769,11 +7135,13 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
 
       <section className="workspace">
         <aside className="panel library-panel context-panel" aria-label="Pose Library">
+          <div className="action-library-tabs" role="tablist" aria-label="动作库类型">{([["pose","姿态"],["motion","动态"],["interaction","双人互动"]] as const).map(([kind,label])=><button key={kind} role="tab" aria-selected={libraryKind===kind} onClick={()=>{cancelActionPreview();setLibraryKind(kind);}}>{label}</button>)}</div>
+          {libraryKind!=="pose"?<ActionLibrary key={libraryKind} kind={libraryKind} ratio={editor.ratio} actions={allActionPresets} selected={previewActionId} covers={actionCovers} favorites={favoriteIds} recent={recentIds} playing={timelinePlaying} time={actionPreviewTime} onPreview={previewAction} onFavorite={id=>setFavoriteIds(ids=>ids.includes(id)?ids.filter(value=>value!==id):[...ids,id])} onApply={applyActionPreview} onCancel={cancelActionPreview} onPlay={playActionPreview} onScrub={scrubActionPreview} onSavePose={saveActionFrame} onSaveImage={()=>{scrubActionPreview(actionPreviewTime);void exportPng("clean");}} onFit={()=>fitActionPreview()}/>:<>
           <div className="library-scroll-header">
             <div className="panel-title-row">
               <div><h2>{text("Pose Library", "姿势库")}</h2></div>
               <div className="panel-heading-actions">
-                <span className="count">{text(`${poseItems.length + savedPoses.length} poses`, `${poseItems.length + savedPoses.length} 个姿势`)}</span>
+                <span className="count">{text(`${poseItems.filter(pose=>pose.status==="ready").length + savedPoses.length} poses`, `${poseItems.filter(pose=>pose.status==="ready").length + savedPoses.length} 个姿势`)}</span>
                 <button onClick={() => setHelpOpen(true)} aria-label={text("Open help", "打开帮助")} title={text("Help and shortcuts", "帮助与快捷键")}><Info size={18} /></button>
                 <button onClick={() => setContextPanelOpen(false)} aria-label={text("Collapse panel", "收起面板")} title={text("Collapse panel", "收起面板")}><SidebarSimple size={18} weight="fill" /></button>
               </div>
@@ -6877,6 +7245,7 @@ export default function StudioEditor({ bridge }: { bridge: EditorBridge }) {
               <button className="primary" onClick={exitInteractionMode}>{text("Done", "完成")}</button>
             </div>}
           </div>
+          </>}
         </aside>
 
         <section className="canvas-area">

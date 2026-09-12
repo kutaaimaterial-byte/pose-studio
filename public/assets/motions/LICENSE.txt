@@ -1,0 +1,11 @@
+Quaternius Universal Animation Library — Standard (2025-03 release)
+CC0 1.0 Universal — Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+Author: Quaternius
+Author's distribution: https://opengameart.org/content/universal-animation-library
+Pack: https://quaternius.com/packs/universalanimationlibrary.html
+
+quaternius-standard.json contains 13 selected skeletal animation clips retargeted
+to PoseBoard's existing Quaternius mannequin by scripts/retarget-quaternius.mjs.
+Only the free Standard release was used. No Pro or Source edition assets used.
+Original archive downloaded 2026-09-12.

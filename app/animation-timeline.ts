@@ -33,10 +33,10 @@ export type CameraAnimationKeyframe = {
   focalLength: number;
 };
 
-export type AnimationTrack =
-  | { id: string; kind: "pose"; name: string; enabled: boolean; keyframes: PoseAnimationKeyframe[] }
+export type AnimationTrack = { targetId?: string } & (
+  | { id: string; kind: "pose"; name: string; enabled: boolean; restPose?: Pick<PoseAnimationKeyframe, "bones" | "bonePositions">; keyframes: PoseAnimationKeyframe[] }
   | { id: string; kind: "root"; name: string; enabled: boolean; keyframes: RootAnimationKeyframe[] }
-  | { id: string; kind: "camera"; name: string; enabled: boolean; keyframes: CameraAnimationKeyframe[] };
+  | { id: string; kind: "camera"; name: string; enabled: boolean; keyframes: CameraAnimationKeyframe[] });
 
 export type MotionId =
   | "idle"
@@ -66,6 +66,8 @@ export type CameraMotionId =
   | "handheld";
 
 export type AnimationShot = {
+  actionId?: string;
+  sourceDuration?: number;
   id: string;
   shotId: string;
   duration: number;
@@ -259,8 +261,8 @@ function interpolateSnapshot<T>(before: Record<string, T> = {}, after: Record<st
 function evaluatePose(track: Extract<AnimationTrack, { kind: "pose" }>, time: number) {
   const pair = framePair(track.keyframes, time);
   if (!pair) return undefined;
-  const bones = interpolateSnapshot(pair.before.bones, pair.after.bones, pair.amount, slerpQuaternion);
-  const bonePositions = interpolateSnapshot(pair.before.bonePositions ?? {}, pair.after.bonePositions ?? {}, pair.amount, lerpVec3);
+  const bones = interpolateSnapshot({...track.restPose?.bones,...pair.before.bones},{...track.restPose?.bones,...pair.after.bones},pair.amount,slerpQuaternion);
+  const bonePositions = interpolateSnapshot({...track.restPose?.bonePositions,...pair.before.bonePositions},{...track.restPose?.bonePositions,...pair.after.bonePositions},pair.amount,lerpVec3);
   const selected = pair.amount < 0.5 ? pair.before : pair.after;
   const beforeRig = pair.before.rigPosition ?? pair.after.rigPosition;
   const afterRig = pair.after.rigPosition ?? beforeRig;
@@ -273,12 +275,16 @@ function evaluatePose(track: Extract<AnimationTrack, { kind: "pose" }>, time: nu
   };
 }
 
-export function evaluateAnimationShot(shot: AnimationShot | undefined, localTime: number): EvaluatedAnimation {
+export function evaluateAnimationShot(shot: AnimationShot | undefined, localTime: number, targetId?: string): EvaluatedAnimation {
   if (!shot) return {};
-  const time = Math.min(shot.duration, Math.max(0, localTime));
+  const duration = shot.sourceDuration ?? shot.duration;
+  const time = shot.loop && duration > 0 && localTime > duration
+    ? localTime % duration : Math.min(duration, Math.max(0, localTime));
   const result: EvaluatedAnimation = {};
   for (const track of shot.tracks) {
     if (!track.enabled) continue;
+    if (targetId !== undefined && track.kind !== "camera" && track.targetId && track.targetId !== targetId) continue;
+    if (targetId === undefined && track.targetId) continue;
     if (track.kind === "pose") result.pose = evaluatePose(track, time);
     if (track.kind === "root") {
       const pair = framePair(track.keyframes, time);
@@ -287,9 +293,21 @@ export function evaluateAnimationShot(shot: AnimationShot | undefined, localTime
         rotation: lerpVec3(pair.before.rotation, pair.after.rotation, pair.amount),
         scale: round(lerpNumber(pair.before.scale, pair.after.scale, pair.amount)),
       };
+      // Authored locomotion continues along its path on subsequent cycles.
+      // Legacy clips retain their original evaluation and camera timing.
+      if (result.root && shot.actionId && shot.loop && localTime > duration && duration > 0) {
+        const first = track.keyframes[0], last = track.keyframes.at(-1);
+        if (first && last) {
+          const cycles = Math.floor(localTime / duration);
+          result.root.position = result.root.position.map((v,i) => v + cycles * (last.position[i] - first.position[i])) as Vec3Tuple;
+        }
+      }
     }
     if (track.kind === "camera") {
-      const pair = framePair(track.keyframes, time);
+      // A body's source loop is not a camera loop. Authored camera keys span
+      // the whole shot even when its motion repeats or has finished.
+      const cameraTime=shot.actionId?Math.min(shot.duration,Math.max(0,localTime/shot.speed)):time;
+      const pair = framePair(track.keyframes, cameraTime);
       if (pair) result.camera = {
         position: lerpVec3(pair.before.position, pair.after.position, pair.amount),
         target: lerpVec3(pair.before.target, pair.after.target, pair.amount),
@@ -357,7 +375,10 @@ export function normalizeAnimationTimeline(source: unknown, shots: Array<{ id: s
       speed: Math.max(0.01, Number(stored.speed) || 1),
       motionId: inferredMotionId,
       cameraMotionId: inferredCameraMotionId,
-      tracks: fallback.tracks.map((track) => {
+      tracks: stored.actionId ? [
+        ...stored.tracks.filter((track) => ["pose","root","camera"].includes(track.kind) && Array.isArray(track.keyframes)).map((track) => ({...track,keyframes:[...track.keyframes].sort((a,b)=>a.time-b.time)} as AnimationTrack)),
+        ...fallback.tracks.filter((track) => !stored.tracks.some((candidate) => candidate.kind === track.kind)),
+      ] : fallback.tracks.map((track) => {
         const found = stored.tracks.find((candidate) => candidate.kind === track.kind);
         if (!found || !Array.isArray(found.keyframes)) return track;
         return { ...track, ...found, id: found.id || track.id, keyframes: [...found.keyframes].sort((a, b) => a.time - b.time) } as AnimationTrack;
